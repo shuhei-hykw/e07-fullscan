@@ -145,7 +145,7 @@ parameter change:
 - **Track length** — distribution with minLineLength threshold marked
 - **Track angle** — 0–180°
 
-![Pipeline: raw scan vs full pipeline with Hough line detection](docs/pipeline.png)
+![Pipeline: all 6 processing steps from raw scan to track detection](docs/pipeline.png)
 
 ## Tests
 
