@@ -37,6 +37,9 @@ htmlcov/
 *.parquet
 *.zarr
 
+# Claude Code
+.claude/
+
 # IDEs
 .idea/
 .vscode/
