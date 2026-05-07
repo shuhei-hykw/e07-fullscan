@@ -10,6 +10,8 @@ from flask import Flask, abort, render_template_string, request, send_file
 
 from e07fullscan.io import load_spng
 
+Z_PROJ_HALF = 4  # slices on each side for Z-projection (total = 2*Z_PROJ_HALF+1)
+
 _TEMPLATE = """
 <html>
 <head>
@@ -57,23 +59,28 @@ _TEMPLATE = """
     <div class="sidebar-section">
       <h3>Processing Pipeline</h3>
       <div class="pipeline">
-        <label class="step" id="step-fog">
+        <label class="step" id="step-zpj">
           <span class="step-num">1</span>
+          <input type="checkbox" id="cb-zpj" onchange="updateStep('step-zpj','cb-zpj'); updateImage()">
+          <span class="step-label">Z-Projection</span>
+        </label>
+        <label class="step" id="step-fog">
+          <span class="step-num">2</span>
           <input type="checkbox" id="cb-fog" onchange="updateStep('step-fog','cb-fog'); updateImage()">
           <span class="step-label">Fog Removal</span>
         </label>
         <label class="step" id="step-thr">
-          <span class="step-num">2</span>
+          <span class="step-num">3</span>
           <input type="checkbox" id="cb-thr" onchange="updateStep('step-thr','cb-thr'); updateImage()">
-          <span class="step-label">Threshold</span>
+          <span class="step-label">Threshold (Otsu)</span>
         </label>
         <label class="step" id="step-den">
-          <span class="step-num">3</span>
+          <span class="step-num">4</span>
           <input type="checkbox" id="cb-den" onchange="updateStep('step-den','cb-den'); updateImage()">
           <span class="step-label">Noise Removal</span>
         </label>
         <label class="step" id="step-hough">
-          <span class="step-num">4</span>
+          <span class="step-num">5</span>
           <input type="checkbox" id="cb-hough" onchange="updateStep('step-hough','cb-hough'); updateImage()">
           <span class="step-label">Hough Lines</span>
         </label>
@@ -104,8 +111,9 @@ _TEMPLATE = """
 
       function buildUrl(idx) {
         return `/image/${relPath}/${idx}` +
-          `?fog=${flag('cb-fog')}&thr=${flag('cb-thr')}` +
-          `&den=${flag('cb-den')}&hough=${flag('cb-hough')}`;
+          `?zpj=${flag('cb-zpj')}&fog=${flag('cb-fog')}` +
+          `&thr=${flag('cb-thr')}&den=${flag('cb-den')}` +
+          `&hough=${flag('cb-hough')}`;
       }
 
       function update(val) {
@@ -164,7 +172,9 @@ def _process(
         current = cv2.subtract(blurred, current)
 
     if thr:
-        _, current = cv2.threshold(current, 19, 255, cv2.THRESH_BINARY)
+        _, current = cv2.threshold(
+            current, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU
+        )
 
     if den:
         contours, _ = cv2.findContours(current, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -251,12 +261,20 @@ def create_app(root_dir: Path | str) -> Flask:
     @app.route("/image/<path:json_rel_path>/<int:idx>")
     def get_image(json_rel_path: str, idx: int):
         json_path = _safe_resolve(json_rel_path)
+        zpj   = request.args.get("zpj",   "0") == "1"
         fog   = request.args.get("fog",   "0") == "1"
         thr   = request.args.get("thr",   "0") == "1"
         den   = request.args.get("den",   "0") == "1"
         hough = request.args.get("hough", "0") == "1"
         try:
-            img = load_spng(json_path).read(idx)
+            reader = load_spng(json_path)
+            if zpj:
+                lo = max(0, idx - Z_PROJ_HALF)
+                hi = min(len(reader) - 1, idx + Z_PROJ_HALF)
+                slices = [reader.read(i) for i in range(lo, hi + 1)]
+                img = np.mean(slices, axis=0).astype(np.uint8)
+            else:
+                img = reader.read(idx)
             result = _process(img, fog=fog, thr=thr, den=den, hough=hough)
             _, buf = cv2.imencode(".png", result)
             return send_file(io.BytesIO(buf.tobytes()), mimetype="image/png")

@@ -112,10 +112,11 @@ Enabled steps are applied in order.
 
 | # | Step | Processing | Key Parameters |
 |---|---|---|---|
-| 1 | **Fog Removal** | Fog removal using Gaussian blur and subtraction | ksize=31 |
-| 2 | **Threshold** | Binarization | thresh=19 |
-| 3 | **Noise Removal** | Contour filtering by area and compactness | area<5, compactness<15 |
-| 4 | **Hough Lines** | Track overlay with green lines via HoughLinesP | minLineLength=15, maxLineGap=8 |
+| 1 | **Z-Projection** | Average ±4 neighbouring z-slices to boost track SNR | half=4 (9 slices total) |
+| 2 | **Fog Removal** | Fog removal using Gaussian blur and subtraction | ksize=31 |
+| 3 | **Threshold (Otsu)** | Auto-threshold binarization via Otsu's method | — |
+| 4 | **Noise Removal** | Contour filtering by area and compactness | area<5, compactness<15 |
+| 5 | **Hough Lines** | Track overlay with green lines via HoughLinesP | minLineLength=15, maxLineGap=8 |
 
 ![Pipeline: raw scan vs full pipeline with Hough line detection](docs/pipeline.png)
 
