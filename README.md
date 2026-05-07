@@ -1,43 +1,46 @@
 # e07fullscan
 
-E07乳剤フルスキャン解析ツールキット。
+Analysis toolkit for E07 emulsion full-scan data.
 
-## セットアップ
+## Setup
 
 ```bash
-# 解析ライブラリのみ
+# Analysis library only
 pip install -e .
 
-# Webビューアも使う場合
+# With web viewer
 pip install -e ".[server]"
 
-# 開発環境（テスト・lint含む）
+# Development environment (tests and lint)
 pip install -e ".[dev]"
 ```
 
-依存ライブラリ: numpy, scipy, opencv-python, matplotlib, PyYAML  
-Webビューア追加依存: flask
+Dependencies: numpy, scipy, opencv-python, matplotlib, PyYAML  
+Additional dependency for web viewer: flask
 
-## パッケージ構成
+## Package Structure
 
 ```
 e07fullscan/
 ├── io/
-│   └── image_reader.py   # SPNG形式リーダー
-├── server/               # Webビューア（要 flask）
+│   └── image_reader.py   # SPNG format reader
+├── server/               # Web viewer (requires flask)
 │   ├── app.py
 │   └── __main__.py
-├── tracking/             # 飛跡追跡（開発中）
-└── utils/                # 共通ユーティリティ（開発中）
+├── tracking/             # Track finding (under development)
+└── utils/                # Common utilities (under development)
 ```
 
-## SPNGフォーマット
+## SPNG Format
 
-E07フルスキャンで使われる独自フォーマット。ビュー（視野）ごとにJSONとSPNGファイルがペアで存在する。
+A proprietary format used in E07 full-scan data. Each view (field of view)
+consists of a JSON/SPNG file pair.
 
-- **JSONファイル**: メタデータ（画像サイズ・枚数・各スライスのXYZ座標・アフィン変換係数など）
-- **SPNGファイル**: PNGブロブを連結したバイナリコンテナ  
-  JSON内の `Images[].Path` が `ファイル名.spng&バイトオフセット&バイト長` の形式で各画像の位置を示す
+- **JSON file**: Metadata (image size, number of slices, XYZ coordinates per
+  slice, affine transformation coefficients, etc.)
+- **SPNG file**: Binary container holding concatenated PNG blobs.  
+  `Images[].Path` in the JSON has the form
+  `filename.spng&byte_offset&byte_length`, specifying each image's location.
 
 ## SPNG Image Reader
 
@@ -47,72 +50,76 @@ from e07fullscan.io import load_spng
 reader = load_spng("path/to/scan.json")
 ```
 
-### 属性
+### Attributes
 
-| 属性 | 型 | 内容 |
+| Attribute | Type | Description |
 |---|---|---|
 | `reader.image_type` | `ImageType` | `depth`, `height`, `width` |
-| `reader.affine_p2s` | `list[float]` | ピクセル→ステージ座標のアフィン係数（6要素） |
-| `reader.datetime` | `str` | 撮影日時文字列 |
-| `reader.entries` | `list[ImageEntry]` | 各スライスのSPNG内位置とXYZ座標 |
+| `reader.affine_p2s` | `list[float]` | Affine coefficients pixel→stage (6 elements) |
+| `reader.datetime` | `str` | Acquisition datetime string |
+| `reader.entries` | `list[ImageEntry]` | SPNG location and XYZ coordinates per slice |
 
-### 画像の読み込み
+### Reading Images
 
 ```python
-len(reader)              # スライス枚数
-reader.z_positions()     # 各スライスのZ座標 (ndarray, float64)
+len(reader)              # Number of slices
+reader.z_positions()     # Z coordinate of each slice (ndarray, float64)
 
-img   = reader.read(0)         # グレースケール画像 (H×W, uint8)
-raw   = reader.read_raw(0)     # 生PNGバイト列（デコードなし）
-stack = reader.read_stack()    # 全スライスをスタック (N×H×W, uint8)
+img   = reader.read(0)         # Grayscale image (H×W, uint8)
+raw   = reader.read_raw(0)     # Raw PNG bytes (no decode)
+stack = reader.read_stack()    # All slices as a stack (N×H×W, uint8)
 
-reader[0]       # read() と同等
-for img in reader:  # イテレーション対応
+reader[0]           # Equivalent to read()
+for img in reader:  # Iteration supported
     ...
 ```
 
-## Webビューア
+## Web Viewer
 
-SPNGデータをブラウザで閲覧し、処理パイプラインをインタラクティブに操作できる。
+Browse SPNG data in a browser and interactively control the processing
+pipeline.
 
-### 起動
+### Starting the Server
 
 ```bash
 python -m e07fullscan.server /path/to/data/root
 
-# ホスト・ポートを指定する場合
+# Specify host and port
 python -m e07fullscan.server /path/to/data/root 0.0.0.0 8080
 ```
 
-KEKCCで動かしてローカルから見る場合はSSHトンネルを使う：
+To run on KEKCC and access from a local machine, use an SSH tunnel:
 
 ```bash
 ssh -L 8000:localhost:8000 username@login.kekcc.jp
 ```
 
-ブラウザで `http://localhost:8000` にアクセス。
+Then open `http://localhost:8000` in your browser.
 
-### 操作
+### Controls
 
-| 操作 | 動作 |
+| Action | Effect |
 |---|---|
-| サイドバーでJSONをクリック | zスタックを読み込む |
-| マウスホイール / 左右矢印キー | Zスライスを切り替え |
-| VIEW: FIT/ACTUAL | 全体表示 ↔ 等倍表示 |
-| 等倍表示でドラッグ | パン |
+| Click a JSON file in the sidebar | Load the Z stack |
+| Mouse wheel / left-right arrow keys | Switch Z slice |
+| VIEW: FIT/ACTUAL | Toggle fit ↔ actual-size view |
+| Drag in actual-size view | Pan |
 
-### 処理パイプライン
+### Processing Pipeline
 
-サイドバーのチェックボックスで各ステップを個別にon/offできる。有効なステップが順番に適用される。
+Each step can be toggled on/off individually via checkboxes in the sidebar.
+Enabled steps are applied in order.
 
-| # | ステップ | 処理 | 主なパラメータ |
+| # | Step | Processing | Key Parameters |
 |---|---|---|---|
-| 1 | **Fog Removal** | GaussianBlurとsubtractによるFog除去 | ksize=31 |
-| 2 | **Threshold** | 二値化 | thresh=19 |
-| 3 | **Noise Removal** | 面積・コンパクト度による輪郭フィルタリング | area<5, compactness<15 |
-| 4 | **Hough Lines** | HoughLinesPによる飛跡の緑線オーバーレイ | minLineLength=15, maxLineGap=8 |
+| 1 | **Fog Removal** | Fog removal using Gaussian blur and subtraction | ksize=31 |
+| 2 | **Threshold** | Binarization | thresh=19 |
+| 3 | **Noise Removal** | Contour filtering by area and compactness | area<5, compactness<15 |
+| 4 | **Hough Lines** | Track overlay with green lines via HoughLinesP | minLineLength=15, maxLineGap=8 |
 
-## テスト
+![Pipeline: raw scan vs full pipeline with Hough line detection](docs/pipeline.png)
+
+## Tests
 
 ```bash
 pytest
