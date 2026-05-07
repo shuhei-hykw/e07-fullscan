@@ -26,6 +26,11 @@ def main() -> None:
         "--open", action="store_true",
         help="Open browser automatically",
     )
+    parser.add_argument(
+        "--start", default="",
+        metavar="SUBPATH",
+        help="Initial sub-path to open (e.g. fullscan-image/MOD108/...)",
+    )
     args = parser.parse_args()
 
     url = f"http://{args.host}:{args.port}"
@@ -33,7 +38,8 @@ def main() -> None:
     if args.open:
         webbrowser.open(url)
 
-    run(args.root_dir, host=args.host, port=args.port)
+    run(args.root_dir, host=args.host, port=args.port,
+        start_path=args.start)
 
 
 if __name__ == "__main__":

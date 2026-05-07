@@ -12,3 +12,13 @@ tracking:
 
 logging:
   level: INFO
+
+viewer:
+  zpj_half:    4    # Z-projection half-range (slices)
+  fog_ksize:   51   # Gaussian kernel for fog removal (odd number)
+  noise_amin:  2    # Noise removal: minimum blob area (px)
+  noise_amax:  100  # Noise removal: maximum blob area (px)
+  noise_cmp:   50   # Noise removal: compactness threshold (peri^2/area)
+  hough_thr:   20   # Hough: accumulator threshold
+  hough_ml:    25   # Hough: minimum line length (px)
+  hough_mg:    4    # Hough: maximum line gap (px)

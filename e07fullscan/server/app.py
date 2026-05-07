@@ -7,22 +7,35 @@ from pathlib import Path
 import cv2
 import matplotlib
 import numpy as np
+import yaml
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from flask import Flask, abort, render_template_string, request, send_file
+from flask import (
+    Flask, abort, redirect, render_template_string, request, send_file,
+)
 
 from e07fullscan.io import load_spng
 
-# --- Default pipeline parameters ---
-Z_PROJ_HALF    = 4
-FOG_KSIZE      = 31
-NOISE_AREA_MIN = 5
-NOISE_AREA_MAX = 30
-NOISE_COMPACT  = 15
-HOUGH_THRESH   = 20
-HOUGH_MIN_LINE = 15
-HOUGH_MAX_GAP  = 8
+# --- Load pipeline defaults from config (fallback to built-in values) ---
+_CFG_PATH = Path(__file__).parents[2] / "config" / "default.yaml"
+
+def _load_viewer_cfg() -> dict:
+    if _CFG_PATH.exists():
+        raw = yaml.safe_load(_CFG_PATH.read_text()) or {}
+        return raw.get("viewer", {})
+    return {}
+
+_vcfg = _load_viewer_cfg()
+
+Z_PROJ_HALF    = _vcfg.get("zpj_half",   4)
+FOG_KSIZE      = _vcfg.get("fog_ksize",  51)
+NOISE_AREA_MIN = _vcfg.get("noise_amin", 2)
+NOISE_AREA_MAX = _vcfg.get("noise_amax", 100)
+NOISE_COMPACT  = _vcfg.get("noise_cmp",  50)
+HOUGH_THRESH   = _vcfg.get("hough_thr",  20)
+HOUGH_MIN_LINE = _vcfg.get("hough_ml",   25)
+HOUGH_MAX_GAP  = _vcfg.get("hough_mg",   4)
 
 _TEMPLATE = """
 <html>
@@ -64,10 +77,13 @@ _TEMPLATE = """
             background:#000; overflow:hidden; }
     #header { background:#333; padding:10px; text-align:center;
               border-bottom:1px solid #444; z-index:20; }
-    #viewport { flex-grow:1; overflow:auto; display:block;
-                text-align:center; cursor:grab; }
-    img.mode-fit    { max-height:100%; max-width:100%; object-fit:contain; }
-    img.mode-actual { max-height:none; max-width:none; object-fit:none; }
+    #viewport { flex-grow:1; overflow:auto; display:flex; cursor:grab; }
+    #img-row { display:flex; flex:1; min-height:0;
+               align-items:center; justify-content:center; gap:4px; }
+    #img-row > img { display:none; min-width:0; }
+    #img-row > img.show { display:block; flex:1;
+                          max-height:100%; object-fit:contain; }
+    #img-row > img.actual { max-height:none; flex:none; object-fit:none; }
     input[type=range] { width:60%; vertical-align:middle; }
     #stats-panel { height:360px; border-top:1px solid #444; display:none;
                    overflow:auto; background:#111; text-align:center;
@@ -91,7 +107,9 @@ _TEMPLATE = """
   <div class="sidebar-section">
     <a href="/view/" class="btn" style="background:#522;">GO TO ROOT</a>
     <button class="btn" onclick="toggleViewMode()">VIEW: FIT/ACTUAL</button>
+    <button class="btn" id="btn-orig"  onclick="toggleOrig()">ORIGINAL</button>
     <button class="btn" id="btn-stats" onclick="toggleStats()">STATS</button>
+    <button class="btn" onclick="resetParams()">RESET PARAMS</button>
   </div>
 
   <div class="sidebar-section">
@@ -174,7 +192,7 @@ _TEMPLATE = """
       </div>
       <div class="param-row">
         <label>compact</label>
-        <input type="range" id="noise_cmp" min="5" max="50" step="1"
+        <input type="range" id="noise_cmp" min="5" max="100" step="1"
                value="{{ noise_cmp }}"
                oninput="sv('noise_cmp'); updateAll()">
         <span id="noise_cmp_v">{{ noise_cmp }}</span>
@@ -232,14 +250,30 @@ _TEMPLATE = """
       IDX: <span id="idx">0</span> / {{ max_idx + 1 }}
     </span>
   </div>
-  <div id="viewport"><img id="target" class="mode-fit" draggable="false"></div>
+  <div id="viewport">
+    <div id="img-row">
+      <img id="orig"   draggable="false">
+      <img id="target" class="show" draggable="false">
+    </div>
+  </div>
   <div id="stats-panel"><img id="stats-img" draggable="false"></div>
   <script>
     const relPath    = "{{ rel_dir_path }}/{{ selected_json }}";
     const range      = document.getElementById('z-range');
     const targetImg  = document.getElementById('target');
+    const origImg    = document.getElementById('orig');
     const statsImg   = document.getElementById('stats-img');
     const statsPanel = document.getElementById('stats-panel');
+    const DEFAULTS   = {
+      zpj_half:   {{ zpj_half }},
+      fog_k:      {{ fog_k }},
+      noise_amin: {{ noise_amin }},
+      noise_amax: {{ noise_amax }},
+      noise_cmp:  {{ noise_cmp }},
+      hough_thr:  {{ hough_thr }},
+      hough_ml:   {{ hough_ml }},
+      hough_mg:   {{ hough_mg }},
+    };
 
     function flag(id) {
       return document.getElementById(id).checked ? 1 : 0;
@@ -266,28 +300,72 @@ _TEMPLATE = """
     }
     function fullQuery()     { return flagQuery() + '&' + paramQuery(); }
     function buildUrl(i)     { return `/image/${relPath}/${i}?${fullQuery()}`; }
+    function buildRawUrl(i)  { return `/raw/${relPath}/${i}`; }
     function buildStatsUrl(i){ return `/stats/${relPath}/${i}?${fullQuery()}`; }
+
+    let _debounceTimer = null;
+    let _imgCtrl = null, _rawCtrl = null, _statsCtrl = null;
 
     function update(v) {
       v = Math.max(0, Math.min(v, {{ max_idx }}));
       document.getElementById('idx').textContent = v;
-      targetImg.src = buildUrl(v);
-      if (statsPanel.classList.contains('visible'))
-        statsImg.src = buildStatsUrl(v);
+
+      if (_imgCtrl) { _imgCtrl.abort(); }
+      _imgCtrl = new AbortController();
+      fetch(buildUrl(v), { signal: _imgCtrl.signal })
+        .then(r => r.blob()).then(b => {
+          targetImg.src = URL.createObjectURL(b);
+        }).catch(() => {});
+
+      if (origImg.classList.contains('show')) {
+        if (_rawCtrl) { _rawCtrl.abort(); }
+        _rawCtrl = new AbortController();
+        fetch(buildRawUrl(v), { signal: _rawCtrl.signal })
+          .then(r => r.blob()).then(b => {
+            origImg.src = URL.createObjectURL(b);
+          }).catch(() => {});
+      }
+
+      if (statsPanel.classList.contains('visible')) {
+        if (_statsCtrl) { _statsCtrl.abort(); }
+        _statsCtrl = new AbortController();
+        fetch(buildStatsUrl(v), { signal: _statsCtrl.signal })
+          .then(r => r.blob()).then(b => {
+            statsImg.src = URL.createObjectURL(b);
+          }).catch(() => {});
+      }
     }
-    function updateAll()  { update(parseInt(range.value)); }
+    function updateAll() {
+      clearTimeout(_debounceTimer);
+      _debounceTimer = setTimeout(
+        () => update(parseInt(range.value)), 150
+      );
+    }
     function updateStep(stepId, cbId) {
       document.getElementById(stepId).classList.toggle('active',
         document.getElementById(cbId).checked);
     }
     function toggleViewMode() {
-      targetImg.classList.toggle('mode-fit');
-      targetImg.classList.toggle('mode-actual');
+      [targetImg, origImg].forEach(
+        img => img.classList.toggle('actual')
+      );
+    }
+    function toggleOrig() {
+      const on = origImg.classList.toggle('show');
+      document.getElementById('btn-orig').classList.toggle('active', on);
+      if (on) update(parseInt(range.value));
+    }
+    function resetParams() {
+      for (const [id, v] of Object.entries(DEFAULTS)) {
+        document.getElementById(id).value = v;
+        document.getElementById(id + '_v').textContent = v;
+      }
+      updateAll();
     }
     function toggleStats() {
       const visible = statsPanel.classList.toggle('visible');
       document.getElementById('btn-stats').classList.toggle('active', visible);
-      if (visible) statsImg.src = buildStatsUrl(parseInt(range.value));
+      if (visible) update(parseInt(range.value));
     }
 
     window.addEventListener('wheel', (e) => {
@@ -343,7 +421,8 @@ def _process(
             current, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU
         )
 
-    if den:
+    # den requires a binary image; skip silently if thr was not applied
+    if den and thr:
         contours, _ = cv2.findContours(
             current, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
@@ -406,28 +485,31 @@ def _collect_stats(
         )
         stats["otsu_val"] = float(otsu_val)
 
-    if thr or den:
+    # contour analysis only on binary image (after thr)
+    if thr:
         cnts, _ = cv2.findContours(
             current, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
         stats["blob_areas_before"] = [cv2.contourArea(c) for c in cnts]
 
-    if den:
-        noise = []
-        for cnt in cnts:
-            area = cv2.contourArea(cnt)
-            if area < noise_amin:
-                noise.append(cnt)
-                continue
-            perimeter = cv2.arcLength(cnt, True)
-            if (perimeter > 0 and area < noise_amax
-                    and (perimeter ** 2) / area < noise_cmp):
-                noise.append(cnt)
-        cv2.drawContours(current, noise, -1, 0, thickness=-1)
-        cnts_after, _ = cv2.findContours(
-            current, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
-        stats["blob_areas_after"] = [cv2.contourArea(c) for c in cnts_after]
+        if den:
+            noise = []
+            for cnt in cnts:
+                area = cv2.contourArea(cnt)
+                if area < noise_amin:
+                    noise.append(cnt)
+                    continue
+                perimeter = cv2.arcLength(cnt, True)
+                if (perimeter > 0 and area < noise_amax
+                        and (perimeter ** 2) / area < noise_cmp):
+                    noise.append(cnt)
+            cv2.drawContours(current, noise, -1, 0, thickness=-1)
+            cnts_after, _ = cv2.findContours(
+                current, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            )
+            stats["blob_areas_after"] = [
+                cv2.contourArea(c) for c in cnts_after
+            ]
 
     if hough_or_trk:
         lines = cv2.HoughLinesP(
@@ -572,13 +654,17 @@ def _stats_figure(
     return fig
 
 
-def create_app(root_dir: Path | str) -> Flask:
+def create_app(
+    root_dir: Path | str,
+    start_path: str = "",
+) -> Flask:
     """Create the Flask viewer app rooted at *root_dir*."""
     root = Path(root_dir).resolve()
     app = Flask(__name__)
 
     def _safe_resolve(subpath: str) -> Path:
-        full = (root / subpath).resolve()
+        # Use normpath (no symlink resolution) so symlinks under root work.
+        full = Path(os.path.normpath(root / subpath))
         if not str(full).startswith(str(root)):
             abort(403)
         return full
@@ -623,6 +709,10 @@ def create_app(root_dir: Path | str) -> Flask:
         return reader.read(idx), len(reader)
 
     @app.route("/")
+    def index():
+        dest = start_path.strip("/")
+        return redirect(f"/view/{dest}" if dest else "/view/")
+
     @app.route("/view/")
     @app.route("/view/<path:subpath>")
     def viewer(subpath: str = "") -> str:
@@ -665,6 +755,18 @@ def create_app(root_dir: Path | str) -> Flask:
             hough_ml=HOUGH_MIN_LINE,
             hough_mg=HOUGH_MAX_GAP,
         )
+
+    @app.route("/raw/<path:json_rel_path>/<int:idx>")
+    def get_raw(json_rel_path: str, idx: int):
+        try:
+            reader = load_spng(_safe_resolve(json_rel_path))
+            img = reader.read(idx)
+            _, buf = cv2.imencode(".png", img)
+            return send_file(
+                io.BytesIO(buf.tobytes()), mimetype="image/png"
+            )
+        except Exception as e:
+            return str(e), 500
 
     @app.route("/image/<path:json_rel_path>/<int:idx>")
     def get_image(json_rel_path: str, idx: int):
@@ -724,8 +826,9 @@ def run(
     root_dir: Path | str,
     host: str = "0.0.0.0",
     port: int = 8000,
+    start_path: str = "",
 ) -> None:
     """Start the viewer server."""
-    create_app(root_dir).run(
+    create_app(root_dir, start_path=start_path).run(
         host=host, port=port, debug=False, threaded=True
     )
