@@ -6,7 +6,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from flask import Flask, abort, render_template_string, send_file
+from flask import Flask, abort, render_template_string, request, send_file
 
 from e07fullscan.io import load_spng
 
@@ -26,7 +26,17 @@ _TEMPLATE = """
       text-align: center; display: block; text-decoration: none; box-sizing: border-box;
     }
     .btn:hover { background: #555; }
-    .btn-active { background: #0055ff; border-color: #0077ff; }
+    .pipeline { display: flex; flex-direction: column; gap: 6px; }
+    .step {
+      display: flex; align-items: center; gap: 8px;
+      background: #333; border: 1px solid #555; border-radius: 3px; padding: 8px 10px;
+      cursor: pointer; user-select: none; font-size: 0.85em;
+    }
+    .step:hover { background: #3a3a3a; }
+    .step.active { border-color: #0077ff; background: #0a2a55; }
+    .step input[type=checkbox] { accent-color: #0077ff; width: 15px; height: 15px; cursor: pointer; }
+    .step-label { flex: 1; }
+    .step-num { color: #666; font-size: 0.8em; min-width: 16px; }
     .list-item { display: block; color: #aaa; text-decoration: none; padding: 4px; font-size: 0.85em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .list-item:hover { background: #333; color: #fff; }
     .list-item.active { background: #0055ff; color: #fff; }
@@ -43,9 +53,31 @@ _TEMPLATE = """
     <div class="sidebar-section">
       <a href="/view/" class="btn" style="background:#522;">GO TO ROOT</a>
       <button class="btn" onclick="toggleViewMode()">VIEW: FIT/ACTUAL</button>
-      <button id="btn-blur" class="btn" onclick="setMode('blur')">GAUSSIAN BLUR</button>
-      <button id="btn-bin" class="btn" onclick="setMode('bin')">BINARIZATION</button>
-      <button id="btn-raw" class="btn btn-active" onclick="setMode('raw')">ORIGINAL RAW</button>
+    </div>
+    <div class="sidebar-section">
+      <h3>Processing Pipeline</h3>
+      <div class="pipeline">
+        <label class="step" id="step-fog">
+          <span class="step-num">1</span>
+          <input type="checkbox" id="cb-fog" onchange="updateStep('step-fog','cb-fog'); updateImage()">
+          <span class="step-label">Fog Removal</span>
+        </label>
+        <label class="step" id="step-thr">
+          <span class="step-num">2</span>
+          <input type="checkbox" id="cb-thr" onchange="updateStep('step-thr','cb-thr'); updateImage()">
+          <span class="step-label">Threshold</span>
+        </label>
+        <label class="step" id="step-den">
+          <span class="step-num">3</span>
+          <input type="checkbox" id="cb-den" onchange="updateStep('step-den','cb-den'); updateImage()">
+          <span class="step-label">Noise Removal</span>
+        </label>
+        <label class="step" id="step-hough">
+          <span class="step-num">4</span>
+          <input type="checkbox" id="cb-hough" onchange="updateStep('step-hough','cb-hough'); updateImage()">
+          <span class="step-label">Hough Lines</span>
+        </label>
+      </div>
     </div>
     <div class="scroll-area">
       <h3>PATH: /{{ rel_dir_path }}</h3>
@@ -58,31 +90,35 @@ _TEMPLATE = """
   <div id="main">
     {% if selected_json %}
     <div id="header">
-      <div style="font-size: 0.8em; color: #888;">{{ selected_json }} [MODE: <span id="mode-name">RAW</span>]</div>
+      <div style="font-size: 0.8em; color: #888;">{{ selected_json }}</div>
       <input type="range" id="z-range" min="0" max="{{ max_idx }}" value="0" oninput="update(this.value)">
       <span style="font-size: 0.8em;">IDX: <span id="idx">0</span> / {{ max_idx + 1 }}</span>
     </div>
-    <div id="viewport"><img id="target" src="/image/raw/{{ rel_dir_path }}/{{ selected_json }}/0" class="mode-fit" draggable="false"></div>
+    <div id="viewport"><img id="target" class="mode-fit" draggable="false"></div>
     <script>
-      let currentMode = 'raw';
+      const relPath = "{{ rel_dir_path }}/{{ selected_json }}";
       const range = document.getElementById('z-range');
       const targetImg = document.getElementById('target');
-      const relPath = "{{ rel_dir_path }}/{{ selected_json }}";
 
-      function setMode(mode) {
-        currentMode = mode;
-        document.querySelectorAll('.btn').forEach(b => b.classList.remove('btn-active'));
-        if (mode === 'raw') document.getElementById('btn-raw').classList.add('btn-active');
-        if (mode === 'blur') document.getElementById('btn-blur').classList.add('btn-active');
-        if (mode === 'bin') document.getElementById('btn-bin').classList.add('btn-active');
-        document.getElementById('mode-name').innerText = mode.toUpperCase();
-        update(range.value);
+      function flag(id) { return document.getElementById(id).checked ? 1 : 0; }
+
+      function buildUrl(idx) {
+        return `/image/${relPath}/${idx}` +
+          `?fog=${flag('cb-fog')}&thr=${flag('cb-thr')}` +
+          `&den=${flag('cb-den')}&hough=${flag('cb-hough')}`;
       }
 
       function update(val) {
         val = Math.max(0, Math.min(val, {{ max_idx }}));
         document.getElementById('idx').innerText = val;
-        targetImg.src = `/image/${currentMode}/${relPath}/${val}`;
+        targetImg.src = buildUrl(val);
+      }
+
+      function updateImage() { update(parseInt(range.value)); }
+
+      function updateStep(stepId, cbId) {
+        document.getElementById(stepId).classList.toggle('active',
+          document.getElementById(cbId).checked);
       }
 
       function toggleViewMode() {
@@ -96,6 +132,13 @@ _TEMPLATE = """
         range.value = parseInt(range.value) + (e.deltaY > 0 ? 1 : -1);
         update(range.value);
       }, { passive: false });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight') { range.value = parseInt(range.value) + 1; update(range.value); }
+        if (e.key === 'ArrowLeft')  { range.value = parseInt(range.value) - 1; update(range.value); }
+      });
+
+      update(0);
     </script>
     {% else %}
     <div id="viewport" style="display:flex; align-items:center; justify-content:center;">SELECT A JSON FILE</div>
@@ -105,20 +148,50 @@ _TEMPLATE = """
 </html>
 """
 
-_VALID_MODES = {"raw", "blur", "bin"}
 
+def _process(
+    img: np.ndarray,
+    fog: bool,
+    thr: bool,
+    den: bool,
+    hough: bool,
+) -> np.ndarray:
+    """Apply the selected pipeline steps in order."""
+    current = img  # uint8 grayscale H×W
 
-def _apply_mode(img: np.ndarray, mode: str) -> np.ndarray:
-    if mode == "blur":
-        return cv2.GaussianBlur(img, (5, 5), 0)
-    if mode == "bin":
-        blurred = cv2.GaussianBlur(img, (5, 5), 0)
-        return cv2.adaptiveThreshold(
-            blurred, 255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV,
-            11, 2,
+    if fog:
+        blurred = cv2.GaussianBlur(current, (31, 31), 0)
+        current = cv2.subtract(blurred, current)
+
+    if thr:
+        _, current = cv2.threshold(current, 19, 255, cv2.THRESH_BINARY)
+
+    if den:
+        contours, _ = cv2.findContours(current, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        noise = []
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area < 5:
+                noise.append(cnt)
+                continue
+            perimeter = cv2.arcLength(cnt, True)
+            if perimeter > 0 and area < 30 and (perimeter ** 2) / area < 15:
+                noise.append(cnt)
+        cv2.drawContours(current, noise, -1, 0, thickness=-1)
+
+    if hough:
+        lines = cv2.HoughLinesP(
+            current, 1, np.pi / 180,
+            threshold=20, minLineLength=15, maxLineGap=8,
         )
-    return img
+        output = cv2.cvtColor(current, cv2.COLOR_GRAY2BGR)
+        if lines is not None:
+            for line in lines:
+                x1, y1, x2, y2 = line[0]
+                cv2.line(output, (x1, y1), (x2, y2), (0, 255, 0), 1)
+        return output
+
+    return current
 
 
 def create_app(root_dir: Path | str) -> Flask:
@@ -175,15 +248,17 @@ def create_app(root_dir: Path | str) -> Flask:
             parent_path=os.path.dirname(rel_dir_path.rstrip("/")),
         )
 
-    @app.route("/image/<mode>/<path:json_rel_path>/<int:idx>")
-    def get_image(mode: str, json_rel_path: str, idx: int):
-        if mode not in _VALID_MODES:
-            abort(400)
+    @app.route("/image/<path:json_rel_path>/<int:idx>")
+    def get_image(json_rel_path: str, idx: int):
         json_path = _safe_resolve(json_rel_path)
+        fog   = request.args.get("fog",   "0") == "1"
+        thr   = request.args.get("thr",   "0") == "1"
+        den   = request.args.get("den",   "0") == "1"
+        hough = request.args.get("hough", "0") == "1"
         try:
-            reader = load_spng(json_path)
-            img = _apply_mode(reader.read(idx), mode)
-            _, buf = cv2.imencode(".png", img)
+            img = load_spng(json_path).read(idx)
+            result = _process(img, fog=fog, thr=thr, den=den, hough=hough)
+            _, buf = cv2.imencode(".png", result)
             return send_file(io.BytesIO(buf.tobytes()), mimetype="image/png")
         except Exception as e:
             return str(e), 500
