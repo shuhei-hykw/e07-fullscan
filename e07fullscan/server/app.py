@@ -84,6 +84,11 @@ _TEMPLATE = """
           <input type="checkbox" id="cb-hough" onchange="updateStep('step-hough','cb-hough'); updateImage()">
           <span class="step-label">Hough Lines</span>
         </label>
+        <label class="step" id="step-trk">
+          <span class="step-num">6</span>
+          <input type="checkbox" id="cb-trk" onchange="updateStep('step-trk','cb-trk'); updateImage()">
+          <span class="step-label">Tracks Only</span>
+        </label>
       </div>
     </div>
     <div class="scroll-area">
@@ -113,7 +118,7 @@ _TEMPLATE = """
         return `/image/${relPath}/${idx}` +
           `?zpj=${flag('cb-zpj')}&fog=${flag('cb-fog')}` +
           `&thr=${flag('cb-thr')}&den=${flag('cb-den')}` +
-          `&hough=${flag('cb-hough')}`;
+          `&hough=${flag('cb-hough')}&trk=${flag('cb-trk')}`;
       }
 
       function update(val) {
@@ -163,6 +168,7 @@ def _process(
     thr: bool,
     den: bool,
     hough: bool,
+    trk: bool,
 ) -> np.ndarray:
     """Apply the selected pipeline steps in order."""
     current = img  # uint8 grayscale H×W
@@ -177,7 +183,9 @@ def _process(
         )
 
     if den:
-        contours, _ = cv2.findContours(current, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(
+            current, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
         noise = []
         for cnt in contours:
             area = cv2.contourArea(cnt)
@@ -189,12 +197,15 @@ def _process(
                 noise.append(cnt)
         cv2.drawContours(current, noise, -1, 0, thickness=-1)
 
-    if hough:
+    if hough or trk:
         lines = cv2.HoughLinesP(
             current, 1, np.pi / 180,
             threshold=20, minLineLength=15, maxLineGap=8,
         )
-        output = cv2.cvtColor(current, cv2.COLOR_GRAY2BGR)
+        if trk:
+            output = np.zeros((*current.shape, 3), dtype=np.uint8)
+        else:
+            output = cv2.cvtColor(current, cv2.COLOR_GRAY2BGR)
         if lines is not None:
             for line in lines:
                 x1, y1, x2, y2 = line[0]
@@ -266,6 +277,7 @@ def create_app(root_dir: Path | str) -> Flask:
         thr   = request.args.get("thr",   "0") == "1"
         den   = request.args.get("den",   "0") == "1"
         hough = request.args.get("hough", "0") == "1"
+        trk   = request.args.get("trk",   "0") == "1"
         try:
             reader = load_spng(json_path)
             if zpj:
@@ -275,7 +287,7 @@ def create_app(root_dir: Path | str) -> Flask:
                 img = np.mean(slices, axis=0).astype(np.uint8)
             else:
                 img = reader.read(idx)
-            result = _process(img, fog=fog, thr=thr, den=den, hough=hough)
+            result = _process(img, fog=fog, thr=thr, den=den, hough=hough, trk=trk)
             _, buf = cv2.imencode(".png", result)
             return send_file(io.BytesIO(buf.tobytes()), mimetype="image/png")
         except Exception as e:

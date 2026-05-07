@@ -117,6 +117,7 @@ Enabled steps are applied in order.
 | 3 | **Threshold (Otsu)** | Auto-threshold binarization via Otsu's method | — |
 | 4 | **Noise Removal** | Contour filtering by area and compactness | area<5, compactness<15 |
 | 5 | **Hough Lines** | Track overlay with green lines via HoughLinesP | minLineLength=15, maxLineGap=8 |
+| 6 | **Tracks Only** | Green track lines on black background (no binary dots) | — |
 
 ![Pipeline: raw scan vs full pipeline with Hough line detection](docs/pipeline.png)
 
