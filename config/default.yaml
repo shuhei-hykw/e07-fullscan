@@ -1,0 +1,14 @@
+data:
+  root_dir: ""          # path to raw scan data
+  output_dir: outputs/
+
+io:
+  image_ext: ".tif"
+  loader: "tifffile"    # tifffile | pillow
+
+tracking:
+  method: "nearest"     # nearest | hungarian
+  max_distance: 50      # pixels
+
+logging:
+  level: INFO
