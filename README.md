@@ -93,6 +93,9 @@ e07view /path/to/data/root --open
 
 # Custom host / port
 e07view /path/to/data/root --host 0.0.0.0 --port 8080
+
+# Open at a specific sub-path on launch
+e07view /path/to/data/root --start MOD108/PL12
 ```
 
 `python -m e07fullscan.server` works as an alias if `e07view` is not on PATH.
@@ -113,20 +116,34 @@ Then open `http://localhost:8000` in your browser.
 | Mouse wheel / left-right arrow keys | Switch Z slice |
 | VIEW: FIT/ACTUAL | Toggle fit ↔ actual-size view |
 | Drag in actual-size view | Pan |
+| ORIGINAL toggle | Show processed image alongside the original |
+| STATS toggle | Show/hide pipeline statistics histograms below the image |
+| RESET PARAMS button | Reset all pipeline parameters to defaults |
 
 ### Processing Pipeline
 
 Each step can be toggled on/off individually via checkboxes in the sidebar.
-Enabled steps are applied in order.
+Enabled steps are applied in order. All parameters are adjustable in
+real time via sliders; defaults are defined in `config/default.yaml`.
 
-| # | Step | Processing | Key Parameters |
+| # | Step | Processing | Default Parameters |
 |---|---|---|---|
-| 1 | **Z-Projection** | Average ±4 neighbouring z-slices to boost track SNR | half=4 (9 slices total) |
-| 2 | **Fog Removal** | Fog removal using Gaussian blur and subtraction | ksize=31 |
+| 1 | **Z-Projection** | Average neighbouring z-slices to boost track SNR | half=4 (9 slices total) |
+| 2 | **Fog Removal** | Fog removal using Gaussian blur and subtraction | ksize=51 |
 | 3 | **Threshold (Otsu)** | Auto-threshold binarization via Otsu's method | — |
-| 4 | **Noise Removal** | Contour filtering by area and compactness | area<5, compactness<15 |
-| 5 | **Hough Lines** | Track overlay with green lines via HoughLinesP | minLineLength=15, maxLineGap=8 |
+| 4 | **Noise Removal** | Contour filtering by area and compactness | area_max=100, compactness=50 |
+| 5 | **Hough Lines** | Track overlay with green lines via HoughLinesP | minLineLength=25, maxLineGap=4 |
 | 6 | **Tracks Only** | Green track lines on black background (no binary dots) | — |
+
+### Statistics Panel
+
+The STATS panel shows four histograms that update with each slice and
+parameter change:
+
+- **Pixel intensity** — raw vs. after fog removal, with Otsu threshold marked
+- **Blob area** — before/after noise removal (log scale)
+- **Track length** — distribution with minLineLength threshold marked
+- **Track angle** — 0–180°
 
 ![Pipeline: raw scan vs full pipeline with Hough line detection](docs/pipeline.png)
 
