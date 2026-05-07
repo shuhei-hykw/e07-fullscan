@@ -82,11 +82,20 @@ pipeline.
 ### Starting the Server
 
 ```bash
-python -m e07fullscan.server /path/to/data/root
+# In the data directory (uses current directory as root)
+cd /path/to/data && e07view
 
-# Specify host and port
-python -m e07fullscan.server /path/to/data/root 0.0.0.0 8080
+# Explicit directory
+e07view /path/to/data/root
+
+# Open browser automatically
+e07view /path/to/data/root --open
+
+# Custom host / port
+e07view /path/to/data/root --host 0.0.0.0 --port 8080
 ```
+
+`python -m e07fullscan.server` works as an alias if `e07view` is not on PATH.
 
 To run on KEKCC and access from a local machine, use an SSH tunnel:
 
