@@ -272,4 +272,5 @@ pytest        # run all tests
 pytest -v     # verbose output
 ```
 
-Tests cover the tracking library (`tracking/`) and batch CLI (`analyze/`).
+Tests cover the tracking library (`tracking/`), batch CLI (`analyze/`),
+and results viewer (`server/results.py`).
