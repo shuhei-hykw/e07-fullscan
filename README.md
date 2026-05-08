@@ -15,7 +15,8 @@ pip install -e ".[server]"
 pip install -e ".[dev]"
 ```
 
-Dependencies: numpy, scipy, opencv-python, matplotlib, PyYAML  
+Dependencies: numpy, scipy, opencv-python, matplotlib, PyYAML,
+pandas, pyarrow  
 Additional dependency for web viewer: flask
 
 ## Package Structure
@@ -24,14 +25,17 @@ Additional dependency for web viewer: flask
 e07fullscan/
 ├── io/
 │   └── image_reader.py   # SPNG format reader
-├── server/               # Web viewer (requires flask)
-│   ├── app.py
-│   └── __main__.py
 ├── tracking/             # Track finding
 │   ├── _track.py         # Track dataclass
 │   └── _finder.py        # preprocess(), find_tracks()
 ├── analyze/              # Batch analysis CLI
 │   └── cli.py            # e07analyze entry point
+├── merge/                # Result merge CLI
+│   └── cli.py            # e07merge entry point
+├── server/               # Web viewer (requires flask)
+│   ├── app.py
+│   ├── results.py        # Results viewer backend
+│   └── __main__.py
 └── utils/                # Common utilities (under development)
 ```
 
@@ -110,35 +114,68 @@ The same parameters as the web viewer are accepted as keyword arguments.
 
 ## Batch Analysis
 
-Run track finding over a directory tree and write results to CSV.
+Run track finding over a directory tree and write results to CSV or
+Parquet. For parallel KEKCC jobs, use `--chunk-id/--chunk-total` to
+split the JSON file list across workers.
 
 ```bash
-# Analyze all JSON files under a directory
+# Single job — CSV output
 e07analyze /data/MOD108 -o tracks.csv -v
 
-# Analyze a single file
-e07analyze /data/MOD108/PL12/view.json -o tracks.csv
+# Single job — Parquet output
+e07analyze /data/MOD108 -o tracks.parquet -v
+
+# Parallel jobs (e.g. PBS job array with 100 workers)
+e07analyze /data/MOD108 \
+  --chunk-id $PBS_ARRAY_INDEX --chunk-total 100 \
+  -o results/chunk_${PBS_ARRAY_INDEX}.parquet
 
 # Analyze one slice only
-e07analyze /data/MOD108 --slice 10 -o tracks.csv
+e07analyze /data/MOD108 --slice 10 -o tracks.parquet
 
 # Use a custom parameter config
-e07analyze /data/MOD108 --config my_params.yaml -o tracks.csv
+e07analyze /data/MOD108 --config my_params.yaml -o tracks.parquet
 ```
 
 `python -m e07fullscan.analyze` works as an alias if `e07analyze` is not
 on PATH.
 
-### CSV Output Format
+### Output Format
 
-| Column | Description |
-|---|---|
-| `view_id` | Source JSON path |
-| `slice_idx` | Slice index within the view |
-| `x1, y1, x2, y2` | Track endpoints in stage coordinates |
-| `z` | Stage Z of the slice |
-| `length_px` | Track length in pixels |
-| `angle_deg` | Track angle 0–180° |
+| Column | Type | Description |
+|---|---|---|
+| `view_id` | str | Source JSON path |
+| `slice_idx` | int | Slice index within the view |
+| `x1, y1, x2, y2` | float | Track endpoints in stage coordinates |
+| `z` | float | Stage Z of the slice |
+| `px1, py1, px2, py2` | int | Track endpoints in pixel coordinates |
+| `length_px` | float | Track length in pixels |
+| `angle_deg` | float | Track angle 0–180° |
+
+## Merging Results
+
+After all parallel jobs complete, merge Parquet chunks into a single
+SQLite database for interactive querying.
+
+```bash
+e07merge results/ -o tracks.db -v
+```
+
+`e07merge` creates indices on `view_id`, `z`, and `angle_deg`
+automatically. Query the result with pandas or any SQLite client:
+
+```python
+import sqlite3, pandas as pd
+
+conn = sqlite3.connect("tracks.db")
+df = pd.read_sql(
+    "SELECT * FROM tracks WHERE angle_deg < 5 AND length_px > 50",
+    conn,
+)
+```
+
+`python -m e07fullscan.merge` works as an alias if `e07merge` is not
+on PATH.
 
 ## Web Viewer
 
@@ -162,6 +199,9 @@ e07view /path/to/data/root --host 0.0.0.0 --port 8080
 
 # Open at a specific sub-path on launch
 e07view /path/to/data/root --start MOD108/PL12
+
+# Load analysis results to enable the Results Viewer
+e07view /path/to/data/root --results tracks.db
 ```
 
 `python -m e07fullscan.server` works as an alias if `e07view` is not on PATH.
@@ -212,6 +252,18 @@ parameter change:
 - **Track angle** — 0–180°
 
 ![Pipeline: all 6 processing steps from raw scan to track detection](docs/pipeline.png)
+
+## Results Viewer
+
+When `--results` is given, a separate results page is available at
+`http://localhost:8000/results/`. It displays pre-computed tracks from
+the analysis database without re-running the pipeline.
+
+| Control | Effect |
+|---|---|
+| View selector | Switch between JSON views in the results |
+| Slice slider / arrow keys | Step through slices |
+| STATS toggle | Show angle and length histograms for the slice |
 
 ## Tests
 
