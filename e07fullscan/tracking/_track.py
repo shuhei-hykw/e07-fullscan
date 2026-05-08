@@ -18,3 +18,7 @@ class Track:
     length_px: float # Hough segment length in pixels
     angle_deg: float # line angle 0-180 degrees
     view_id: str     # source JSON path
+    # properties from the raw image (default 0 when not measured)
+    n_grains:    int   = 0    # grain blobs overlapping the segment
+    width_px:    float = 0.0  # transverse spread of grains (px)
+    mean_intens: float = 0.0  # mean fog-removed intensity along track

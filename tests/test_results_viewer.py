@@ -1,6 +1,5 @@
 import io
 from unittest.mock import MagicMock, patch
-from urllib.parse import quote
 
 import numpy as np
 import pandas as pd
@@ -118,22 +117,19 @@ def test_results_page_200(client):
 
 
 def test_result_image_returns_png(client):
-    enc = quote(VIEW_ID, safe="")
-    resp = client.get(f"/result_image/{enc}/0")
+    resp = client.get("/result_image/0/0")
     assert resp.status_code == 200
     assert resp.content_type == "image/png"
 
 
 def test_result_stats_returns_png(client):
-    enc = quote(VIEW_ID, safe="")
-    resp = client.get(f"/result_stats/{enc}/0")
+    resp = client.get("/result_stats/0/0")
     assert resp.status_code == 200
     assert resp.content_type == "image/png"
 
 
 def test_result_image_empty_slice(client):
-    enc = quote(VIEW_ID, safe="")
-    resp = client.get(f"/result_image/{enc}/99")
+    resp = client.get("/result_image/0/99")
     assert resp.status_code == 200
     assert resp.content_type == "image/png"
 

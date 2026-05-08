@@ -32,6 +32,8 @@ e07fullscan/
 │   └── cli.py            # e07analyze entry point
 ├── merge/                # Result merge CLI
 │   └── cli.py            # e07merge entry point
+├── clustering/           # Post-processing: merge duplicate Hough segments
+│   └── _cluster.py       # cluster_tracks(), cluster_df()
 ├── server/               # Web viewer (requires flask)
 │   ├── app.py
 │   ├── results.py        # Results viewer backend
@@ -111,6 +113,9 @@ The same parameters as the web viewer are accepted as keyword arguments.
 | `length_px` | `float` | Segment length in pixels |
 | `angle_deg` | `float` | Line angle 0–180° |
 | `view_id` | `str` | Source JSON path (set by caller) |
+| `n_grains` | `int` | Number of grain blobs within `grain_radius` px of the segment |
+| `width_px` | `float` | Transverse spread (std dev) of nearby grain centroids (px) |
+| `mean_intens` | `float` | Mean fog-removed intensity sampled along the segment |
 
 ## Batch Analysis
 
@@ -151,6 +156,9 @@ on PATH.
 | `px1, py1, px2, py2` | int | Track endpoints in pixel coordinates |
 | `length_px` | float | Track length in pixels |
 | `angle_deg` | float | Track angle 0–180° |
+| `n_grains` | int | Grain blob count along the segment |
+| `width_px` | float | Transverse grain spread (px) |
+| `mean_intens` | float | Mean fog-removed intensity along the segment |
 
 ## Merging Results
 
@@ -177,10 +185,47 @@ df = pd.read_sql(
 `python -m e07fullscan.merge` works as an alias if `e07merge` is not
 on PATH.
 
+## Clustering API
+
+Merge duplicate Hough segments that represent the same physical track.
+Two segments are considered duplicates when their Hough normal-form
+parameters (ρ, θ) satisfy |Δρ| < `dist_eps` pixels and |Δθ| < `angle_eps`
+degrees. The longest segment in each cluster is kept.
+
+```python
+from e07fullscan.clustering import cluster_tracks, cluster_df
+
+# List[Track] → List[Track] (one per cluster)
+merged = cluster_tracks(tracks, dist_eps=20.0, angle_eps=5.0)
+
+# DataFrame → DataFrame (processes each view_id/slice_idx group)
+import pandas as pd
+df = pd.read_parquet("tracks.parquet")
+df_merged = cluster_df(df, dist_eps=20.0, angle_eps=5.0)
+```
+
+### Parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `dist_eps` | `20.0` | ρ tolerance in pixels |
+| `angle_eps` | `5.0` | θ tolerance in degrees |
+
 ## Web Viewer
 
 Browse SPNG data in a browser and interactively control the processing
 pipeline.
+
+The three viewer pages share a single server process and can be accessed at:
+
+| URL | Description |
+|---|---|
+| `http://localhost:8000/` | Redirect to Image Viewer |
+| `http://localhost:8000/view/` | **Image Viewer** — live pipeline, SPNG browsing |
+| `http://localhost:8000/results/` | **Results Viewer** — stored track images and stats |
+| `http://localhost:8000/viewer3d/` | **3D Viewer** — interactive 3D track visualization |
+
+Each page has navigation buttons to switch between the others.
 
 ### Starting the Server
 
@@ -264,6 +309,25 @@ the analysis database without re-running the pipeline.
 | View selector | Switch between JSON views in the results |
 | Slice slider / arrow keys | Step through slices |
 | STATS toggle | Show angle and length histograms for the slice |
+
+## 3D Track Viewer
+
+When `--results` is given, an interactive 3D viewer is available at
+`http://localhost:8000/viewer3d/`. It renders stored track segments as
+3D lines in (X, Y, Z) space using Plotly.js (loaded from CDN in the
+browser).
+
+| Control | Effect |
+|---|---|
+| View selector | Switch between JSON views |
+| Cluster checkbox | Apply duplicate-segment clustering before display |
+| Angle range | Filter tracks by angle (0–180°) |
+| Min Length | Hide segments shorter than this value (px) |
+| Slice Range | Restrict to a subset of Z-slices |
+| RELOAD button | Fetch and redraw with current settings |
+
+Track segments are coloured by angle using the Turbo colorscale.
+Rotate and zoom with mouse drag / scroll.
 
 ## Tests
 

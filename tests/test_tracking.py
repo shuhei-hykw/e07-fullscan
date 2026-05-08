@@ -87,6 +87,26 @@ def test_find_tracks_detects_line():
   assert len(tracks) >= 1
 
 
+def test_find_tracks_grain_properties_measured():
+  reader = _MockReader(_foggy_line_image())
+  tracks = find_tracks(reader, 0, zpj_half=0)
+  for t in tracks:
+    assert isinstance(t.n_grains, int)
+    assert t.n_grains >= 0
+    assert isinstance(t.width_px, float)
+    assert isinstance(t.mean_intens, float)
+    assert t.mean_intens >= 0.0
+
+
+def test_find_tracks_line_has_grains():
+  # the horizontal track should have grains detected along it
+  reader = _MockReader(_foggy_line_image())
+  tracks = find_tracks(reader, 0, zpj_half=0)
+  # at least one track should have n_grains > 0 and mean_intens > 0
+  assert any(t.n_grains > 0 for t in tracks)
+  assert any(t.mean_intens > 0.0 for t in tracks)
+
+
 def test_find_tracks_uniform_returns_empty():
   reader = _MockReader(_uniform_image())
   tracks = find_tracks(reader, 0, zpj_half=0)

@@ -12,7 +12,8 @@ import yaml
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from flask import (
-    Flask, abort, redirect, render_template_string, request, send_file,
+    Flask, abort, jsonify, redirect, render_template_string,
+    request, send_file,
 )
 
 from e07fullscan.io import load_spng
@@ -110,6 +111,12 @@ _TEMPLATE = """
 <div id="sidebar">
   <div class="sidebar-section">
     <a href="/view/" class="btn" style="background:#522;">GO TO ROOT</a>
+    {% if has_results %}
+    <a href="/results/" class="btn" style="background:#225;">
+      RESULTS VIEWER</a>
+    <a href="/viewer3d/" class="btn" style="background:#225;">
+      3D VIEWER</a>
+    {% endif %}
     <button class="btn" onclick="toggleViewMode()">VIEW: FIT/ACTUAL</button>
     <button class="btn" id="btn-orig"  onclick="toggleOrig()">ORIGINAL</button>
     <button class="btn" id="btn-stats" onclick="toggleStats()">STATS</button>
@@ -639,6 +646,164 @@ def _stats_figure(
     return fig
 
 
+_VIEWER3D_TEMPLATE = """
+<html>
+<head>
+  <title>E07 3D Track Viewer</title>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { background:#1a1a1a; color:#ddd; font-family:sans-serif;
+           margin:0; display:flex; height:100vh; overflow:hidden; }
+    #sidebar { width:260px; background:#252525;
+               border-right:1px solid #444; display:flex;
+               flex-direction:column; flex-shrink:0; padding:10px;
+               overflow-y:auto; }
+    h3 { font-size:0.75em; color:#666; text-transform:uppercase;
+         margin:10px 0 4px 0; }
+    .btn { background:#444; color:#eee; border:1px solid #666;
+           padding:7px; cursor:pointer; border-radius:3px;
+           font-size:0.8em; width:100%; margin-bottom:6px;
+           text-align:center; display:block; text-decoration:none; }
+    .btn:hover { background:#555; }
+    select { width:100%; background:#333; color:#ddd;
+             border:1px solid #555; padding:4px;
+             font-size:0.8em; margin-bottom:6px; }
+    .row { display:flex; align-items:center; gap:6px;
+           margin-bottom:5px; font-size:0.8em; }
+    .row label { min-width:70px; color:#999; }
+    .row input[type=number] { width:56px; background:#333; color:#ddd;
+                              border:1px solid #555; padding:3px;
+                              font-size:0.8em; }
+    .row input[type=range]  { flex:1; accent-color:#0077ff; }
+    .row span { min-width:28px; font-size:0.8em;
+                font-family:monospace; text-align:right; }
+    #status { font-size:0.75em; color:#888; margin-top:6px;
+              word-break:break-all; }
+    #main { flex-grow:1; overflow:hidden; }
+    #plot  { width:100%; height:100%; }
+  </style>
+</head>
+<body>
+<div id="sidebar">
+  <a href="/results/" class="btn" style="background:#522;">
+    RESULTS VIEWER</a>
+  <h3>View</h3>
+  <select id="sel-view" onchange="onViewChange()">
+    {% for v in view_ids %}
+    <option value="{{ loop.index0 }}"
+      {{ 'selected' if loop.index0 == cur_view_idx else '' }}>
+      {{ v.split('/')[-1] }}</option>
+    {% endfor %}
+  </select>
+  <h3>Options</h3>
+  <div class="row">
+    <label>
+      <input type="checkbox" id="cb-cluster" checked
+             style="accent-color:#0077ff;">
+      Cluster
+    </label>
+  </div>
+  <h3>Angle (deg)</h3>
+  <div class="row">
+    <label>min</label>
+    <input type="number" id="angle-min" value="0" min="0" max="180">
+    <label>max</label>
+    <input type="number" id="angle-max" value="180" min="0" max="180">
+  </div>
+  <h3>Min Length (px)</h3>
+  <div class="row">
+    <input type="range" id="len-min" min="0" max="200" step="5"
+           value="25" oninput="sv('len-min')">
+    <span id="len-min_v">25</span>
+  </div>
+  <h3>Slice Range</h3>
+  <div class="row">
+    <label>min</label>
+    <input type="number" id="slice-min" value="0" min="0">
+    <label>max</label>
+    <input type="number" id="slice-max" value="999" min="0">
+  </div>
+  <button class="btn" onclick="reload()" style="margin-top:10px;
+    background:#0a2a55; border-color:#0077ff;">RELOAD</button>
+  <div id="status">—</div>
+</div>
+<div id="main"><div id="plot"></div></div>
+<script>
+  let initialized = false;
+
+  function sv(id) {
+    document.getElementById(id + '_v').textContent =
+      document.getElementById(id).value;
+  }
+  function onViewChange() {
+    const vidx = document.getElementById('sel-view').value;
+    window.location.href = '/viewer3d/' + vidx;
+  }
+  function reload() {
+    const vidx    = document.getElementById('sel-view').value;
+    const cluster = document.getElementById('cb-cluster').checked ? 1 : 0;
+    const aMin    = document.getElementById('angle-min').value;
+    const aMax    = document.getElementById('angle-max').value;
+    const lMin    = document.getElementById('len-min').value;
+    const sMin    = document.getElementById('slice-min').value;
+    const sMax    = document.getElementById('slice-max').value;
+    const url = `/viewer3d_data/${vidx}?cluster=${cluster}` +
+                `&angle_min=${aMin}&angle_max=${aMax}` +
+                `&length_min=${lMin}` +
+                `&slice_min=${sMin}&slice_max=${sMax}`;
+
+    document.getElementById('status').textContent = 'Loading…';
+    fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        const n  = data.n_shown;
+        const nr = data.n_raw;
+        document.getElementById('status').textContent =
+          n + ' tracks shown' + (n !== nr ? ' (' + nr + ' raw)' : '');
+
+        const trace = {
+          type: 'scatter3d', mode: 'lines',
+          x: data.x, y: data.y, z: data.z,
+          line: {
+            color: data.color, colorscale: 'Turbo',
+            cmin: 0, cmax: 180, width: 1.5,
+          },
+          hoverinfo: 'none',
+        };
+        const layout = {
+          paper_bgcolor: '#1a1a1a',
+          scene: {
+            xaxis: {title:'X (px)', color:'#aaa',
+                    gridcolor:'#333', backgroundcolor:'#111'},
+            yaxis: {title:'Y (px)', color:'#aaa',
+                    gridcolor:'#333', backgroundcolor:'#111'},
+            zaxis: {title:'Z (mm)', color:'#aaa',
+                    gridcolor:'#333', backgroundcolor:'#111'},
+            bgcolor: '#111',
+            aspectmode: 'cube',
+          },
+          margin: {l:0, r:0, t:30, b:0},
+          font: {color:'#ddd', size:11},
+        };
+        if (!initialized) {
+          Plotly.newPlot('plot', [trace], layout,
+                         {responsive:true, displaylogo:false});
+          initialized = true;
+        } else {
+          Plotly.react('plot', [trace], layout);
+        }
+      })
+      .catch(e => {
+        document.getElementById('status').textContent = 'Error: ' + e;
+      });
+  }
+  reload();
+</script>
+</body>
+</html>
+"""
+
 _RESULTS_TEMPLATE = """
 <html>
 <head>
@@ -682,14 +847,16 @@ _RESULTS_TEMPLATE = """
 <div id="sidebar">
   <a href="/view/" class="btn" style="background:#522;">
     GO TO VIEWER</a>
+  <a href="/viewer3d/" class="btn" style="background:#225;">
+    3D VIEWER</a>
   <button class="btn" id="btn-stats" onclick="toggleStats()">
     STATS</button>
   <h3>View</h3>
   <select id="sel-view" onchange="onViewChange()">
     {% for v in view_ids %}
-    <option value="{{ v }}"
-      {{ 'selected' if v == selected_view else '' }}>
-      {{ v }}</option>
+    <option value="{{ loop.index0 }}"
+      {{ 'selected' if loop.index0 == cur_view_idx else '' }}>
+      {{ v.split('/')[-1] }}</option>
     {% endfor %}
   </select>
   <h3>Slice</h3>
@@ -705,27 +872,27 @@ _RESULTS_TEMPLATE = """
     — <span id="hdr-n">{{ n_tracks }}</span> tracks
   </div>
   <div id="viewport">
-    <img id="track-img" src="/result_image/{{ cur_view_enc }}/{{ cur_idx }}">
+    <img id="track-img"
+         src="/result_image/{{ cur_view_idx }}/{{ cur_idx }}">
   </div>
   <div id="stats-panel">
     <img id="stats-img"
-         src="/result_stats/{{ cur_view_enc }}/{{ cur_idx }}">
+         src="/result_stats/{{ cur_view_idx }}/{{ cur_idx }}">
   </div>
 </div>
 <script>
-  function encView(v) { return encodeURIComponent(v); }
   function update(v) {
     v = parseInt(v);
     document.getElementById('idx-label').textContent =
       v + ' / ' + ({{ max_idx }} + 1);
     document.getElementById('hdr-idx').textContent = v;
-    const view = document.getElementById('sel-view').value;
+    const vidx = document.getElementById('sel-view').value;
     document.getElementById('track-img').src =
-      '/result_image/' + encView(view) + '/' + v;
+      '/result_image/' + vidx + '/' + v;
     if (document.getElementById('stats-panel')
                 .classList.contains('visible')) {
       document.getElementById('stats-img').src =
-        '/result_stats/' + encView(view) + '/' + v;
+        '/result_stats/' + vidx + '/' + v;
     }
   }
   function onSliceChange(v) {
@@ -733,11 +900,8 @@ _RESULTS_TEMPLATE = """
     update(v);
   }
   function onViewChange() {
-    window.location.href =
-      '/results/' +
-      encodeURIComponent(
-        document.getElementById('sel-view').value
-      ) + '/0';
+    const vidx = document.getElementById('sel-view').value;
+    window.location.href = '/results/' + vidx + '/0';
   }
   function toggleStats() {
     const p = document.getElementById('stats-panel');
@@ -869,6 +1033,7 @@ def create_app(
             hough_thr=HOUGH_THRESH,
             hough_ml=HOUGH_MIN_LINE,
             hough_mg=HOUGH_MAX_GAP,
+            has_results=results is not None,
         )
 
     def _get_tracks(
@@ -964,38 +1129,39 @@ def create_app(
     # --- Results viewer routes (only active when results loaded) ---
 
     if results is not None:
+        # Cache the view list; routes use integer indices to avoid
+        # URL-encoding issues with slash-containing paths.
+        _view_ids = results.view_ids()
 
         @app.route("/results/")
-        @app.route("/results/<path:view_enc>/<int:idx>")
-        def results_viewer(view_enc: str = "", idx: int = 0):
-            view_ids = results.view_ids()
-            if not view_ids:
+        @app.route("/results/<int:view_idx>/<int:slice_idx>")
+        def results_viewer(view_idx: int = 0, slice_idx: int = 0):
+            if not _view_ids:
                 return "No results loaded.", 404
-            from urllib.parse import unquote
-            selected = unquote(view_enc) if view_enc else view_ids[0]
-            if selected not in view_ids:
-                selected = view_ids[0]
+            view_idx = min(max(view_idx, 0), len(_view_ids) - 1)
+            selected = _view_ids[view_idx]
             slices  = results.slice_indices(selected)
             max_idx = slices[-1] if slices else 0
-            cur_idx = idx if idx in slices else (slices[0] if slices else 0)
+            cur_idx = (
+                slice_idx if slice_idx in slices
+                else (slices[0] if slices else 0)
+            )
             df = results.get_slice(selected, cur_idx)
-            from urllib.parse import quote
             return render_template_string(
                 _RESULTS_TEMPLATE,
-                view_ids=view_ids,
+                view_ids=_view_ids,
                 selected_view=selected,
+                cur_view_idx=view_idx,
                 max_idx=max_idx,
                 cur_idx=cur_idx,
-                cur_view_enc=quote(selected, safe=""),
                 n_tracks=len(df),
             )
 
-        @app.route("/result_image/<path:view_enc>/<int:idx>")
-        def result_image(view_enc: str, idx: int):
+        @app.route("/result_image/<int:view_idx>/<int:slice_idx>")
+        def result_image(view_idx: int, slice_idx: int):
             try:
-                from urllib.parse import unquote
-                view_id = unquote(view_enc)
-                df = results.get_slice(view_id, idx)
+                view_id = _view_ids[view_idx]
+                df = results.get_slice(view_id, slice_idx)
                 json_path = Path(view_id)
                 reader = load_spng(json_path)
                 h = reader.image_type.height
@@ -1008,12 +1174,11 @@ def create_app(
             except Exception as e:
                 return str(e), 500
 
-        @app.route("/result_stats/<path:view_enc>/<int:idx>")
-        def result_stats(view_enc: str, idx: int):
+        @app.route("/result_stats/<int:view_idx>/<int:slice_idx>")
+        def result_stats(view_idx: int, slice_idx: int):
             try:
-                from urllib.parse import unquote
-                view_id = unquote(view_enc)
-                df = results.get_slice(view_id, idx)
+                view_id = _view_ids[view_idx]
+                df = results.get_slice(view_id, slice_idx)
                 fig = render_stats(df)
                 buf = io.BytesIO()
                 fig.savefig(
@@ -1024,6 +1189,77 @@ def create_app(
                 plt.close(fig)
                 buf.seek(0)
                 return send_file(buf, mimetype="image/png")
+            except Exception as e:
+                return str(e), 500
+
+        @app.route("/viewer3d/")
+        @app.route("/viewer3d/<int:view_idx>")
+        def viewer3d(view_idx: int = 0):
+            if not _view_ids:
+                return "No results loaded.", 404
+            view_idx = min(max(view_idx, 0), len(_view_ids) - 1)
+            return render_template_string(
+                _VIEWER3D_TEMPLATE,
+                view_ids=_view_ids,
+                cur_view_idx=view_idx,
+            )
+
+        @app.route("/viewer3d_data/<int:view_idx>")
+        def viewer3d_data(view_idx: int):
+            try:
+                from e07fullscan.clustering import cluster_df
+                view_id = _view_ids[view_idx]
+                df = results._df[
+                    results._df["view_id"] == view_id
+                ].copy()
+
+                def _flt(name, default):
+                    try:
+                        return float(request.args.get(name, default))
+                    except (ValueError, TypeError):
+                        return float(default)
+
+                def _int(name, default):
+                    try:
+                        return int(request.args.get(name, default))
+                    except (ValueError, TypeError):
+                        return int(default)
+
+                a_min  = _flt("angle_min",  0)
+                a_max  = _flt("angle_max",  180)
+                l_min  = _flt("length_min", 0)
+                s_min  = _int("slice_min",  0)
+                s_max  = _int("slice_max",  999)
+                do_cl  = request.args.get("cluster", "0") == "1"
+
+                df = df[
+                    (df["angle_deg"]  >= a_min)
+                    & (df["angle_deg"]  <= a_max)
+                    & (df["length_px"]  >= l_min)
+                    & (df["slice_idx"]  >= s_min)
+                    & (df["slice_idx"]  <= s_max)
+                ]
+                n_raw = int(len(df))
+
+                if do_cl:
+                    df = cluster_df(df)
+
+                n_shown = int(len(df))
+
+                xs: list = []
+                ys: list = []
+                zs: list = []
+                cs: list = []
+                for row in df.itertuples():
+                    xs += [row.x1, row.x2, None]
+                    ys += [row.y1, row.y2, None]
+                    zs += [row.z,  row.z,  None]
+                    cs += [row.angle_deg, row.angle_deg, None]
+
+                return jsonify({
+                    "x": xs, "y": ys, "z": zs, "color": cs,
+                    "n_raw": n_raw, "n_shown": n_shown,
+                })
             except Exception as e:
                 return str(e), 500
 

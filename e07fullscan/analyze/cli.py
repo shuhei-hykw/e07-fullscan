@@ -19,12 +19,14 @@ _FIELDS = [
     "x1", "y1", "x2", "y2", "z",
     "px1", "py1", "px2", "py2",
     "length_px", "angle_deg",
+    "n_grains", "width_px", "mean_intens",
 ]
 
 _NUMERIC_FIELDS = (
-    "x1", "y1", "x2", "y2", "z", "length_px", "angle_deg"
+    "x1", "y1", "x2", "y2", "z",
+    "length_px", "angle_deg", "width_px", "mean_intens",
 )
-_INT_FIELDS = ("slice_idx", "px1", "py1", "px2", "py2")
+_INT_FIELDS = ("slice_idx", "px1", "py1", "px2", "py2", "n_grains")
 
 
 def _load_cfg(path: Path | None) -> dict:
@@ -60,6 +62,9 @@ def _make_row(t, idx: int) -> dict:
         "px2": t.px2, "py2": t.py2,
         "length_px": f"{t.length_px:.2f}",
         "angle_deg": f"{t.angle_deg:.2f}",
+        "n_grains":    t.n_grains,
+        "width_px":    f"{t.width_px:.3f}",
+        "mean_intens": f"{t.mean_intens:.3f}",
     }
 
 

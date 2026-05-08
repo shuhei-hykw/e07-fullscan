@@ -5,7 +5,7 @@
 
 ## Package structure
 - Main package: e07fullscan
-- Subpackages: io, tracking, analyze, merge, server, utils
+- Subpackages: io, tracking, analyze, merge, clustering, server, utils
 
 ## Style
 - Indentation: 2 spaces (never tabs)
