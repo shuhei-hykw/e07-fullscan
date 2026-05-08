@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import sys
 from pathlib import Path
 
@@ -13,11 +14,13 @@ from e07fullscan.tracking import find_tracks
 
 _CFG_PATH = Path(__file__).parents[2] / "config" / "default.yaml"
 
-_CSV_FIELDS = [
+_FIELDS = [
     "view_id", "slice_idx",
     "x1", "y1", "x2", "y2", "z",
     "length_px", "angle_deg",
 ]
+
+_NUMERIC_FIELDS = ("x1", "y1", "x2", "y2", "z", "length_px", "angle_deg")
 
 
 def _load_cfg(path: Path | None) -> dict:
@@ -34,18 +37,37 @@ def _find_jsons(path: Path) -> list[Path]:
     return sorted(path.rglob("*.json"))
 
 
+def _chunk(
+    jsons: list[Path], chunk_id: int, chunk_total: int
+) -> list[Path]:
+    size = math.ceil(len(jsons) / chunk_total)
+    lo = chunk_id * size
+    return jsons[lo: lo + size]
+
+
+def _make_row(t, idx: int) -> dict:
+    return {
+        "view_id":   t.view_id,
+        "slice_idx": idx,
+        "x1": f"{t.x1:.4f}", "y1": f"{t.y1:.4f}",
+        "x2": f"{t.x2:.4f}", "y2": f"{t.y2:.4f}",
+        "z":  f"{t.z:.4f}",
+        "length_px": f"{t.length_px:.2f}",
+        "angle_deg": f"{t.angle_deg:.2f}",
+    }
+
+
 def _analyze_view(
     json_path: Path,
     cfg: dict,
-    writer: csv.DictWriter,
     slice_idx: int | None,
     verbose: bool,
-) -> int:
+) -> list[dict]:
     reader = load_spng(json_path)
     indices = (
         [slice_idx] if slice_idx is not None else range(len(reader))
     )
-    n_total = 0
+    rows = []
     for idx in indices:
         tracks = find_tracks(
             reader, idx,
@@ -59,25 +81,22 @@ def _analyze_view(
             hough_min_line=cfg.get("hough_ml", 25),
             hough_max_gap=cfg.get("hough_mg", 4),
         )
-        for t in tracks:
-            writer.writerow({
-                "view_id":   t.view_id,
-                "slice_idx": idx,
-                "x1": f"{t.x1:.4f}",
-                "y1": f"{t.y1:.4f}",
-                "x2": f"{t.x2:.4f}",
-                "y2": f"{t.y2:.4f}",
-                "z":  f"{t.z:.4f}",
-                "length_px": f"{t.length_px:.2f}",
-                "angle_deg": f"{t.angle_deg:.2f}",
-            })
-        n_total += len(tracks)
+        rows.extend(_make_row(t, idx) for t in tracks)
     if verbose:
         print(
-            f"  {json_path.name}: {n_total} tracks",
+            f"  {json_path.name}: {len(rows)} tracks",
             file=sys.stderr,
         )
-    return n_total
+    return rows
+
+
+def _write_parquet(rows: list[dict], path: Path) -> None:
+    import pandas as pd
+    df = pd.DataFrame(rows, columns=_FIELDS)
+    for col in _NUMERIC_FIELDS:
+        df[col] = df[col].astype(float)
+    df["slice_idx"] = df["slice_idx"].astype(int)
+    df.to_parquet(path, index=False)
 
 
 def main() -> None:
@@ -86,37 +105,42 @@ def main() -> None:
         description="Batch track finder for E07 full-scan data.",
     )
     parser.add_argument(
-        "path",
-        type=Path,
+        "path", type=Path,
         help="Data directory or single JSON file.",
     )
     parser.add_argument(
-        "-o", "--output",
-        type=Path,
-        default=None,
-        metavar="FILE",
-        help="Output CSV file (default: stdout).",
+        "-o", "--output", type=Path, default=None, metavar="FILE",
+        help=(
+            "Output file (.parquet or .csv; "
+            "default: CSV to stdout)."
+        ),
     )
     parser.add_argument(
-        "--config",
-        type=Path,
-        default=None,
-        metavar="YAML",
+        "--config", type=Path, default=None, metavar="YAML",
         help="Config YAML (default: config/default.yaml).",
     )
     parser.add_argument(
-        "--slice",
-        type=int,
-        default=None,
-        metavar="IDX",
+        "--slice", type=int, default=None, metavar="IDX",
         help="Analyze a single slice index only.",
     )
     parser.add_argument(
-        "-v", "--verbose",
-        action="store_true",
+        "--chunk-id", type=int, default=None, metavar="N",
+        help="Process Nth chunk (0-based, requires --chunk-total).",
+    )
+    parser.add_argument(
+        "--chunk-total", type=int, default=None, metavar="M",
+        help="Split JSON list into M equal chunks.",
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true",
         help="Print progress to stderr.",
     )
     args = parser.parse_args()
+
+    if (args.chunk_id is None) != (args.chunk_total is None):
+        parser.error(
+            "--chunk-id and --chunk-total must be used together."
+        )
 
     cfg   = _load_cfg(args.config)
     jsons = _find_jsons(args.path)
@@ -127,35 +151,65 @@ def main() -> None:
         )
         sys.exit(1)
 
-    if args.verbose:
-        print(f"Found {len(jsons)} JSON file(s).", file=sys.stderr)
+    if args.chunk_total is not None:
+        jsons = _chunk(jsons, args.chunk_id, args.chunk_total)
+        if not jsons:
+            print("Empty chunk — nothing to do.", file=sys.stderr)
+            sys.exit(0)
 
-    out = (
-        open(args.output, "w", newline="", encoding="utf-8")
-        if args.output else sys.stdout
+    if args.verbose:
+        print(f"Processing {len(jsons)} JSON file(s).", file=sys.stderr)
+
+    use_parquet = (
+        args.output is not None
+        and args.output.suffix == ".parquet"
     )
-    try:
-        writer = csv.DictWriter(out, fieldnames=_CSV_FIELDS)
-        writer.writeheader()
-        total = 0
+
+    if use_parquet:
+        all_rows: list[dict] = []
         for json_path in jsons:
             try:
-                total += _analyze_view(
-                    json_path, cfg, writer,
-                    slice_idx=args.slice,
-                    verbose=args.verbose,
+                all_rows.extend(
+                    _analyze_view(
+                        json_path, cfg, args.slice, args.verbose
+                    )
                 )
             except Exception as exc:
                 print(
-                    f"WARNING: {json_path}: {exc}",
-                    file=sys.stderr,
+                    f"WARNING: {json_path}: {exc}", file=sys.stderr
                 )
-    finally:
-        if args.output:
-            out.close()
-
-    if args.verbose:
-        print(f"Done. Total tracks: {total}", file=sys.stderr)
+        _write_parquet(all_rows, args.output)
+        if args.verbose:
+            print(
+                f"Done. {len(all_rows)} tracks → {args.output}",
+                file=sys.stderr,
+            )
+    else:
+        out = (
+            open(args.output, "w", newline="", encoding="utf-8")
+            if args.output else sys.stdout
+        )
+        try:
+            writer = csv.DictWriter(out, fieldnames=_FIELDS)
+            writer.writeheader()
+            total = 0
+            for json_path in jsons:
+                try:
+                    rows = _analyze_view(
+                        json_path, cfg, args.slice, args.verbose
+                    )
+                    writer.writerows(rows)
+                    total += len(rows)
+                except Exception as exc:
+                    print(
+                        f"WARNING: {json_path}: {exc}",
+                        file=sys.stderr,
+                    )
+        finally:
+            if args.output:
+                out.close()
+        if args.verbose:
+            print(f"Done. Total tracks: {total}", file=sys.stderr)
 
 
 if __name__ == "__main__":

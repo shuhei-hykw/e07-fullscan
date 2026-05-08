@@ -13,6 +13,8 @@ dependencies = [
     "opencv-python>=4.8",
     "matplotlib>=3.7",
     "PyYAML>=6.0",
+    "pandas>=2.0",
+    "pyarrow>=14.0",
 ]
 
 [project.optional-dependencies]
@@ -26,6 +28,7 @@ dev = [
 [project.scripts]
 e07view    = "e07fullscan.server.cli:main"
 e07analyze = "e07fullscan.analyze.cli:main"
+e07merge   = "e07fullscan.merge.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
