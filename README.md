@@ -78,6 +78,68 @@ for img in reader:  # Iteration supported
     ...
 ```
 
+## Tracking API
+
+Find track segments in a single Z-slice and return them in stage coordinates.
+
+```python
+from e07fullscan.io import load_spng
+from e07fullscan.tracking import find_tracks
+
+reader = load_spng("path/to/scan.json")
+tracks = find_tracks(reader, idx=10, view_id="path/to/scan.json")
+
+for t in tracks:
+    print(t.x1, t.y1, t.x2, t.y2, t.z)
+```
+
+`find_tracks` applies the full preprocessing pipeline (Z-projection → fog
+removal → Otsu threshold → noise removal) before running HoughLinesP.
+The same parameters as the web viewer are accepted as keyword arguments.
+
+### Track Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `x1, y1, x2, y2` | `float` | Start/end points in stage coordinates |
+| `z` | `float` | Stage Z of the slice (`reader.entries[idx].z`) |
+| `px1, py1, px2, py2` | `int` | Start/end points in pixel coordinates |
+| `length_px` | `float` | Segment length in pixels |
+| `angle_deg` | `float` | Line angle 0–180° |
+| `view_id` | `str` | Source JSON path (set by caller) |
+
+## Batch Analysis
+
+Run track finding over a directory tree and write results to CSV.
+
+```bash
+# Analyze all JSON files under a directory
+e07analyze /data/MOD108 -o tracks.csv -v
+
+# Analyze a single file
+e07analyze /data/MOD108/PL12/view.json -o tracks.csv
+
+# Analyze one slice only
+e07analyze /data/MOD108 --slice 10 -o tracks.csv
+
+# Use a custom parameter config
+e07analyze /data/MOD108 --config my_params.yaml -o tracks.csv
+```
+
+`python -m e07fullscan.analyze` works as an alias if `e07analyze` is not
+on PATH.
+
+### CSV Output Format
+
+| Column | Description |
+|---|---|
+| `view_id` | Source JSON path |
+| `slice_idx` | Slice index within the view |
+| `x1, y1, x2, y2` | Track endpoints in stage coordinates |
+| `z` | Stage Z of the slice |
+| `length_px` | Track length in pixels |
+| `angle_deg` | Track angle 0–180° |
+
 ## Web Viewer
 
 Browse SPNG data in a browser and interactively control the processing
@@ -151,80 +213,11 @@ parameter change:
 
 ![Pipeline: all 6 processing steps from raw scan to track detection](docs/pipeline.png)
 
-## Tracking API
-
-Find track segments in a single Z-slice and return them in stage coordinates.
-
-```python
-from e07fullscan.io import load_spng
-from e07fullscan.tracking import find_tracks
-
-reader = load_spng("path/to/scan.json")
-tracks = find_tracks(reader, idx=10, view_id="path/to/scan.json")
-
-for t in tracks:
-    print(t.x1, t.y1, t.x2, t.y2, t.z)
-```
-
-`find_tracks` applies the full preprocessing pipeline (Z-projection → fog
-removal → Otsu threshold → noise removal) before running HoughLinesP.
-The same parameters as the web viewer are accepted as keyword arguments.
-
-### Track Fields
-
-| Field | Type | Description |
-|---|---|---|
-| `x1, y1, x2, y2` | `float` | Start/end points in stage coordinates |
-| `z` | `float` | Stage Z of the slice (`reader.entries[idx].z`) |
-| `px1, py1, px2, py2` | `int` | Start/end points in pixel coordinates |
-| `length_px` | `float` | Segment length in pixels |
-| `angle_deg` | `float` | Line angle 0–180° |
-| `view_id` | `str` | Source JSON path (set by caller) |
-
-### Affine Transform
-
-`reader.affine_p2s` is a 6-element list `[a00, a01, a10, a11, tx, ty]`
-mapping pixel coordinates to stage coordinates:
-
-```
-stage_x = a00·px + a01·py + tx
-stage_y = a10·px + a11·py + ty
-```
-
-## Batch Analysis
-
-Run track finding over a directory tree and write results to CSV.
-
-```bash
-# Analyze all JSON files under a directory
-e07analyze /data/MOD108 -o tracks.csv -v
-
-# Analyze a single file
-e07analyze /data/MOD108/PL12/view.json -o tracks.csv
-
-# Analyze one slice only
-e07analyze /data/MOD108 --slice 10 -o tracks.csv
-
-# Use a custom parameter config
-e07analyze /data/MOD108 --config my_params.yaml -o tracks.csv
-```
-
-`python -m e07fullscan.analyze` works as an alias if `e07analyze` is not
-on PATH.
-
-### CSV Output Format
-
-| Column | Description |
-|---|---|
-| `view_id` | Source JSON path |
-| `slice_idx` | Slice index within the view |
-| `x1, y1, x2, y2` | Track endpoints in stage coordinates |
-| `z` | Stage Z of the slice |
-| `length_px` | Track length in pixels |
-| `angle_deg` | Track angle 0–180° |
-
 ## Tests
 
 ```bash
-pytest
+pytest        # run all tests
+pytest -v     # verbose output
 ```
+
+Tests cover the tracking library (`tracking/`) and batch CLI (`analyze/`).
