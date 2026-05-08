@@ -17,10 +17,14 @@ _CFG_PATH = Path(__file__).parents[2] / "config" / "default.yaml"
 _FIELDS = [
     "view_id", "slice_idx",
     "x1", "y1", "x2", "y2", "z",
+    "px1", "py1", "px2", "py2",
     "length_px", "angle_deg",
 ]
 
-_NUMERIC_FIELDS = ("x1", "y1", "x2", "y2", "z", "length_px", "angle_deg")
+_NUMERIC_FIELDS = (
+    "x1", "y1", "x2", "y2", "z", "length_px", "angle_deg"
+)
+_INT_FIELDS = ("slice_idx", "px1", "py1", "px2", "py2")
 
 
 def _load_cfg(path: Path | None) -> dict:
@@ -52,6 +56,8 @@ def _make_row(t, idx: int) -> dict:
         "x1": f"{t.x1:.4f}", "y1": f"{t.y1:.4f}",
         "x2": f"{t.x2:.4f}", "y2": f"{t.y2:.4f}",
         "z":  f"{t.z:.4f}",
+        "px1": t.px1, "py1": t.py1,
+        "px2": t.px2, "py2": t.py2,
         "length_px": f"{t.length_px:.2f}",
         "angle_deg": f"{t.angle_deg:.2f}",
     }
@@ -95,7 +101,8 @@ def _write_parquet(rows: list[dict], path: Path) -> None:
     df = pd.DataFrame(rows, columns=_FIELDS)
     for col in _NUMERIC_FIELDS:
         df[col] = df[col].astype(float)
-    df["slice_idx"] = df["slice_idx"].astype(int)
+    for col in _INT_FIELDS:
+        df[col] = df[col].astype(int)
     df.to_parquet(path, index=False)
 
 

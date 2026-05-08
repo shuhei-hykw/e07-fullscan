@@ -17,6 +17,9 @@ from flask import (
 
 from e07fullscan.io import load_spng
 from e07fullscan.tracking import Track, find_tracks
+from e07fullscan.server.results import (
+    ResultsStore, render_image, render_stats,
+)
 
 # --- Load pipeline defaults from config (fallback to built-in values) ---
 _CFG_PATH = Path(__file__).parents[2] / "config" / "default.yaml"
@@ -636,9 +639,140 @@ def _stats_figure(
     return fig
 
 
+_RESULTS_TEMPLATE = """
+<html>
+<head>
+  <title>E07 Results Viewer</title>
+  <style>
+    body { background:#1a1a1a; color:#ddd; font-family:sans-serif;
+           margin:0; display:flex; height:100vh; overflow:hidden; }
+    #sidebar { width:280px; background:#252525;
+               border-right:1px solid #444; display:flex;
+               flex-direction:column; flex-shrink:0;
+               box-sizing:border-box; padding:10px; }
+    h3 { font-size:0.8em; color:#666; text-transform:uppercase;
+         margin:10px 0 5px 0; }
+    .btn { background:#444; color:#eee; border:1px solid #666;
+           padding:8px; cursor:pointer; border-radius:3px;
+           font-size:0.8em; width:100%; margin-bottom:8px;
+           text-align:center; display:block; text-decoration:none;
+           box-sizing:border-box; }
+    .btn:hover { background:#555; }
+    select { width:100%; background:#333; color:#ddd;
+             border:1px solid #555; padding:4px;
+             font-size:0.8em; margin-bottom:8px; }
+    #main { flex-grow:1; display:flex; flex-direction:column;
+            background:#000; overflow:hidden; }
+    #header { background:#333; padding:10px; text-align:center;
+              border-bottom:1px solid #444; }
+    #viewport { flex-grow:1; overflow:auto; display:flex;
+                align-items:center; justify-content:center; }
+    #viewport img { max-width:100%; max-height:100%;
+                    object-fit:contain; }
+    #stats-panel { height:340px; border-top:1px solid #444;
+                   display:none; overflow:auto; background:#111;
+                   text-align:center; flex-shrink:0; }
+    #stats-panel.visible { display:block; }
+    #stats-panel img { height:100%; object-fit:contain; }
+    input[type=range] { width:80%; vertical-align:middle;
+                        accent-color:#0077ff; }
+  </style>
+</head>
+<body>
+<div id="sidebar">
+  <a href="/view/" class="btn" style="background:#522;">
+    GO TO VIEWER</a>
+  <button class="btn" id="btn-stats" onclick="toggleStats()">
+    STATS</button>
+  <h3>View</h3>
+  <select id="sel-view" onchange="onViewChange()">
+    {% for v in view_ids %}
+    <option value="{{ v }}"
+      {{ 'selected' if v == selected_view else '' }}>
+      {{ v }}</option>
+    {% endfor %}
+  </select>
+  <h3>Slice</h3>
+  <input type="range" id="z-range" min="0" max="{{ max_idx }}"
+         value="{{ cur_idx }}" oninput="onSliceChange(this.value)">
+  <span id="idx-label" style="font-size:0.8em;">
+    {{ cur_idx }} / {{ max_idx + 1 }}</span>
+</div>
+<div id="main">
+  <div id="header" style="font-size:0.8em; color:#888;">
+    {{ selected_view or "Select a view" }}
+    — slice <span id="hdr-idx">{{ cur_idx }}</span>
+    — <span id="hdr-n">{{ n_tracks }}</span> tracks
+  </div>
+  <div id="viewport">
+    <img id="track-img" src="/result_image/{{ cur_view_enc }}/{{ cur_idx }}">
+  </div>
+  <div id="stats-panel">
+    <img id="stats-img"
+         src="/result_stats/{{ cur_view_enc }}/{{ cur_idx }}">
+  </div>
+</div>
+<script>
+  function encView(v) { return encodeURIComponent(v); }
+  function update(v) {
+    v = parseInt(v);
+    document.getElementById('idx-label').textContent =
+      v + ' / ' + ({{ max_idx }} + 1);
+    document.getElementById('hdr-idx').textContent = v;
+    const view = document.getElementById('sel-view').value;
+    document.getElementById('track-img').src =
+      '/result_image/' + encView(view) + '/' + v;
+    if (document.getElementById('stats-panel')
+                .classList.contains('visible')) {
+      document.getElementById('stats-img').src =
+        '/result_stats/' + encView(view) + '/' + v;
+    }
+  }
+  function onSliceChange(v) {
+    document.getElementById('z-range').value = v;
+    update(v);
+  }
+  function onViewChange() {
+    window.location.href =
+      '/results/' +
+      encodeURIComponent(
+        document.getElementById('sel-view').value
+      ) + '/0';
+  }
+  function toggleStats() {
+    const p = document.getElementById('stats-panel');
+    const on = p.classList.toggle('visible');
+    document.getElementById('btn-stats')
+            .classList.toggle('active', on);
+    if (on) update(
+      parseInt(document.getElementById('z-range').value)
+    );
+  }
+  window.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const r = document.getElementById('z-range');
+    r.value = parseInt(r.value) + (e.deltaY > 0 ? 1 : -1);
+    update(r.value);
+  }, { passive: false });
+  window.addEventListener('keydown', (e) => {
+    const r = document.getElementById('z-range');
+    if (e.key === 'ArrowRight') {
+      r.value = parseInt(r.value) + 1; update(r.value);
+    }
+    if (e.key === 'ArrowLeft') {
+      r.value = parseInt(r.value) - 1; update(r.value);
+    }
+  });
+</script>
+</body>
+</html>
+"""
+
+
 def create_app(
     root_dir: Path | str,
     start_path: str = "",
+    results: ResultsStore | None = None,
 ) -> Flask:
     """Create the Flask viewer app rooted at *root_dir*."""
     root = Path(root_dir).resolve()
@@ -827,6 +961,72 @@ def create_app(
         except Exception as e:
             return str(e), 500
 
+    # --- Results viewer routes (only active when results loaded) ---
+
+    if results is not None:
+
+        @app.route("/results/")
+        @app.route("/results/<path:view_enc>/<int:idx>")
+        def results_viewer(view_enc: str = "", idx: int = 0):
+            view_ids = results.view_ids()
+            if not view_ids:
+                return "No results loaded.", 404
+            from urllib.parse import unquote
+            selected = unquote(view_enc) if view_enc else view_ids[0]
+            if selected not in view_ids:
+                selected = view_ids[0]
+            slices  = results.slice_indices(selected)
+            max_idx = slices[-1] if slices else 0
+            cur_idx = idx if idx in slices else (slices[0] if slices else 0)
+            df = results.get_slice(selected, cur_idx)
+            from urllib.parse import quote
+            return render_template_string(
+                _RESULTS_TEMPLATE,
+                view_ids=view_ids,
+                selected_view=selected,
+                max_idx=max_idx,
+                cur_idx=cur_idx,
+                cur_view_enc=quote(selected, safe=""),
+                n_tracks=len(df),
+            )
+
+        @app.route("/result_image/<path:view_enc>/<int:idx>")
+        def result_image(view_enc: str, idx: int):
+            try:
+                from urllib.parse import unquote
+                view_id = unquote(view_enc)
+                df = results.get_slice(view_id, idx)
+                json_path = Path(view_id)
+                reader = load_spng(json_path)
+                h = reader.image_type.height
+                w = reader.image_type.width
+                img = render_image(df, h, w)
+                _, buf = cv2.imencode(".png", img)
+                return send_file(
+                    io.BytesIO(buf.tobytes()), mimetype="image/png"
+                )
+            except Exception as e:
+                return str(e), 500
+
+        @app.route("/result_stats/<path:view_enc>/<int:idx>")
+        def result_stats(view_enc: str, idx: int):
+            try:
+                from urllib.parse import unquote
+                view_id = unquote(view_enc)
+                df = results.get_slice(view_id, idx)
+                fig = render_stats(df)
+                buf = io.BytesIO()
+                fig.savefig(
+                    buf, format="png", dpi=110,
+                    bbox_inches="tight",
+                    facecolor=fig.get_facecolor(),
+                )
+                plt.close(fig)
+                buf.seek(0)
+                return send_file(buf, mimetype="image/png")
+            except Exception as e:
+                return str(e), 500
+
     return app
 
 
@@ -835,8 +1035,9 @@ def run(
     host: str = "0.0.0.0",
     port: int = 8000,
     start_path: str = "",
+    results: ResultsStore | None = None,
 ) -> None:
     """Start the viewer server."""
-    create_app(root_dir, start_path=start_path).run(
-        host=host, port=port, debug=False, threaded=True
-    )
+    create_app(
+        root_dir, start_path=start_path, results=results
+    ).run(host=host, port=port, debug=False, threaded=True)
