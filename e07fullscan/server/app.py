@@ -16,6 +16,7 @@ from flask import (
 )
 
 from e07fullscan.io import load_spng
+from e07fullscan.tracking import Track, find_tracks
 
 # --- Load pipeline defaults from config (fallback to built-in values) ---
 _CFG_PATH = Path(__file__).parents[2] / "config" / "default.yaml"
@@ -400,13 +401,11 @@ _TEMPLATE = """
 def _process(
     img: np.ndarray,
     fog: bool, thr: bool, den: bool, hough: bool, trk: bool,
+    tracks: list[Track] | None = None,
     fog_k: int      = FOG_KSIZE,
     noise_amin: int = NOISE_AREA_MIN,
     noise_amax: int = NOISE_AREA_MAX,
     noise_cmp: int  = NOISE_COMPACT,
-    hough_thr: int  = HOUGH_THRESH,
-    hough_ml: int   = HOUGH_MIN_LINE,
-    hough_mg: int   = HOUGH_MAX_GAP,
 ) -> np.ndarray:
     """Apply the selected pipeline steps in order."""
     current = img
@@ -439,19 +438,17 @@ def _process(
         cv2.drawContours(current, noise, -1, 0, thickness=-1)
 
     if hough or trk:
-        lines = cv2.HoughLinesP(
-            current, 1, np.pi / 180,
-            threshold=hough_thr,
-            minLineLength=hough_ml,
-            maxLineGap=hough_mg,
-        )
         output = (
             np.zeros((*current.shape, 3), dtype=np.uint8)
             if trk else cv2.cvtColor(current, cv2.COLOR_GRAY2BGR)
         )
-        if lines is not None:
-            for x1, y1, x2, y2 in lines[:, 0]:
-                cv2.line(output, (x1, y1), (x2, y2), (0, 255, 0), 1)
+        if tracks:
+            for t in tracks:
+                cv2.line(
+                    output,
+                    (t.px1, t.py1), (t.px2, t.py2),
+                    (0, 255, 0), 1,
+                )
         return output
 
     return current
@@ -459,14 +456,12 @@ def _process(
 
 def _collect_stats(
     img: np.ndarray,
-    fog: bool, thr: bool, den: bool, hough_or_trk: bool,
+    fog: bool, thr: bool, den: bool,
+    tracks: list[Track] | None = None,
     fog_k: int      = FOG_KSIZE,
     noise_amin: int = NOISE_AREA_MIN,
     noise_amax: int = NOISE_AREA_MAX,
     noise_cmp: int  = NOISE_COMPACT,
-    hough_thr: int  = HOUGH_THRESH,
-    hough_ml: int   = HOUGH_MIN_LINE,
-    hough_mg: int   = HOUGH_MAX_GAP,
 ) -> dict:
     """Run the pipeline and collect statistics at each stage."""
     stats: dict = {}
@@ -511,23 +506,10 @@ def _collect_stats(
                 cv2.contourArea(c) for c in cnts_after
             ]
 
-    if hough_or_trk:
-        lines = cv2.HoughLinesP(
-            current, 1, np.pi / 180,
-            threshold=hough_thr,
-            minLineLength=hough_ml,
-            maxLineGap=hough_mg,
-        )
-        if lines is not None:
-            lengths, angles = [], []
-            for x1, y1, x2, y2 in lines[:, 0]:
-                lengths.append(float(np.hypot(x2 - x1, y2 - y1)))
-                angles.append(
-                    float(np.degrees(np.arctan2(y2 - y1, x2 - x1)) % 180)
-                )
-            stats["track_lengths"] = lengths
-            stats["track_angles"]  = angles
-            stats["n_tracks"]      = len(lines)
+    if tracks is not None:
+        stats["track_lengths"] = [t.length_px for t in tracks]
+        stats["track_angles"]  = [t.angle_deg for t in tracks]
+        stats["n_tracks"]      = len(tracks)
 
     return stats
 
@@ -698,9 +680,8 @@ def create_app(
         )
 
     def _load_image(
-        json_path: Path, idx: int, zpj: bool, zpj_half: int
+        reader, idx: int, zpj: bool, zpj_half: int
     ) -> tuple[np.ndarray, int]:
-        reader = load_spng(json_path)
         if zpj:
             lo = max(0, idx - zpj_half)
             hi = min(len(reader) - 1, idx + zpj_half)
@@ -756,6 +737,22 @@ def create_app(
             hough_mg=HOUGH_MAX_GAP,
         )
 
+    def _get_tracks(
+        json_path: Path, reader, idx: int, params: dict
+    ) -> list[Track]:
+        return find_tracks(
+            reader, idx,
+            view_id=str(json_path),
+            zpj_half=params["zpj_half"],
+            fog_ksize=params["fog_k"],
+            noise_amin=params["noise_amin"],
+            noise_amax=params["noise_amax"],
+            noise_cmp=params["noise_cmp"],
+            hough_thr=params["hough_thr"],
+            hough_min_line=params["hough_ml"],
+            hough_max_gap=params["hough_mg"],
+        )
+
     @app.route("/raw/<path:json_rel_path>/<int:idx>")
     def get_raw(json_rel_path: str, idx: int):
         try:
@@ -773,21 +770,28 @@ def create_app(
         flags  = _parse_flags()
         params = _parse_params()
         try:
+            json_path = _safe_resolve(json_rel_path)
+            reader = load_spng(json_path)
             img, _ = _load_image(
-                _safe_resolve(json_rel_path), idx,
-                flags["zpj"], params["zpj_half"],
+                reader, idx, flags["zpj"], params["zpj_half"],
+            )
+            tracks = (
+                _get_tracks(json_path, reader, idx, params)
+                if flags["hough"] or flags["trk"] else None
             )
             result = _process(
                 img,
                 fog=flags["fog"], thr=flags["thr"],
                 den=flags["den"], hough=flags["hough"], trk=flags["trk"],
+                tracks=tracks,
                 **{k: params[k] for k in (
-                    "fog_k", "noise_amin", "noise_amax",
-                    "noise_cmp", "hough_thr", "hough_ml", "hough_mg",
+                    "fog_k", "noise_amin", "noise_amax", "noise_cmp",
                 )},
             )
             _, buf = cv2.imencode(".png", result)
-            return send_file(io.BytesIO(buf.tobytes()), mimetype="image/png")
+            return send_file(
+                io.BytesIO(buf.tobytes()), mimetype="image/png"
+            )
         except Exception as e:
             return str(e), 500
 
@@ -796,17 +800,21 @@ def create_app(
         flags  = _parse_flags()
         params = _parse_params()
         try:
+            json_path = _safe_resolve(json_rel_path)
+            reader = load_spng(json_path)
             img, n_slices = _load_image(
-                _safe_resolve(json_rel_path), idx,
-                flags["zpj"], params["zpj_half"],
+                reader, idx, flags["zpj"], params["zpj_half"],
+            )
+            tracks = (
+                _get_tracks(json_path, reader, idx, params)
+                if flags["hough"] or flags["trk"] else None
             )
             stats = _collect_stats(
                 img,
                 fog=flags["fog"], thr=flags["thr"], den=flags["den"],
-                hough_or_trk=flags["hough"] or flags["trk"],
+                tracks=tracks,
                 **{k: params[k] for k in (
-                    "fog_k", "noise_amin", "noise_amax",
-                    "noise_cmp", "hough_thr", "hough_ml", "hough_mg",
+                    "fog_k", "noise_amin", "noise_amax", "noise_cmp",
                 )},
             )
             fig = _stats_figure(stats, flags, params, idx, n_slices)

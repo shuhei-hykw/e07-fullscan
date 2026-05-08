@@ -24,7 +24,8 @@ dev = [
 ]
 
 [project.scripts]
-e07view = "e07fullscan.server.cli:main"
+e07view    = "e07fullscan.server.cli:main"
+e07analyze = "e07fullscan.analyze.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
