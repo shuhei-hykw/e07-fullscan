@@ -701,8 +701,21 @@ _VIEWER3D_TEMPLATE = """
     <label>
       <input type="checkbox" id="cb-cluster" checked
              style="accent-color:#0077ff;">
-      Cluster
+      Cluster (XY)
     </label>
+  </div>
+  <div class="row">
+    <label>
+      <input type="checkbox" id="cb-link"
+             style="accent-color:#0077ff;">
+      Link Z
+    </label>
+  </div>
+  <h3>Min Span (slices)</h3>
+  <div class="row">
+    <input type="range" id="min-span" min="1" max="20" step="1"
+           value="1" oninput="sv('min-span')">
+    <span id="min-span_v">1</span>
   </div>
   <h3>Angle (deg)</h3>
   <div class="row">
@@ -743,12 +756,15 @@ _VIEWER3D_TEMPLATE = """
   function reload() {
     const vidx    = document.getElementById('sel-view').value;
     const cluster = document.getElementById('cb-cluster').checked ? 1 : 0;
+    const link    = document.getElementById('cb-link').checked ? 1 : 0;
+    const mSpan   = document.getElementById('min-span').value;
     const aMin    = document.getElementById('angle-min').value;
     const aMax    = document.getElementById('angle-max').value;
     const lMin    = document.getElementById('len-min').value;
     const sMin    = document.getElementById('slice-min').value;
     const sMax    = document.getElementById('slice-max').value;
     const url = `/viewer3d_data/${vidx}?cluster=${cluster}` +
+                `&link=${link}&min_span=${mSpan}` +
                 `&angle_min=${aMin}&angle_max=${aMax}` +
                 `&length_min=${lMin}` +
                 `&slice_min=${sMin}&slice_max=${sMax}`;
@@ -762,13 +778,15 @@ _VIEWER3D_TEMPLATE = """
         document.getElementById('status').textContent =
           n + ' tracks shown' + (n !== nr ? ' (' + nr + ' raw)' : '');
 
+        const linked = data.linked;
         const trace = {
           type: 'scatter3d', mode: 'lines',
           x: data.x, y: data.y, z: data.z,
-          line: {
-            color: data.color, colorscale: 'Turbo',
-            cmin: 0, cmax: 180, width: 1.5,
-          },
+          line: linked
+            ? { color: data.color, colorscale: 'HSV',
+                cmin: 0, cmax: 360, width: 2 }
+            : { color: data.color, colorscale: 'Turbo',
+                cmin: 0, cmax: 180, width: 1.5 },
           hoverinfo: 'none',
         };
         const layout = {
@@ -1207,7 +1225,7 @@ def create_app(
         @app.route("/viewer3d_data/<int:view_idx>")
         def viewer3d_data(view_idx: int):
             try:
-                from e07fullscan.clustering import cluster_df
+                from e07fullscan.clustering import cluster_df, link_tracks
                 view_id = _view_ids[view_idx]
                 df = results._df[
                     results._df["view_id"] == view_id
@@ -1225,24 +1243,33 @@ def create_app(
                     except (ValueError, TypeError):
                         return int(default)
 
-                a_min  = _flt("angle_min",  0)
-                a_max  = _flt("angle_max",  180)
-                l_min  = _flt("length_min", 0)
-                s_min  = _int("slice_min",  0)
-                s_max  = _int("slice_max",  999)
-                do_cl  = request.args.get("cluster", "0") == "1"
+                a_min    = _flt("angle_min",  0)
+                a_max    = _flt("angle_max",  180)
+                l_min    = _flt("length_min", 0)
+                s_min    = _int("slice_min",  0)
+                s_max    = _int("slice_max",  999)
+                do_cl    = request.args.get("cluster",  "0") == "1"
+                do_link  = request.args.get("link",     "0") == "1"
+                min_span = _int("min_span", 1)
 
                 df = df[
-                    (df["angle_deg"]  >= a_min)
-                    & (df["angle_deg"]  <= a_max)
-                    & (df["length_px"]  >= l_min)
-                    & (df["slice_idx"]  >= s_min)
-                    & (df["slice_idx"]  <= s_max)
+                    (df["angle_deg"] >= a_min)
+                    & (df["angle_deg"] <= a_max)
+                    & (df["length_px"] >= l_min)
+                    & (df["slice_idx"] >= s_min)
+                    & (df["slice_idx"] <= s_max)
                 ]
                 n_raw = int(len(df))
 
                 if do_cl:
                     df = cluster_df(df)
+
+                if do_link:
+                    df = link_tracks(df)
+                    if min_span > 1:
+                        spans = df.groupby("track_id")["slice_idx"].nunique()
+                        keep  = spans[spans >= min_span].index
+                        df    = df[df["track_id"].isin(keep)]
 
                 n_shown = int(len(df))
 
@@ -1250,15 +1277,26 @@ def create_app(
                 ys: list = []
                 zs: list = []
                 cs: list = []
-                for row in df.itertuples():
-                    xs += [row.x1, row.x2, None]
-                    ys += [row.y1, row.y2, None]
-                    zs += [row.z,  row.z,  None]
-                    cs += [row.angle_deg, row.angle_deg, None]
+
+                if do_link and "track_id" in df.columns:
+                    # color by hue derived from track_id (golden angle)
+                    for row in df.itertuples():
+                        hue = float((int(row.track_id) * 137) % 360)
+                        xs += [row.x1, row.x2, None]
+                        ys += [row.y1, row.y2, None]
+                        zs += [row.z,  row.z,  None]
+                        cs += [hue, hue, None]
+                else:
+                    for row in df.itertuples():
+                        xs += [row.x1, row.x2, None]
+                        ys += [row.y1, row.y2, None]
+                        zs += [row.z,  row.z,  None]
+                        cs += [row.angle_deg, row.angle_deg, None]
 
                 return jsonify({
                     "x": xs, "y": ys, "z": zs, "color": cs,
                     "n_raw": n_raw, "n_shown": n_shown,
+                    "linked": do_link,
                 })
             except Exception as e:
                 return str(e), 500
