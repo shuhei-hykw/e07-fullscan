@@ -40,10 +40,13 @@ def main() -> None:
                     help="Quality cut on length_px")
     ap.add_argument("--eps",            type=float, default=25.0,
                     help="Clustering radius (px)")
-    ap.add_argument("--beam-angle-cut",  type=float, default=0.0,
+    ap.add_argument("--beam-angle-cut",   type=float, default=0.0,
                     help="Exclude tracks with angle_deg < cut or "
                          "> 180-cut (beam-parallel removal, deg)")
-    ap.add_argument("--views",          type=int,   default=None,
+    ap.add_argument("--min-angle-spread", type=float, default=0.0,
+                    help="Min angular spread of contributing tracks (deg);"
+                         " rejects heavy-particle fake vertices; 0=disable")
+    ap.add_argument("--views",           type=int,   default=None,
                     help="Limit to N views (for testing)")
     args = ap.parse_args()
 
@@ -78,6 +81,7 @@ def main() -> None:
         eps_px=args.eps,
         min_len_px=args.min_len,
         beam_angle_cut=args.beam_angle_cut,
+        min_angle_spread=args.min_angle_spread,
     )
     elapsed = time.time() - t0
 

@@ -3,14 +3,29 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-_MIN_TRACKS      = 3
-_MAX_IMPACT      = 30.0   # px — perpendicular distance to vertex line
-_MAX_EP          = 150.0  # px — absolute nearest-endpoint limit
-_MAX_EP_FRAC     = 0.5    # relative limit: ep < frac * track_length
-_MIN_INTENS      = 10.0   # lower cut for efficiency (was 12)
-_EPS_PX          = 25.0   # clustering radius (px) = 7.3 μm at 0.29 μm/px
-_MIN_LEN_PX      = 50.0   # px = 14.5 μm — catches alpha (25 μm = 86 px)
-_BEAM_ANGLE_CUT  = 0.0    # deg — exclude |angle| < cut and |180-angle| < cut
+_MIN_TRACKS       = 3
+_MAX_IMPACT       = 30.0   # px — perpendicular distance to vertex line
+_MAX_EP           = 150.0  # px — absolute nearest-endpoint limit
+_MAX_EP_FRAC      = 0.5    # relative limit: ep < frac * track_length
+_MIN_INTENS       = 10.0   # lower cut for efficiency (was 12)
+_EPS_PX           = 25.0   # clustering radius (px) = 7.3 μm at 0.29 μm/px
+_MIN_LEN_PX       = 50.0   # px = 14.5 μm — catches alpha (25 μm = 86 px)
+_BEAM_ANGLE_CUT   = 0.0    # deg — exclude |angle| < cut and |180-angle| < cut
+_MIN_ANGLE_SPREAD = 0.0    # deg — 0 = disabled; reject if spread < threshold
+
+
+def _angle_spread_deg(angles: np.ndarray) -> float:
+    """Circular spread of line directions in [0, 180).
+
+    Uses the doubled-angle trick to handle the 0/180 wraparound:
+    maps each direction θ → exp(2iθ), then measures how spread the
+    unit vectors are.  Returns half-angle spread in [0, 90]:
+      0  = all lines parallel (heavy-track fake signature)
+      45 = lines uniformly distributed (ideal star vertex)
+    """
+    phi = np.deg2rad(2.0 * angles)
+    R = float(np.abs(np.mean(np.exp(1j * phi))))
+    return float(np.degrees(np.arccos(np.clip(R, -1.0, 1.0))) / 2.0)
 
 
 def _vertices_in_group(
@@ -20,6 +35,7 @@ def _vertices_in_group(
     max_ep_frac: float,
     eps_px: float,
     min_tracks: int,
+    min_angle_spread: float,
 ) -> list[dict]:
     n = len(rows)
     if n < 2:
@@ -108,6 +124,8 @@ def _vertices_in_group(
         end = first_idx[fi + 1] if fi + 1 < len(first_idx) else len(keys)
         labels[f:end] = fi
 
+    has_angle = 'angle_deg' in rows.columns
+
     results: list[dict] = []
     for lbl in range(len(first_idx)):
         mask = labels == lbl
@@ -117,29 +135,40 @@ def _vertices_in_group(
         if len(track_idx) < min_tracks:
             continue
         tr = rows.iloc[sorted(track_idx)]
+
+        spread = (
+            _angle_spread_deg(tr['angle_deg'].values)
+            if has_angle else float('nan')
+        )
+        if min_angle_spread > 0.0 and has_angle:
+            if spread < min_angle_spread:
+                continue
+
         results.append({
-            'vx_px':       float(cluster_vx),
-            'vy_px':       float(cluster_vy),
-            'n_tracks':    len(track_idx),
-            'mean_intens': float(tr['mean_intens'].mean()),
-            'z':           float(rows['z'].mean()),
-            'view_id':     rows['view_id'].iloc[0],
-            'view_x_mm':   float(rows['view_x_mm'].iloc[0]),
-            'view_y_mm':   float(rows['view_y_mm'].iloc[0]),
+            'vx_px':        float(cluster_vx),
+            'vy_px':        float(cluster_vy),
+            'n_tracks':     len(track_idx),
+            'mean_intens':  float(tr['mean_intens'].mean()),
+            'angle_spread': spread,
+            'z':            float(rows['z'].mean()),
+            'view_id':      rows['view_id'].iloc[0],
+            'view_x_mm':    float(rows['view_x_mm'].iloc[0]),
+            'view_y_mm':    float(rows['view_y_mm'].iloc[0]),
         })
     return results
 
 
 def find_vertices(
     df: pd.DataFrame,
-    min_tracks: int       = _MIN_TRACKS,
-    max_impact: float     = _MAX_IMPACT,
-    max_ep: float         = _MAX_EP,
-    max_ep_frac: float    = _MAX_EP_FRAC,
-    min_intens: float     = _MIN_INTENS,
-    eps_px: float         = _EPS_PX,
-    min_len_px: float     = _MIN_LEN_PX,
-    beam_angle_cut: float = _BEAM_ANGLE_CUT,
+    min_tracks: int          = _MIN_TRACKS,
+    max_impact: float        = _MAX_IMPACT,
+    max_ep: float            = _MAX_EP,
+    max_ep_frac: float       = _MAX_EP_FRAC,
+    min_intens: float        = _MIN_INTENS,
+    eps_px: float            = _EPS_PX,
+    min_len_px: float        = _MIN_LEN_PX,
+    beam_angle_cut: float    = _BEAM_ANGLE_CUT,
+    min_angle_spread: float  = _MIN_ANGLE_SPREAD,
 ) -> pd.DataFrame:
     """Find 2D vertex candidates per (view_id, slice_idx).
 
@@ -156,9 +185,15 @@ def find_vertices(
     beam_angle_cut > 0 removes tracks with angle_deg < cut or
     angle_deg > 180 - cut (nearly beam-parallel tracks).
 
+    min_angle_spread > 0 rejects clusters where the circular spread of
+    contributing track directions is below the threshold (in degrees).
+    Uses doubled-angle trick to handle 0/180 wraparound; spread=0 means
+    all tracks parallel (heavy-particle fake), spread=45 means uniform.
+    Recommended: 20-30 deg.  0 = disabled (default).
+
     Returns DataFrame with columns:
       view_id, slice_idx, vx_px, vy_px, z, n_tracks,
-      mean_intens, view_x_mm, view_y_mm
+      mean_intens, angle_spread, view_x_mm, view_y_mm
     """
     sel = df[
         (df['mean_intens'] >= min_intens) &
@@ -176,7 +211,8 @@ def find_vertices(
     ):
         for v in _vertices_in_group(
             grp.reset_index(drop=True),
-            max_impact, max_ep, max_ep_frac, eps_px, min_tracks,
+            max_impact, max_ep, max_ep_frac, eps_px,
+            min_tracks, min_angle_spread,
         ):
             v['slice_idx'] = int(slice_idx)
             records.append(v)
@@ -184,7 +220,8 @@ def find_vertices(
     if not records:
         return pd.DataFrame(columns=[
             'view_id', 'slice_idx', 'vx_px', 'vy_px', 'z',
-            'n_tracks', 'mean_intens', 'view_x_mm', 'view_y_mm',
+            'n_tracks', 'mean_intens', 'angle_spread',
+            'view_x_mm', 'view_y_mm',
         ])
     return pd.DataFrame(records)
 

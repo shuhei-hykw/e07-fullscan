@@ -322,6 +322,32 @@ python scripts/vertex_map.py \
 Generates two panels: scatter plot coloured by `n_tracks_max` and a
 log-scale density map per FOV.
 
+### Vertex crop tool (`scripts/crop_vertices.py`)
+
+Crops raw SPNG images around vertex positions for visual inspection.
+Each output PNG is a 3-panel strip: **RAW** (min projection, contrast-stretched)
+| **FOG-REMOVED** | **BINARY**, with edge tick marks and a 1 px dot at the
+computed vertex centre.
+
+```bash
+python scripts/crop_vertices.py \
+    --vertices   results/vertices_merged.parquet \
+    --output-dir results/vertex_crops/ \
+    --n-samples  30 \
+    --min-tracks 5 --max-tracks 12 --min-slices 20 \
+    --shuffle --seed 7 \
+    --crop-size  200
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--crop-size` | 200 | Half-size of crop in px (total = 2×) |
+| `--min-tracks` | 3 | Min `n_tracks_max` |
+| `--min-slices` | 1 | Min `n_slices` |
+| `--shuffle` | off | Random sample (default: top-n by n_tracks_max) |
+| `--zpj-half` | 4 | Z-projection half-range for fog/binary panels |
+| `--zpj-mode` | mean | Projection mode: `mean` or `max` |
+
 ## Clustering API
 
 ```python

@@ -19,4 +19,4 @@
 - Avoid magic numbers; always assign named constants
 
 ## Documentation
-- Always update README.md in English when making changes
+- Always update ANALYSIS.md and README.md in English

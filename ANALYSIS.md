@@ -3,7 +3,7 @@
 Running record of findings, observations, and decisions during the analysis.
 Physics-focused; code usage is documented in README.md.
 
-**Created:** 2026-05-10  **Last updated:** 2026-05-10
+**Created:** 2026-05-10  **Last updated:** 2026-05-10 (angular spread filter, crop tool, teacher data)
 
 ---
 
@@ -445,11 +445,58 @@ v3 max_ep_frac=0.5 fixed this (relative endpoint cut).
 
 ---
 
+## Visual Inspection Findings (2026-05-10)
+
+### Vertex crop tool (`scripts/crop_vertices.py`)
+Generates 3-panel strips per vertex: RAW (min projection) | FOG-REMOVED | BINARY.
+- **Min projection** across all z-slices: dark tracks accumulate, showing all tracks in the view depth
+- **Contrast stretch** applied to raw panel for visibility
+- **Edge tick marks + 1 px dot** mark the computed vertex position
+
+Usage:
+```bash
+python scripts/crop_vertices.py \
+  --vertices results/vertices_merged.parquet \
+  --output-dir results/vertex_crops_teacher \
+  --n-samples 30 --min-tracks 5 --max-tracks 12 --min-slices 20 \
+  --shuffle --seed 7 --crop-size 200
+```
+
+### Contamination types confirmed (2026-05-10)
+
+From 30 crops (`n_tracks 5–12`, `n_slices ≥ 20`, random seed 7):
+
+| Category | Count | Examples |
+|---|---|---|
+| Emulsion artifact (crack / blob) | 7 | 003, 007, 011, 013, 025, 026, 030 |
+| Good teacher (real particle tracks) | 23 | — |
+| Reaction vertex candidates | 5 | 004, 017, 021, 023, 027 |
+
+**Key finding**: high `n_slices` does NOT guarantee genuine vertices — emulsion
+artifacts persist across all slices and score high `n_slices`.
+
+### Angular spread filter (2026-05-10)
+Implemented `min_angle_spread` in `find_vertices()` and `_vertices_in_group()`.
+Uses doubled-angle trick for circular statistics on line directions.
+
+- n=34 artifact vertex: `angle_spread = 14.8°` → removed by threshold ≥ 15°
+- Recommendation: `--min-angle-spread 20` for next KEKCC run
+
+### Preprocessing fix needed
+Large emulsion artifacts (cracks, blobs) survive `noise_amax = 100 px²` cutoff
+→ their edges are detected by Hough as near-parallel lines → fake high-n vertices.
+Fix: add `noise_amax_upper` parameter to `preprocess()` to remove blobs with
+`area > threshold` (e.g. 5000 px²) before Hough runs.
+Requires re-running full `e07analyze` pipeline.
+
+---
+
 ## Open Questions / Next Steps
 
-- [ ] **Angular spread filter**: add `min_angle_spread` to `find_vertices()`;
-      reject vertices where std(angle_deg of tracks) < threshold (~20–30°).
-      Expected to cleanly remove heavy-particle fake vertices.
+- [x] **Angular spread filter**: implemented `min_angle_spread` in `find_vertices()`;
+      n=34 artifact has spread=14.8° → threshold 15–20° removes it cleanly.
+- [ ] **Preprocessing fix**: add `noise_amax_upper` to `preprocess()` to remove
+      large emulsion artifact blobs before Hough; requires full re-analysis on KEKCC.
 - [ ] **width_px filter**: thick tracks (heavy particles) have large `width_px`;
       could use `mean(width_px) < threshold` at vertex to reject heavy-track fakes.
 - [ ] **Track re-analysis**: re-run `e07analyze` with `px_scale = 0.29` to get
