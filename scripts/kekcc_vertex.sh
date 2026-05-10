@@ -39,7 +39,7 @@ python scripts/find_vertices.py \
     --max-ep-frac     0.5 \
     --eps            25.0 \
     --beam-angle-cut  15.0 \
-    --min-angle-spread 0.0 \
+    --min-angle-spread 20.0 \
     2>> "$LOG_FILE"
 
 echo "---" | tee -a "$LOG_FILE"
