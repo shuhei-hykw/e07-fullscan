@@ -3,7 +3,7 @@
 Running record of findings, observations, and decisions during the analysis.
 Physics-focused; code usage is documented in README.md.
 
-**Created:** 2026-05-10  **Last updated:** 2026-05-10 (angular spread filter, crop tool, teacher data)
+**Created:** 2026-05-10  **Last updated:** 2026-05-10 (run traceability system)
 
 ---
 
@@ -20,7 +20,8 @@ Physics-focused; code usage is documented in README.md.
 9. [Physics Goals](#physics-goals)
 10. [Observed Event Types](#observed-event-types)
 11. [Parameter Decisions Log](#parameter-decisions-log)
-12. [Open Questions / Next Steps](#open-questions--next-steps)
+12. [Run Traceability](#run-traceability-2026-05-10)
+13. [Open Questions / Next Steps](#open-questions--next-steps)
 
 ---
 
@@ -491,12 +492,64 @@ Requires re-running full `e07analyze` pipeline.
 
 ---
 
+## Run Traceability (2026-05-10)
+
+Every output file now carries a complete record of the parameters and
+code version used to produce it.
+
+### How it works
+
+`e07fullscan/utils/run_info.py` generates a **run_id** of the form
+`YYYYMMDD_HHMMSS_<git_short_hash>` at script startup, then records:
+
+| Field | Content |
+|---|---|
+| `run_id` | Unique identifier per invocation |
+| `script` | Script filename |
+| `timestamp` | ISO-8601 datetime |
+| `python` | Python version |
+| `params` | All CLI arguments as key-value pairs |
+
+### Storage locations
+
+| Output type | Sidecar |
+|---|---|
+| `*.parquet` | `<stem>_run.json` next to the file |
+| PNG image directory | `run_params.json` inside the directory |
+| Single PNG file | `<stem>_run.json` next to the file |
+
+Parquet files also carry the metadata embedded in PyArrow schema
+(`run_meta` key) so the information is preserved if sidecars are lost.
+
+### Reading back
+
+```python
+import json, pyarrow.parquet as pq
+meta = json.loads(
+    pq.read_table("results/vertices.parquet")
+    .schema.metadata[b"run_meta"]
+)
+print(meta["run_id"])    # e.g. 20260510_165200_b0ec81f
+print(meta["params"])    # full CLI arg dict
+```
+
+Scripts updated: `find_vertices.py`, `merge_vertices.py`,
+`crop_vertices.py`, `vertex_map.py`.
+
+---
+
 ## Open Questions / Next Steps
 
 - [x] **Angular spread filter**: implemented `min_angle_spread` in `find_vertices()`;
       n=34 artifact has spread=14.8° → threshold 15–20° removes it cleanly.
+- [x] **Run traceability**: `run_id + _run.json` sidecar + parquet metadata
+      embedded in all output files; code in `e07fullscan/utils/run_info.py`.
+- [ ] **Parameter reconsideration**: use teacher data (5 reaction vertex candidates
+      found 2026-05-10) to systematically optimize vertex-finding parameters.
+      Expand teacher set to ~100 samples first.
 - [ ] **Preprocessing fix**: add `noise_amax_upper` to `preprocess()` to remove
       large emulsion artifact blobs before Hough; requires full re-analysis on KEKCC.
+- [ ] **KEKCC v4 vertex run**: re-run vertex finding with `min_angle_spread=20°`.
 - [ ] **width_px filter**: thick tracks (heavy particles) have large `width_px`;
       could use `mean(width_px) < threshold` at vertex to reject heavy-track fakes.
 - [ ] **Track re-analysis**: re-run `e07analyze` with `px_scale = 0.29` to get
