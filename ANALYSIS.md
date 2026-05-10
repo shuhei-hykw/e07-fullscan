@@ -1,6 +1,6 @@
 # E07 Fullscan — Analysis Notes
 
-Chronological development diary.
+Chronological development diary — results, discussions, decisions, and dead ends.
 Technical API reference: README.md.
 
 **Started:** 2026-05-08
@@ -232,10 +232,107 @@ Filter is most aggressive at high n_tracks_max, as expected
 
 ---
 
+## 2026-05-10 — v4 crops inspection; specials_x20 teacher events; integration tests
+
+### v3 vs v4 crop comparison
+
+Generated 30 crops from both v3 (`results/vertex_crops_teacher/`) and
+v4 (`results/vertex_crops_v4/`) with identical parameters
+(`n_tracks 5–12, n_slices≥20, seed=7`).
+
+Because the underlying parquet files differ (v4 has 207k vs v3 221k merged),
+the same random seed draws different vertices.
+Qualitative comparison: v4 crops had noticeably fewer large-blob artifacts;
+the high-n fake vertices with tightly clustered parallel lines were reduced.
+
+Discussion: `n_slices` was previously thought to be a reliability metric
+("more z-slices = more real"), but visual inspection shows emulsion cracks
+persist across ALL slices → high `n_slices` is not a purity guarantee.
+
+### specials_x20 teacher events
+
+User provided 13 confirmed double-hypernuclei (or candidate) events at
+`/gpfs/group/had/sks/Users/shuhei/work/specials_x20/`:
+
+```
+D005, D013, IBUKI, IRRAWADY, KISO, MINO, NAGARA,
+T004, T004_3body, T004_center,
+T011, T011_100, T011_200
+```
+
+Image format: plain PNG files (`0000.png`, `0001.png`, …) + `image.json`.
+JSON format is identical to SPNG format except `Path` is a plain filename
+rather than `file.spng&offset&length`.
+
+`SpngReader` was extended to detect the format from the presence of `&` in
+the Path field (`length=-1` sentinel for plain PNGs).
+
+Pixel scale from `AffineP2S[0]`: 0.00028889 mm/px = **0.289 μm/px** —
+identical to fullscan. Microscope settings confirmed compatible.
+
+Z-spacing: ~3 μm/slice (vs ~1.5 μm/slice in fullscan) — factor 2 difference,
+but `zpj_half=4` still gives ±12 μm range which is sufficient.
+
+**Pipeline results on specials (all slices, min_angle_spread=0):**
+
+| Event | Tracks | Best n | Spread |
+|---|---|---|---|
+| IBUKI | 39,563 | 10 | 31.9° |
+| NAGARA | 61,711 | 9 | 23.2° |
+| MINO | 39,858 | 18 | 30.2° |
+| KISO | 38,256 | 11 | 42.4° |
+| IRRAWADY | 33,943 | 10 | 38.7° |
+| D005 | 97,737 | 13 | 35.5° |
+| D013 | 91,253 | 12 | **13.4°** |
+| T004 | 141,982 | 10 | **18.0°** |
+| T011 | 26,202 | 10 | **8.2°** |
+
+**Key finding**: D013, T004, T011 have angular spread < 20° at their
+best vertex. This means the v4 `min_angle_spread=20°` production filter
+would reject their primary vertex candidate.
+
+Discussion: This does not necessarily mean the filter is wrong.
+Possible explanations:
+1. The "best n" vertex found is NOT the actual reaction vertex —
+   could be a different feature. The true vertex may have larger spread.
+2. These events genuinely have low spread (e.g. forward-boosted topology).
+3. The vertex-finding algorithm is reconstructing only part of the star.
+
+Decision: integration tests use `min_angle_spread=0` to validate the
+pipeline independently of the production filter. The filter setting
+is a separate optimization problem that requires ground-truth vertex positions.
+
+**Vertex positions are NOT at image centre** (dist_center = 229–981 px).
+The specials are NOT centred on the vertex; the vertex is somewhere in the
+2048×2048 FOV. Cannot use "near centre" as a pass criterion in tests.
+
+### Integration test suite (`tests/test_specials.py`)
+
+Added `tests/test_specials.py` with two `@pytest.mark.slow` test types:
+
+1. `test_special_reader_loads` — all 13 events, loads first/last slice,
+   checks shape. Verifies reader extension works for plain PNG format.
+
+2. `test_special_vertex_detected` — runs full track finding + vertex finding
+   on each event, asserts `n_tracks_max >= 5` somewhere in the image.
+   Parameters: `min_angle_spread=0, beam_angle_cut=0` (conservative, format-agnostic).
+
+Slow tests skip by default (`pytest`); run explicitly with `pytest -m slow`.
+Conftest: `tests/conftest.py` implements this via `pytest_collection_modifyitems`.
+Marker registered in `pyproject.toml`.
+
+Tested: `test_special_reader_loads` → 13/13 PASSED (3s).
+`test_special_vertex_detected[IBUKI]`, `[T011]`, `[T011_100]`, `[T011_200]` → PASSED.
+
+---
+
 ## Open Questions / Next Steps
 
 - [ ] **Preprocessing fix**: add `noise_amax_upper` to `preprocess()`;
       requires full re-run of `e07analyze` on KEKCC.
+- [ ] **Investigate D013/T004/T011 low spread**: why does the pipeline's best
+      vertex have spread < 20° in these confirmed events? Need ground-truth
+      vertex positions to check if the true vertex is being found at all.
 - [ ] **Expand teacher data**: 5 reaction vertex candidates from 30 crops is too few;
       inspect 100–200 crops from `vertices_merged_v4.parquet`.
 - [ ] **Parameter reconsideration**: after expanding teacher data, revisit all
