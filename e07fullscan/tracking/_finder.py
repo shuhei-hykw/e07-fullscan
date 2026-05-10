@@ -149,6 +149,8 @@ def find_tracks(
     hough_min_line: int  = _HOUGH_ML,
     hough_max_gap: int   = _HOUGH_MG,
     grain_radius: float  = _GRAIN_RADIUS,
+    px_scale_um: float   = 0.0,
+    _stack: "np.ndarray | None" = None,
 ) -> list[Track]:
     """Detect tracks in one Z-slice and return them in stage coordinates.
 
@@ -162,11 +164,17 @@ def find_tracks(
         Identifier stored in each Track (typically the JSON path).
     grain_radius:
         Search radius (px) for associating grain blobs with a segment.
+    _stack:
+        Optional pre-loaded (N, H, W) uint8 array of all slices.
+        When provided, no file I/O is performed for z-projection.
     """
     lo = max(0, idx - zpj_half)
     hi = min(len(reader) - 1, idx + zpj_half)
-    slices = [reader.read(i) for i in range(lo, hi + 1)]
-    img = np.mean(slices, axis=0).astype(np.uint8)
+    if _stack is not None:
+        img = _stack[lo:hi + 1].mean(axis=0).astype(np.uint8)
+    else:
+        slices = [reader.read(i) for i in range(lo, hi + 1)]
+        img = np.mean(slices, axis=0).astype(np.uint8)
 
     # fog-removed image for intensity measurement
     k = fog_ksize if fog_ksize % 2 == 1 else fog_ksize + 1
@@ -216,5 +224,8 @@ def find_tracks(
             n_grains=n_g,
             width_px=wid,
             mean_intens=intens,
+            px_scale_um=px_scale_um,
+            view_x_mm=entry.x,
+            view_y_mm=entry.y,
         ))
     return tracks

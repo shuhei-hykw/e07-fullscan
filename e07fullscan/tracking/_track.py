@@ -22,3 +22,6 @@ class Track:
     n_grains:    int   = 0    # grain blobs overlapping the segment
     width_px:    float = 0.0  # transverse spread of grains (px)
     mean_intens: float = 0.0  # mean fog-removed intensity along track
+    px_scale_um: float = 0.0  # μm per pixel (0 = unknown)
+    view_x_mm:   float = 0.0  # stage x of this FOV (mm)
+    view_y_mm:   float = 0.0  # stage y of this FOV (mm)

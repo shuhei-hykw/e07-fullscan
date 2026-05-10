@@ -1225,7 +1225,9 @@ def create_app(
         @app.route("/viewer3d_data/<int:view_idx>")
         def viewer3d_data(view_idx: int):
             try:
-                from e07fullscan.clustering import cluster_df, link_tracks
+                from e07fullscan.clustering import (
+                    cluster_df, link_tracks, best_per_track,
+                )
                 view_id = _view_ids[view_idx]
                 df = results._df[
                     results._df["view_id"] == view_id
@@ -1270,6 +1272,7 @@ def create_app(
                         spans = df.groupby("track_id")["slice_idx"].nunique()
                         keep  = spans[spans >= min_span].index
                         df    = df[df["track_id"].isin(keep)]
+                    df = best_per_track(df)
 
                 n_shown = int(len(df))
 
@@ -1315,3 +1318,19 @@ def run(
     create_app(
         root_dir, start_path=start_path, results=results
     ).run(host=host, port=port, debug=False, threaded=True)
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="E07 fullscan viewer")
+    parser.add_argument("root_dir", nargs="?", default=".",
+                        help="Image root directory")
+    parser.add_argument("--results", default=None,
+                        help="Results parquet directory")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--host", default="0.0.0.0")
+    args = parser.parse_args()
+
+    res = ResultsStore(args.results) if args.results else None
+    run(args.root_dir, host=args.host, port=args.port, results=res)

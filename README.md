@@ -1,6 +1,8 @@
 # e07fullscan
 
-Analysis toolkit for E07 emulsion full-scan data.
+Analysis toolkit for E07 nuclear emulsion full-scan data.  
+Designed for double-hypernuclei (ΛΛ) search via track finding, vertex
+detection, and large-scale batch processing on KEKCC.
 
 ## Setup
 
@@ -32,13 +34,15 @@ e07fullscan/
 │   └── cli.py            # e07analyze entry point
 ├── merge/                # Result merge CLI
 │   └── cli.py            # e07merge entry point
-├── clustering/           # Post-processing: merge duplicate Hough segments
-│   └── _cluster.py       # cluster_tracks(), cluster_df()
+├── clustering/           # Post-processing
+│   ├── _cluster.py       # cluster_tracks(), cluster_df()
+│   ├── _link.py          # link_tracks(), best_per_track(), add_dip_angles()
+│   └── _vertex.py        # find_vertices(), merge_vertex_slices()
 ├── server/               # Web viewer (requires flask)
 │   ├── app.py
-│   ├── results.py        # Results viewer backend
+│   ├── results.py
 │   └── __main__.py
-└── utils/                # Common utilities (under development)
+└── utils/
 ```
 
 ## SPNG Format
@@ -51,6 +55,10 @@ consists of a JSON/SPNG file pair.
 - **SPNG file**: Binary container holding concatenated PNG blobs.  
   `Images[].Path` in the JSON has the form
   `filename.spng&byte_offset&byte_length`, specifying each image's location.
+
+The scanner metadata lists `x = y = 0.003 mm/px`, but the confirmed
+pixel scale from scan geometry is **0.29 μm/px** (FOV ≈ 594 μm).
+Set `px_scale_um: 0.29` in `config/default.yaml` (current default).
 
 ## SPNG Image Reader
 
@@ -93,241 +101,291 @@ from e07fullscan.io import load_spng
 from e07fullscan.tracking import find_tracks
 
 reader = load_spng("path/to/scan.json")
-tracks = find_tracks(reader, idx=10, view_id="path/to/scan.json")
-
-for t in tracks:
-    print(t.x1, t.y1, t.x2, t.y2, t.z)
+tracks = find_tracks(reader, idx=10, view_id="path/to/scan.json",
+                     px_scale_um=3.0)
 ```
 
-`find_tracks` applies the full preprocessing pipeline (Z-projection → fog
-removal → Otsu threshold → noise removal) before running HoughLinesP.
-The same parameters as the web viewer are accepted as keyword arguments.
+`find_tracks` applies: Z-projection → fog removal → Otsu threshold →
+noise removal → HoughLinesP.  Stack pre-loading (`_stack=`) avoids
+repeated file I/O when iterating over all slices.
 
 ### Track Fields
 
 | Field | Type | Description |
 |---|---|---|
-| `x1, y1, x2, y2` | `float` | Start/end points in stage coordinates |
-| `z` | `float` | Stage Z of the slice (`reader.entries[idx].z`) |
-| `px1, py1, px2, py2` | `int` | Start/end points in pixel coordinates |
-| `length_px` | `float` | Segment length in pixels |
-| `angle_deg` | `float` | Line angle 0–180° |
-| `view_id` | `str` | Source JSON path (set by caller) |
-| `n_grains` | `int` | Number of grain blobs within `grain_radius` px of the segment |
-| `width_px` | `float` | Transverse spread (std dev) of nearby grain centroids (px) |
-| `mean_intens` | `float` | Mean fog-removed intensity sampled along the segment |
+| `x1, y1, x2, y2` | float | Start/end points in stage coordinates |
+| `z` | float | Stage Z of the slice |
+| `px1, py1, px2, py2` | int | Start/end points in pixel coordinates |
+| `length_px` | float | Segment length in pixels |
+| `angle_deg` | float | Line angle 0–180° |
+| `view_id` | str | Source JSON path |
+| `n_grains` | int | Grain blob count within `grain_radius` px of segment |
+| `width_px` | float | Transverse spread of nearby grain centroids (px) |
+| `mean_intens` | float | Mean fog-removed intensity along the segment |
+| `grain_density` | float | Grains per 100 μm (when `px_scale_um > 0`) |
+| `px_scale_um` | float | Pixel scale in μm/px (from scanner metadata) |
+| `view_x_mm` | float | Stage X of this FOV (mm) |
+| `view_y_mm` | float | Stage Y of this FOV (mm) |
 
 ## Batch Analysis
 
-Run track finding over a directory tree and write results to CSV or
-Parquet. For parallel KEKCC jobs, use `--chunk-id/--chunk-total` to
-split the JSON file list across workers.
-
 ```bash
-# Single job — CSV output
-e07analyze /data/MOD108 -o tracks.csv -v
+# Single process
+python -m e07fullscan.analyze /data/scan_dir -o tracks.parquet -v
 
-# Single job — Parquet output
-e07analyze /data/MOD108 -o tracks.parquet -v
+# Parallel chunk (KEKCC array job)
+python -m e07fullscan.analyze /data/scan_dir \
+  --chunk-id 0 --chunk-total 135 \
+  -o results/chunk_0001.parquet -j 1 -v
 
-# Parallel jobs (e.g. PBS job array with 100 workers)
-e07analyze /data/MOD108 \
-  --chunk-id $PBS_ARRAY_INDEX --chunk-total 100 \
-  -o results/chunk_${PBS_ARRAY_INDEX}.parquet
-
-# Analyze one slice only
-e07analyze /data/MOD108 --slice 10 -o tracks.parquet
-
-# Use a custom parameter config
-e07analyze /data/MOD108 --config my_params.yaml -o tracks.parquet
+# Custom config
+python -m e07fullscan.analyze /data/scan_dir \
+  --config config/default.yaml -o tracks.parquet
 ```
 
-`python -m e07fullscan.analyze` works as an alias if `e07analyze` is not
-on PATH.
+### Output Columns
 
-### Output Format
+| Column | Description |
+|---|---|
+| `view_id` | Source JSON path |
+| `slice_idx` | Slice index within the view |
+| `px1, py1, px2, py2` | Track endpoints in pixels |
+| `length_px` | Track length (px) |
+| `angle_deg` | Angle 0–180° |
+| `mean_intens` | Fog-removed intensity along track |
+| `grain_density` | Grains/100 μm (0 if `px_scale_um` unknown) |
+| `px_scale_um` | Pixel scale (μm/px) |
+| `view_x_mm, view_y_mm` | FOV stage position (mm) |
 
-| Column | Type | Description |
-|---|---|---|
-| `view_id` | str | Source JSON path |
-| `slice_idx` | int | Slice index within the view |
-| `x1, y1, x2, y2` | float | Track endpoints in stage coordinates |
-| `z` | float | Stage Z of the slice |
-| `px1, py1, px2, py2` | int | Track endpoints in pixel coordinates |
-| `length_px` | float | Track length in pixels |
-| `angle_deg` | float | Track angle 0–180° |
-| `n_grains` | int | Grain blob count along the segment |
-| `width_px` | float | Transverse grain spread (px) |
-| `mean_intens` | float | Mean fog-removed intensity along the segment |
+## Analysis Parameters (`config/default.yaml`)
 
-## Merging Results
-
-After all parallel jobs complete, merge Parquet chunks into a single
-SQLite database for interactive querying.
-
-```bash
-e07merge results/ -o tracks.db -v
-```
-
-`e07merge` creates indices on `view_id`, `z`, and `angle_deg`
-automatically. Query the result with pandas or any SQLite client:
-
-```python
-import sqlite3, pandas as pd
-
-conn = sqlite3.connect("tracks.db")
-df = pd.read_sql(
-    "SELECT * FROM tracks WHERE angle_deg < 5 AND length_px > 50",
-    conn,
-)
-```
-
-`python -m e07fullscan.merge` works as an alias if `e07merge` is not
-on PATH.
-
-## Clustering API
-
-Merge duplicate Hough segments that represent the same physical track.
-Two segments are considered duplicates when their Hough normal-form
-parameters (ρ, θ) satisfy |Δρ| < `dist_eps` pixels and |Δθ| < `angle_eps`
-degrees. The longest segment in each cluster is kept.
-
-```python
-from e07fullscan.clustering import cluster_tracks, cluster_df
-
-# List[Track] → List[Track] (one per cluster)
-merged = cluster_tracks(tracks, dist_eps=20.0, angle_eps=5.0)
-
-# DataFrame → DataFrame (processes each view_id/slice_idx group)
-import pandas as pd
-df = pd.read_parquet("tracks.parquet")
-df_merged = cluster_df(df, dist_eps=20.0, angle_eps=5.0)
-```
-
-### Parameters
+Key parameters for track quality and physics sensitivity:
 
 | Parameter | Default | Description |
 |---|---|---|
-| `dist_eps` | `20.0` | ρ tolerance in pixels |
-| `angle_eps` | `5.0` | θ tolerance in degrees |
+| `hough_thr` | 35 | Hough accumulator threshold (higher → fewer noise tracks) |
+| `hough_ml` | 50 | Minimum line length (px) = 14.5 μm at 0.29 μm/px |
+| `hough_mg` | 5 | Maximum line gap (px) = 1.5 μm |
+| `px_scale_um` | 0.29 | Pixel scale confirmed from scan geometry (μm/px) |
+| `zpj_half` | 4 | Z-projection half-range (slices) |
+| `fog_ksize` | 51 | Gaussian kernel size for fog removal |
+| `grain_radius` | 10 | Grain association radius (px) |
+
+## KEKCC Batch Pipeline
+
+Full pipeline for 2025-view scan on KEKCC (LSF):
+
+```bash
+# 1. Track finding (135 array jobs, ~9 min total)
+python scripts/submit_kekcc.py          # reads config/kekcc.yaml
+
+# 2. Monitor progress
+python scripts/monitor.py --job-name e07full \
+    --log-dir logs/kekcc --out-dir results --total 2025
+# Compact display for small windows:
+python scripts/monitor.py --job-name e07full --compact
+
+# 3. Merge track chunks
+python scripts/merge_chunks.py \
+    --input results --output results/merged.parquet
+
+# 4. Vertex finding (135 array jobs, ~30 s total)
+python scripts/submit_vertex_kekcc.py
+
+# 5. Merge vertex chunks
+python scripts/merge_chunks.py \
+    --input results/vertex_chunks \
+    --pattern 'vertex_*.parquet' \
+    --output results/vertices.parquet
+
+# 6. Cross-slice merge + image crop extraction
+python scripts/merge_vertices.py \
+    --input  results/vertices.parquet \
+    --output results/vertices_merged.parquet \
+    --crops  results/vertex_crops \
+    --min-slices 3 --min-tracks 8
+```
+
+### `config/kekcc.yaml`
+
+```yaml
+job:
+  name:     e07full
+  queue:    s          # priority 120 — fastest on KEKCC
+  n_cores:  2
+  mem_mb:   4000
+  walltime: "01:00"
+  n_jobs:   135        # 2025/135 = 15 views/job (~9 min)
+
+data:
+  input:       /gpfs/.../IMAGE00_AREA00
+  output_dir:  results
+  total_views: 2025
+
+analysis:
+  config:  config/default.yaml
+  workers: 1           # keep 1 to avoid TERM_MEMLIMIT
+```
+
+## Vertex Finding
+
+Finds nuclear interaction vertex candidates from track intersections.
+
+### Algorithm
+
+1. Per `(view_id, slice_idx)`, select quality tracks
+   (`mean_intens ≥ 12`, `length_px ≥ 100`)
+2. Optionally remove beam-parallel tracks (`beam_angle_cut = 15°`):
+   exclude tracks with `angle_deg < 15°` or `> 165°`
+   (beam direction is horizontal; these tracks inflate false-vertex counts)
+3. Compute all pairwise 2D line intersections (vectorised with numpy)
+4. Filter by:
+   - Perpendicular distance to vertex < `max_impact` (30 px = 90 μm)
+   - **Nearest endpoint** of each track < `max_ep` (100 px = 300 μm)
+     — this rejects pass-through crossings, keeping only tracks that
+     originate or terminate near the vertex
+5. Grid-cluster intersection points (eps = 25 px)
+6. Output clusters with ≥ 3 contributing tracks
+
+### Cross-slice Merge
+
+The same physical vertex appears in multiple adjacent `slice_idx` due to
+Z-projection overlap.  `merge_vertex_slices()` merges candidates within
+50 px XY proximity across all slices of a view:
+
+| Output column | Description |
+|---|---|
+| `vx_px, vy_px` | n_tracks-weighted mean position |
+| `n_tracks_max` | Max track count across contributing slices |
+| `n_slices` | Number of distinct slices that voted |
+| `z_mean, z_min, z_max` | Depth range of the vertex |
+| `view_x_mm, view_y_mm` | FOV stage position (mm) |
+
+### Python API
+
+```python
+import pandas as pd
+from e07fullscan.clustering import find_vertices, merge_vertex_slices
+
+df   = pd.read_parquet("results/merged.parquet")
+# beam_angle_cut removes tracks with angle_deg < 15° or > 165°
+vdf  = find_vertices(df, min_tracks=3, max_ep=100.0, min_intens=12.0,
+                     beam_angle_cut=15.0)
+mdf  = merge_vertex_slices(vdf, eps_xy=50.0, min_slices=3)
+
+# High-multiplicity star candidates
+stars = mdf[mdf['n_tracks_max'] >= 8].sort_values('n_tracks_max',
+                                                    ascending=False)
+```
+
+### find_vertices Parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `min_tracks` | 3 | Min tracks to form a vertex |
+| `max_impact` | 30 px | Max perpendicular distance to vertex |
+| `max_ep` | 150 px | Max nearest-endpoint distance (43 μm) |
+| `min_intens` | 10.0 | Quality cut on mean_intens (efficiency-first) |
+| `min_len_px` | 50 px | Quality cut on length_px (= 14.5 μm; catches α tracks) |
+| `beam_angle_cut` | 0° | Exclude tracks with angle_deg < cut or > 180°−cut |
+
+**Beam track note**: ~22% of tracks have `angle_deg < 15°` or `> 165°`
+(beam direction).  Setting `beam_angle_cut=15.0` reduces false vertices
+by ~13% in high-quality views while retaining top star candidates.
+
+### n_slices Quality Cut
+
+`n_slices` measures how many z-projection slices voted for a merged vertex
+(higher = more reliable).  Recommended thresholds:
+
+| n_slices ≥ | Fraction retained | Use case |
+|---|---|---|
+| 3 | 100% | All candidates |
+| 5 | 36% | Moderate purity |
+| 8 | 13% | High-multiplicity stars only |
+
+### Image Crop Extraction
+
+`scripts/merge_vertices.py --crops <dir>` saves a PNG crop centred on
+each vertex candidate.  The green circle marks the vertex; the label
+shows `n=<n_tracks_max> sl=<n_slices>`.
+
+### Spatial Distribution Map
+
+```bash
+python scripts/vertex_map.py \
+    --input  results/vertices_merged.parquet \
+    --output results/vertex_map.png \
+    --min-tracks 5 --min-slices 3
+```
+
+Generates two panels: scatter plot coloured by `n_tracks_max` and a
+log-scale density map per FOV.
+
+## Clustering API
+
+```python
+from e07fullscan.clustering import cluster_tracks, cluster_df
+from e07fullscan.clustering import link_tracks, best_per_track, add_dip_angles
+
+# Merge duplicate Hough segments
+merged = cluster_tracks(tracks, dist_eps=20.0, angle_eps=5.0)
+df_merged = cluster_df(df)
+
+# Cross-view track linking
+linked = link_tracks(df_merged)
+best   = best_per_track(linked)
+best   = add_dip_angles(best)
+```
+
+## Monitor Script
+
+```bash
+# Full display (batch mode)
+python scripts/monitor.py --job-name e07full \
+    --log-dir logs/kekcc --out-dir results --total 2025
+
+# Compact 4-line display for small tmux panes
+python scripts/monitor.py --job-name e07full --compact
+
+# Custom width
+python scripts/monitor.py --job-name e07full --compact --width 50
+
+# Local single-process mode
+python scripts/monitor.py --log analyze.log --output out.parquet
+```
 
 ## Web Viewer
 
-Browse SPNG data in a browser and interactively control the processing
-pipeline.
-
-The three viewer pages share a single server process and can be accessed at:
-
-| URL | Description |
-|---|---|
-| `http://localhost:8000/` | Redirect to Image Viewer |
-| `http://localhost:8000/view/` | **Image Viewer** — live pipeline, SPNG browsing |
-| `http://localhost:8000/results/` | **Results Viewer** — stored track images and stats |
-| `http://localhost:8000/viewer3d/` | **3D Viewer** — interactive 3D track visualization |
-
-Each page has navigation buttons to switch between the others.
-
-### Starting the Server
-
 ```bash
-# In the data directory (uses current directory as root)
-cd /path/to/data && e07view
-
-# Explicit directory
-e07view /path/to/data/root
-
-# Open browser automatically
-e07view /path/to/data/root --open
-
-# Custom host / port
-e07view /path/to/data/root --host 0.0.0.0 --port 8080
-
-# Open at a specific sub-path on launch
-e07view /path/to/data/root --start MOD108/PL12
-
-# Load analysis results to enable the Results Viewer
-e07view /path/to/data/root --results tracks.db
-```
-
-`python -m e07fullscan.server` works as an alias if `e07view` is not on PATH.
-
-To run on KEKCC and access from a local machine, use an SSH tunnel:
-
-```bash
+python -m e07fullscan.server.app --data /path/to/scan_dir --port 8000
+# SSH tunnel for remote access:
 ssh -L 8000:localhost:8000 username@login.kekcc.jp
 ```
 
-Then open `http://localhost:8000` in your browser.
-
-### Controls
-
-| Action | Effect |
+| URL | Description |
 |---|---|
-| Click a JSON file in the sidebar | Load the Z stack |
-| Mouse wheel / left-right arrow keys | Switch Z slice |
-| VIEW: FIT/ACTUAL | Toggle fit ↔ actual-size view |
-| Drag in actual-size view | Pan |
-| ORIGINAL toggle | Show processed image alongside the original |
-| STATS toggle | Show/hide pipeline statistics histograms below the image |
-| RESET PARAMS button | Reset all pipeline parameters to defaults |
+| `/view/` | Image Viewer — live pipeline, SPNG browsing |
+| `/results/` | Results Viewer — stored track images |
+| `/viewer3d/` | 3D Viewer — interactive track visualization |
 
 ### Processing Pipeline
 
-Each step can be toggled on/off individually via checkboxes in the sidebar.
-Enabled steps are applied in order. All parameters are adjustable in
-real time via sliders; defaults are defined in `config/default.yaml`.
+| # | Step | Default Parameters |
+|---|---|---|
+| 1 | Z-Projection | half=4 (9 slices) |
+| 2 | Fog Removal | ksize=51 |
+| 3 | Otsu Threshold | — |
+| 4 | Noise Removal | area_max=100, compactness=50 |
+| 5 | Hough Lines | minLen=50 px, maxGap=5, threshold=35 |
+| 6 | Tracks Only | — |
 
-| # | Step | Processing | Default Parameters |
-|---|---|---|---|
-| 1 | **Z-Projection** | Average neighbouring z-slices to boost track SNR | half=4 (9 slices total) |
-| 2 | **Fog Removal** | Fog removal using Gaussian blur and subtraction | ksize=51 |
-| 3 | **Threshold (Otsu)** | Auto-threshold binarization via Otsu's method | — |
-| 4 | **Noise Removal** | Contour filtering by area and compactness | area_max=100, compactness=50 |
-| 5 | **Hough Lines** | Track overlay with green lines via HoughLinesP | minLineLength=25, maxLineGap=4 |
-| 6 | **Tracks Only** | Green track lines on black background (no binary dots) | — |
+![Pipeline: all 6 processing steps](docs/pipeline.png)
 
-### Statistics Panel
+## Analysis Notes
 
-The STATS panel shows four histograms that update with each slice and
-parameter change:
-
-- **Pixel intensity** — raw vs. after fog removal, with Otsu threshold marked
-- **Blob area** — before/after noise removal (log scale)
-- **Track length** — distribution with minLineLength threshold marked
-- **Track angle** — 0–180°
-
-![Pipeline: all 6 processing steps from raw scan to track detection](docs/pipeline.png)
-
-## Results Viewer
-
-When `--results` is given, a separate results page is available at
-`http://localhost:8000/results/`. It displays pre-computed tracks from
-the analysis database without re-running the pipeline.
-
-| Control | Effect |
-|---|---|
-| View selector | Switch between JSON views in the results |
-| Slice slider / arrow keys | Step through slices |
-| STATS toggle | Show angle and length histograms for the slice |
-
-## 3D Track Viewer
-
-When `--results` is given, an interactive 3D viewer is available at
-`http://localhost:8000/viewer3d/`. It renders stored track segments as
-3D lines in (X, Y, Z) space using Plotly.js (loaded from CDN in the
-browser).
-
-| Control | Effect |
-|---|---|
-| View selector | Switch between JSON views |
-| Cluster checkbox | Apply duplicate-segment clustering before display |
-| Angle range | Filter tracks by angle (0–180°) |
-| Min Length | Hide segments shorter than this value (px) |
-| Slice Range | Restrict to a subset of Z-slices |
-| RELOAD button | Fetch and redraw with current settings |
-
-Track segments are coloured by angle using the Turbo colorscale.
-Rotate and zoom with mouse drag / scroll.
+Physics findings, parameter decisions, and event-type observations are recorded in
+[ANALYSIS.md](ANALYSIS.md).
 
 ## Tests
 
@@ -335,6 +393,3 @@ Rotate and zoom with mouse drag / scroll.
 pytest        # run all tests
 pytest -v     # verbose output
 ```
-
-Tests cover the tracking library (`tracking/`), batch CLI (`analyze/`),
-and results viewer (`server/results.py`).

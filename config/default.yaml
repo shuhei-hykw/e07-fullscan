@@ -19,6 +19,8 @@ viewer:
   noise_amin:  2    # Noise removal: minimum blob area (px)
   noise_amax:  100  # Noise removal: maximum blob area (px)
   noise_cmp:   50   # Noise removal: compactness threshold (peri^2/area)
-  hough_thr:   20   # Hough: accumulator threshold
-  hough_ml:    25   # Hough: minimum line length (px)
-  hough_mg:    4    # Hough: maximum line gap (px)
+  hough_thr:   35   # Hough: accumulator threshold
+  hough_ml:    50   # Hough: minimum line length (px) = 14.5 μm at 0.29 μm/px
+  hough_mg:    5    # Hough: maximum line gap (px) = 1.5 μm
+  grain_radius: 15  # grain association radius (px) = 4.4 μm
+  px_scale_um: 0.29 # μm per pixel (confirmed from scan geometry)

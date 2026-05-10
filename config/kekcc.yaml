@@ -1,0 +1,16 @@
+job:
+  name:     e07full     # LSF job name (array index appended automatically)
+  queue:    s            # s: priority 120 (highest); l has massive backlog
+  n_cores:  2            # CPU slots per job (-n); OpenCV threading に使用
+  mem_mb:   4000         # memory limit per job in MB (-M)
+  walltime: "01:00"      # wall time HH:MM (-W)
+  n_jobs:   135          # 2025/135=15 views/job (~9 min); sweet spot for s queue
+
+data:
+  input: /gpfs/group/had/sks/E07/tohoku/fullscan/MOD108/PL12/tohoku-v1/AREA00/IMAGE00_AREA00
+  output_dir: results
+  total_views: 2025
+
+analysis:
+  config:  config/default.yaml
+  workers: 1   # intra-job parallelism; 1 to avoid OOM (parallelism = n_jobs)

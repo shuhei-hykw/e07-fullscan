@@ -12,6 +12,21 @@ _DIST_EPS  = 20.0  # rho tolerance in pixels
 _ANGLE_EPS = 5.0   # theta tolerance in degrees
 
 
+def _track_quality(t: Track) -> float:
+    """Quality score for representative selection.
+
+    Real particle tracks: bright (high mean_intens) and narrow (low
+    width_px).  Score = mean_intens * sqrt(length_px) / width_px.
+    Each factor is applied only when the datum is available (> 0).
+    """
+    score = t.length_px ** 0.5
+    if t.mean_intens > 0:
+        score *= t.mean_intens
+    if t.width_px > 0:
+        score /= t.width_px
+    return score
+
+
 def _hough_params(t: Track) -> tuple[float, float]:
     """Return (rho, theta_deg) Hough normal-form for a track.
 
@@ -75,7 +90,7 @@ def cluster_tracks(
         clusters.setdefault(find(i), []).append(i)
 
     return [
-        tracks[max(idx_list, key=lambda i: tracks[i].length_px)]
+        tracks[max(idx_list, key=lambda i: _track_quality(tracks[i]))]
         for idx_list in clusters.values()
     ]
 
@@ -107,22 +122,39 @@ def cluster_df(
                 length_px=float(r.length_px),
                 angle_deg=float(r.angle_deg),
                 view_id=str(r.view_id),
+                n_grains=int(getattr(r, "n_grains", 0)),
+                width_px=float(getattr(r, "width_px", 0.0)),
+                mean_intens=float(getattr(r, "mean_intens", 0.0)),
+                px_scale_um=float(getattr(r, "px_scale_um", 0.0)),
+                view_x_mm=float(getattr(r, "view_x_mm", 0.0)),
+                view_y_mm=float(getattr(r, "view_y_mm", 0.0)),
             )
             for r in sub.itertuples()
         ]
         merged = cluster_tracks(tracks, dist_eps=dist_eps,
                                 angle_eps=angle_eps)
+        def _gd(t) -> float:
+            if t.length_px <= 0:
+                return 0.0
+            if t.px_scale_um > 0:
+                return t.n_grains / (t.length_px * t.px_scale_um) * 100
+            return t.n_grains / t.length_px
+
         groups.append(pd.DataFrame([{
             "view_id":   t.view_id,
             "slice_idx": slice_idx,
             "x1": t.x1, "y1": t.y1, "x2": t.x2, "y2": t.y2,
             "z":  t.z,
             "px1": t.px1, "py1": t.py1, "px2": t.px2, "py2": t.py2,
-            "length_px":   t.length_px,
-            "angle_deg":   t.angle_deg,
-            "n_grains":    t.n_grains,
-            "width_px":    t.width_px,
-            "mean_intens": t.mean_intens,
+            "length_px":     t.length_px,
+            "angle_deg":     t.angle_deg,
+            "n_grains":      t.n_grains,
+            "width_px":      t.width_px,
+            "mean_intens":   t.mean_intens,
+            "grain_density": _gd(t),
+            "px_scale_um":   t.px_scale_um,
+            "view_x_mm":     t.view_x_mm,
+            "view_y_mm":     t.view_y_mm,
         } for t in merged]))
 
     if not groups:
