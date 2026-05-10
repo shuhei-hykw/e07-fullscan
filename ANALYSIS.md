@@ -3,7 +3,7 @@
 Running record of findings, observations, and decisions during the analysis.
 Physics-focused; code usage is documented in README.md.
 
-**Created:** 2026-05-10  **Last updated:** 2026-05-10 (run traceability system)
+**Created:** 2026-05-10  **Last updated:** 2026-05-10 (v4 vertex run with angular spread filter)
 
 ---
 
@@ -440,9 +440,24 @@ Systematic visual inspection of `results/vertex_sample_crops/` (8 samples per ti
 | 2026-05-08 | v1 | min_len=100, min_intens=12, max_ep=100, no beam cut | 95,160 | 8,468 |
 | 2026-05-09 | v2 | min_len=50, min_intens=10, max_ep=150, beam_cut=15° | 6,976,451 | 642,558 |
 | 2026-05-10 | v3 | + max_ep_frac=0.5 | 1,754,298 | 221,278 |
+| 2026-05-10 | v4 | + min_angle_spread=20° | 1,152,766 | 207,259 |
 
 v2 explosion was caused by max_ep=150 allowing short crossing tracks through.
 v3 max_ep_frac=0.5 fixed this (relative endpoint cut).
+v4 angular spread filter reduced high-multiplicity fake vertices significantly.
+
+### v3 vs v4 angular spread filter effect
+
+| n_tracks_max ≥ | v3 | v4 | reduction |
+|---|---|---|---|
+| 5 | 127,178 | 102,178 | −20% |
+| 8 | 13,180 | 8,542 | −35% |
+| 10 | 4,639 | 2,143 | −54% |
+| 15 | 987 | 337 | −66% |
+| 20 | 215 | 91 | −58% |
+
+As expected, the filter is most aggressive at high n_tracks_max where
+emulsion artifact fakes (small angular spread) dominate.
 
 ---
 
@@ -549,7 +564,8 @@ Scripts updated: `find_vertices.py`, `merge_vertices.py`,
       Expand teacher set to ~100 samples first.
 - [ ] **Preprocessing fix**: add `noise_amax_upper` to `preprocess()` to remove
       large emulsion artifact blobs before Hough; requires full re-analysis on KEKCC.
-- [ ] **KEKCC v4 vertex run**: re-run vertex finding with `min_angle_spread=20°`.
+- [x] **KEKCC v4 vertex run**: completed 2026-05-10; `min_angle_spread=20°`;
+      results in `results/vertices_merged_v4.parquet` (207,259 merged).
 - [ ] **width_px filter**: thick tracks (heavy particles) have large `width_px`;
       could use `mean(width_px) < threshold` at vertex to reject heavy-track fakes.
 - [ ] **Track re-analysis**: re-run `e07analyze` with `px_scale = 0.29` to get
