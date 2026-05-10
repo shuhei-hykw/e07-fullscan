@@ -65,11 +65,17 @@ class SpngReader:
     def _parse_entries(self, meta: dict) -> list[ImageEntry]:
         entries: list[ImageEntry] = []
         for img in meta.get("Images", []):
-            filename, offset_s, length_s = img["Path"].split("&")
+            path_str = img["Path"]
+            if "&" in path_str:
+                filename, offset_s, length_s = path_str.split("&")
+                offset, length = int(offset_s), int(length_s)
+            else:
+                # plain PNG file (e.g. specials_x20 format)
+                filename, offset, length = path_str, 0, -1
             entries.append(ImageEntry(
                 spng_path=self._base_dir / filename,
-                offset=int(offset_s),
-                length=int(length_s),
+                offset=offset,
+                length=length,
                 x=float(img.get("x", 0.0)),
                 y=float(img.get("y", 0.0)),
                 z=float(img.get("z", 0.0)),
@@ -107,6 +113,8 @@ class SpngReader:
         """Return the raw PNG bytes for image *idx* without decoding."""
         entry = self._entries[idx]
         with entry.spng_path.open("rb") as f:
+            if entry.length < 0:
+                return f.read()
             f.seek(entry.offset)
             return f.read(entry.length)
 
@@ -120,12 +128,21 @@ class SpngReader:
             If cv2 fails to decode the stored PNG blob.
         """
         entry = self._entries[idx]
-        with entry.spng_path.open("rb") as f:
-            raw = np.fromfile(f, dtype=np.uint8, count=entry.length, offset=entry.offset)
-        img = cv2.imdecode(raw, cv2.IMREAD_GRAYSCALE)
+        if entry.length < 0:
+            img = cv2.imread(
+                str(entry.spng_path), cv2.IMREAD_GRAYSCALE
+            )
+        else:
+            with entry.spng_path.open("rb") as f:
+                raw = np.fromfile(
+                    f, dtype=np.uint8,
+                    count=entry.length, offset=entry.offset,
+                )
+            img = cv2.imdecode(raw, cv2.IMREAD_GRAYSCALE)
         if img is None:
             raise ValueError(
-                f"Failed to decode image at index {idx} in {entry.spng_path}"
+                f"Failed to decode image at index {idx} "
+                f"in {entry.spng_path}"
             )
         return img
 
