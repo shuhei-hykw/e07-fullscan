@@ -20,3 +20,7 @@
 
 ## Documentation
 - Always update ANALYSIS.md and README.md in English
+- ANALYSIS.md is a **chronological development diary**: each entry is dated,
+  records what was done and found, and is appended at the bottom.
+  Never reorganise or remove existing entries.
+  New entries always go at the end under a `## YYYY-MM-DD — <title>` heading.
