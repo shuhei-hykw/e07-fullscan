@@ -408,6 +408,55 @@ ssh -L 8000:localhost:8000 username@login.kekcc.jp
 
 ![Pipeline: all 6 processing steps](docs/pipeline.png)
 
+## Run Traceability
+
+Every output file can be traced back to the exact parameters and code
+version that produced it.  The mechanism is provided by
+`e07fullscan/utils/run_info.py`.
+
+### What is recorded
+
+| Field | Content |
+|---|---|
+| `run_id` | `YYYYMMDD_HHMMSS_<git_hash>` — unique per invocation |
+| `script` | Script filename |
+| `timestamp` | ISO-8601 datetime |
+| `python` | Python version |
+| `params` | All CLI arguments as a dict |
+
+### Where it is stored
+
+| Output type | Sidecar location |
+|---|---|
+| `*.parquet` | `<stem>_run.json` next to the parquet file |
+| Image directory | `run_params.json` inside the directory |
+| PNG file | `<stem>_run.json` next to the PNG |
+
+Run metadata is also embedded in parquet files via PyArrow schema
+metadata (`run_meta` key), so the information travels with the data
+even if the sidecar is lost.
+
+### Reading back from a parquet file
+
+```python
+import json, pyarrow.parquet as pq
+tbl  = pq.read_table("results/vertices.parquet")
+meta = json.loads(tbl.schema.metadata[b"run_meta"])
+print(meta["run_id"])   # e.g. 20260510_165200_abc1234
+print(meta["params"])   # all CLI args
+```
+
+### API
+
+```python
+from e07fullscan.utils import (
+    make_run_id,            # "20260510_165200_abc1234"
+    build_run_meta,         # {run_id, script, timestamp, python, params}
+    save_run_json,          # write <stem>_run.json sidecar
+    save_parquet_with_meta, # to_parquet + embed run_meta in schema
+)
+```
+
 ## Analysis Notes
 
 Physics findings, parameter decisions, and event-type observations are recorded in

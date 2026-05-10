@@ -30,12 +30,23 @@ def main() -> None:
                   help="Color scale max (n_tracks_max)")
   args = ap.parse_args()
 
+  import sys
   import numpy as np
   import pandas as pd
   import matplotlib
   matplotlib.use('Agg')
   import matplotlib.pyplot as plt
   import matplotlib.colors as mcolors
+
+  sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+  from e07fullscan.utils import (
+    make_run_id, build_run_meta, save_run_json,
+  )
+
+  run_id = make_run_id()
+  run_params = {k: str(v) for k, v in vars(args).items()}
+  run_meta = build_run_meta(run_id, __file__, run_params)
+  print(f"run_id: {run_id}")
 
   df = pd.read_parquet(args.input)
   sel = df[
@@ -93,6 +104,8 @@ def main() -> None:
   args.output.parent.mkdir(parents=True, exist_ok=True)
   plt.savefig(args.output, dpi=120)
   print(f"Saved → {args.output}")
+  json_path = save_run_json(run_meta, args.output)
+  print(f"Run metadata → {json_path}")
 
   # text summary
   print(f"\nn_tracks_max stats:")

@@ -235,6 +235,16 @@ def main() -> None:
                     help="Projection mode: mean or max (MIP)")
     args = ap.parse_args()
 
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from e07fullscan.utils import (
+      make_run_id, build_run_meta, save_run_json,
+    )
+
+    run_id = make_run_id()
+    run_params = {k: str(v) for k, v in vars(args).items()}
+    run_meta = build_run_meta(run_id, __file__, run_params)
+    print(f"run_id: {run_id}")
+
     df = pd.read_parquet(args.vertices)
     print(f"Loaded {len(df):,} merged vertices")
 
@@ -256,6 +266,8 @@ def main() -> None:
           f"{sel['n_tracks_max'].max()})")
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    json_path = save_run_json(run_meta, args.output_dir)
+    print(f"Run metadata → {json_path}")
     half = args.crop_size
 
     for rank, (_, row) in enumerate(sel.iterrows(), 1):

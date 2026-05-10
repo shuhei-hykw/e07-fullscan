@@ -53,6 +53,15 @@ def main() -> None:
     import pandas as pd
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from e07fullscan.clustering import find_vertices
+    from e07fullscan.utils import (
+      make_run_id, build_run_meta,
+      save_run_json, save_parquet_with_meta,
+    )
+
+    run_id = make_run_id()
+    run_params = {k: str(v) for k, v in vars(args).items()}
+    run_meta = build_run_meta(run_id, __file__, run_params)
+    print(f"run_id: {run_id}")
 
     print(f"Loading {args.input} …", flush=True)
     df = pd.read_parquet(args.input)
@@ -87,7 +96,8 @@ def main() -> None:
 
     if vdf.empty:
         print("No vertices found.", file=sys.stderr)
-        vdf.to_parquet(args.output, index=False)
+        save_parquet_with_meta(vdf, args.output, run_meta)
+        save_run_json(run_meta, args.output)
         return
 
     # output filter
@@ -98,9 +108,10 @@ def main() -> None:
     print("  n_tracks distribution:")
     print(vdf['n_tracks'].value_counts().sort_index().to_string(dtype=False))
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    vdf.to_parquet(args.output, index=False)
+    save_parquet_with_meta(vdf, args.output, run_meta)
+    json_path = save_run_json(run_meta, args.output)
     print(f"Saved → {args.output}")
+    print(f"Run metadata → {json_path}")
 
 
 if __name__ == "__main__":

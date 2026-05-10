@@ -49,6 +49,15 @@ def main() -> None:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from e07fullscan.clustering import merge_vertex_slices
     from e07fullscan.io import SpngReader
+    from e07fullscan.utils import (
+      make_run_id, build_run_meta,
+      save_run_json, save_parquet_with_meta,
+    )
+
+    run_id = make_run_id()
+    run_params = {k: str(v) for k, v in vars(args).items()}
+    run_meta = build_run_meta(run_id, __file__, run_params)
+    print(f"run_id: {run_id}")
 
     print(f"Loading {args.input} …", flush=True)
     df = pd.read_parquet(args.input)
@@ -70,9 +79,10 @@ def main() -> None:
     for n, c in vs.items():
         print(f"  {n:3d}: {c:>6,}")
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    mdf.to_parquet(args.output, index=False)
+    save_parquet_with_meta(mdf, args.output, run_meta)
+    json_path = save_run_json(run_meta, args.output)
     print(f"\nSaved → {args.output}")
+    print(f"Run metadata → {json_path}")
 
     if args.crops is None:
         return
@@ -86,6 +96,7 @@ def main() -> None:
         candidates = candidates.head(args.max_crops)
 
     args.crops.mkdir(parents=True, exist_ok=True)
+    save_run_json(run_meta, args.crops)
     print(f"\nExtracting {len(candidates)} image crops → {args.crops}")
 
     saved = 0
