@@ -71,7 +71,7 @@ At 0.29 μm/px individual silver grains (~0.3 μm) are barely resolvable.
 
 ### Spatial distribution of merged vertices (2026-05-10)
 
-![Vertex spatial map](results/vertex_map.png)
+![Vertex spatial map](docs/vertex_map.png)
 
 Left: scatter plot coloured by `n_tracks_max`. Right: log-scale density heatmap.
 The 45 × 45 FOV grid structure is clearly visible. Bright clusters in the density
@@ -384,7 +384,7 @@ Systematic visual inspection of `results/vertex_sample_crops/` (8 samples per ti
 
 ### ✓ True reaction vertex
 
-![True star vertex example](results/vertex_sample_crops/n08_05_V00001395_n8_sl26.png)
+![True star vertex example](docs/n08_05_V00001395_n8_sl26.png)
 
 *`n08_05_V00001395_n8_sl26.png` — clear 8-prong star (n_tracks=8, n_slices=26)*
 
@@ -399,7 +399,7 @@ Systematic visual inspection of `results/vertex_sample_crops/` (8 samples per ti
 
 ### ✗ Heavy-particle track fake (false positive — major at n_tracks ≥ 15)
 
-![Heavy-particle fake vertex example](results/vertex_sample_crops/n16_07_V00000437_n28_sl28.png)
+![Heavy-particle fake vertex example](docs/n16_07_V00000437_n28_sl28.png)
 
 *`n16_07_V00000437_n28_sl28.png` — thick track with kink; Hough edges → fake n=28 vertex*
 
