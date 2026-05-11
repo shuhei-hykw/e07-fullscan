@@ -328,11 +328,16 @@ Tested: `test_special_reader_loads` → 13/13 PASSED (3s).
 
 ## Open Questions / Next Steps
 
+- [ ] **Ground truth positions**: use `scripts/click_vertex.py` to record
+      true reaction vertex (x,y) for each specials event → `tests/specials_gt.json`.
+      Then add position-based integration tests.
+- [ ] **Root cause of vertex miss**: pipeline finds 2-track crossings instead
+      of the true reaction vertex in most specials events. Hypotheses:
+      (1) high track density (~660/slice vs ~120 fullscan) → spurious high-n
+      vertices dominate; (2) true vertex tracks have specific properties not
+      matching current quality cuts; (3) geometric intersection bias.
 - [ ] **Preprocessing fix**: add `noise_amax_upper` to `preprocess()`;
       requires full re-run of `e07analyze` on KEKCC.
-- [ ] **Investigate D013/T004/T011 low spread**: why does the pipeline's best
-      vertex have spread < 20° in these confirmed events? Need ground-truth
-      vertex positions to check if the true vertex is being found at all.
 - [ ] **Expand teacher data**: 5 reaction vertex candidates from 30 crops is too few;
       inspect 100–200 crops from `vertices_merged_v4.parquet`.
 - [ ] **Parameter reconsideration**: after expanding teacher data, revisit all
@@ -345,3 +350,60 @@ Tested: `test_special_reader_loads` → 13/13 PASSED (3s).
 - [ ] **width_px filter**: `mean(width_px) < threshold` at vertex to reject
       thick heavy-track fakes.
 - [ ] **Dip angle improvement**: only ~2% of tracks span >1 slice currently.
+
+---
+
+## 2026-05-11 — Vertex candidate maps; ground truth strategy; indentation fix
+
+### Vertex candidate map generation
+
+Generated all-candidates overlay maps for IBUKI, D013, T004, T011
+(`results/specials_crops/*_all_vertices_map.png`):
+- Green circles: vertices with spread ≥ 20°, radius ∝ n_tracks
+- Yellow circles: vertices with spread < 20°
+- n ≥ 7 vertices labelled with n value
+- Background: min projection over all z-slices (all tracks visible)
+
+**Key finding (critical)**: Visual inspection showed that ALL of the
+pipeline's top-candidate vertices (highest n_tracks near image centre)
+were **2-track crossings** — not reaction vertices. The true reaction
+vertex was NOT the highest-n candidate.
+
+T011 was the only event where a pipeline candidate (at pixel (994,983),
+dist_center=50px) was close to the true vertex — described as "mettya oshii"
+(very close but not exact).
+
+This means the current pipeline cannot reliably identify the true reaction
+vertex in specials events, even with centre-restricted search. Root cause
+is not yet clear — candidates include high track density creating spurious
+high-n intersections, and the geometric intersection algorithm not favouring
+the true star topology.
+
+### Ground truth collection strategy
+
+Decided to collect true reaction vertex pixel positions directly from the
+expert (user), using a dedicated interactive tool rather than inferring
+from the pipeline output.
+
+Added `scripts/click_vertex.py`:
+- Displays min projection (all z-slices) of a specials event
+- User clicks on the true reaction vertex
+- Pixel coordinates (x, y) printed to terminal
+- Supports both single PNG and directory (auto min-projection)
+
+Next step: user identifies true vertex positions for each event →
+record in `tests/specials_gt.json` → add position-based integration tests
+that assert the pipeline finds a vertex within tolerance of the known position.
+
+### Code quality: indentation rule fix
+
+CLAUDE.md specifies 2-space indentation. Audit found that 13 source files
+in `e07fullscan/` and `tests/` were using 4-space indentation.
+All converted to 2-space. All 48 non-slow tests pass after conversion.
+
+Affected files: `clustering/__init__.py`, `clustering/_cluster.py`,
+`clustering/_vertex.py`, `merge/cli.py`, `server/__init__.py`,
+`server/app.py`, `server/cli.py`, `server/results.py`,
+`tracking/_finder.py`, `tracking/_track.py`,
+`tests/test_clustering.py`, `tests/test_linking.py`,
+`tests/test_results_viewer.py`.

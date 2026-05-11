@@ -462,9 +462,29 @@ from e07fullscan.utils import (
 Physics findings, parameter decisions, and event-type observations are recorded in
 [ANALYSIS.md](ANALYSIS.md).
 
+## Ground Truth Collection
+
+```bash
+# Click on reaction vertex to record pixel coordinates
+python scripts/click_vertex.py /path/to/specials_x20/T011/
+
+# Single slice
+python scripts/click_vertex.py /path/to/specials_x20/T011/0000.png
+```
+
+When a directory is given, a min projection over all z-slices is displayed
+(all tracks visible simultaneously).  Click on the reaction vertex; the pixel
+coordinates (x, y) are printed to the terminal.  Multiple clicks are
+supported — a summary is printed on close.
+
 ## Tests
 
 ```bash
-pytest        # run all tests
-pytest -v     # verbose output
+pytest              # fast tests only (slow tests skipped)
+pytest -m slow      # confirmed-event integration tests (specials_x20)
+pytest -v           # verbose output
 ```
+
+Slow tests (`pytest -m slow`) run the full pipeline on the 13 confirmed
+double-hypernuclei events in `specials_x20` and assert that a multi-track
+vertex is detected in each.
