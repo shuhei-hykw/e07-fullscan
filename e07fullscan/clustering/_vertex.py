@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from scipy.spatial import cKDTree
 
 _MIN_TRACKS       = 3
 _MAX_IMPACT       = 30.0   # px — perpendicular distance to vertex line
@@ -108,26 +109,35 @@ def _vertices_in_group(
   vx, vy = vx[ok], vy[ok]
   pi, pj = pi[ok], pj[ok]
 
-  # grid-based clustering: bin intersections into eps_px cells
-  ox = vx.min(); oy = vy.min()
-  gx = ((vx - ox) / eps_px).astype(np.int32)
-  gy = ((vy - oy) / eps_px).astype(np.int32)
-  keys = gx * 100003 + gy  # hash-like key
-  order = np.argsort(keys)
-  vx, vy, pi, pj, keys = (
-    vx[order], vy[order], pi[order], pj[order], keys[order]
-  )
-  # assign label = index of first point in each key group
-  _, first_idx = np.unique(keys, return_index=True)
-  labels = np.empty(len(keys), dtype=np.int32)
-  for fi, f in enumerate(first_idx):
-    end = first_idx[fi + 1] if fi + 1 < len(first_idx) else len(keys)
-    labels[f:end] = fi
+  # distance-based clustering via KDTree + union-find
+  # groups all intersection points within eps_px of each other,
+  # avoiding the grid-boundary split that hashing causes.
+  coords = np.column_stack([vx, vy])
+  tree = cKDTree(coords)
+  pairs = tree.query_pairs(eps_px, output_type='ndarray')
+
+  parent = np.arange(len(vx), dtype=np.int32)
+
+  def _find(x: int) -> int:
+    while parent[x] != x:
+      parent[x] = parent[parent[x]]
+      x = parent[x]
+    return x
+
+  for a, b in pairs:
+    ra, rb = _find(int(a)), _find(int(b))
+    if ra != rb:
+      parent[ra] = rb
+
+  labels = np.array([_find(i) for i in range(len(vx))], dtype=np.int32)
+  # remap to contiguous 0-based labels
+  _, labels = np.unique(labels, return_inverse=True)
 
   has_angle = 'angle_deg' in rows.columns
 
+  n_labels = int(labels.max()) + 1
   results: list[dict] = []
-  for lbl in range(len(first_idx)):
+  for lbl in range(n_labels):
     mask = labels == lbl
     cluster_vx = vx[mask].mean()
     cluster_vy = vy[mask].mean()
