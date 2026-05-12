@@ -595,3 +595,28 @@ should all appear in this list (pending cross-matching with full-scan view IDs).
 **Next step**: generate two-vertex crop images (both primary and secondary
 visible) for the top candidates sorted by primary n_tracks_max, for manual
 scanning to identify true ΛΛ events.
+
+After requiring primary n_tracks_max >= secondary (labeling fix) and
+Z proximity (dz < 0.010 mm = 10 μm):
+
+| n_primary cut | Pairs | Views |
+|---------------|-------|-------|
+| ≥ 5 | 73,751 | 2,025 |
+| ≥ 10 | 4,353 | 1,153 |
+| ≥ 15 | 1,125 | 250 |
+
+### Connecting track search
+
+Implemented `scripts/filter_pairs_by_track.py` to require a connecting
+track (Λ flight path) with an endpoint within `tol` px of BOTH vertices.
+
+Tolerance sensitivity (p_ntracks ≥ 10 pairs in one chunk):
+- tol=10 px: 9.5% of pairs pass
+- tol=20 px: 52.4% pass
+- tol=30 px: 90.5% pass
+
+tol=20 px (≈ 6 μm) chosen for balance: enough to account for vertex
+position resolution (~5-15 px), but still discriminating.
+
+Full-scan connected pairs with tol=20 px: pending (running).
+Expected ~50-60% of pairs to pass (consistent with the tolerance test).
