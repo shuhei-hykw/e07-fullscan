@@ -20,8 +20,9 @@
 
 ## Documentation
 - Always update ANALYSIS.md and README.md in English
-- ANALYSIS.md is a **chronological development diary** (lab notebook style).
-  Record not just results but also discussions, hypotheses, dead ends,
-  and the reasoning behind decisions.
+- Always update ANALYSIS_ja.md in Japanese (mirrors ANALYSIS.md)
+- ANALYSIS.md / ANALYSIS_ja.md are **chronological development diaries**
+  (lab notebook style). Record not just results but also discussions,
+  hypotheses, dead ends, and the reasoning behind decisions.
   Each entry is dated and appended at the bottom; never reorganise or remove
   existing entries. New entries go under `## YYYY-MM-DD — <title>`.
