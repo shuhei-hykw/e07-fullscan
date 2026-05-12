@@ -290,11 +290,60 @@ python scripts/status.py
 
 - [x] **グラウンドトゥルース記録**: `tests/specials_gt.json` 完成（2026-05-12）
 - [x] **vertex miss の根本原因**: グリッドハッシュクラスタリングバグ → KDTree union-find で修正（2026-05-13）。全 9 イベントが position test をパス。
-- [ ] **v5 vertex ラン（KEKCC）**: KDTree 修正を適用した全 2025 ビューの vertex 再解析。
+- [x] **v5 vertex ラン（KEKCC）**: 完了（2026-05-13）。n_tracks≥10 が +83.5%。
+- [x] **2 頂点探索**: `find_vertex_pairs()` 実装（2026-05-13）。p_ntracks≥10 で 5,059 候補。
+- [ ] **ΛΛ 候補の目視確認**: vertex_pairs_v5 上位候補の 2 頂点 crop を生成してスキャン。
 - [ ] **2D 解析の試験実装**: ±2〜4 スライス重ね合わせ + コントラスト改善（CLAHE）。
-      現行手法は保持しつつ比較用プロトタイプを実装。
 - [ ] **前処理修正**: `noise_amax_upper` を `preprocess()` に追加；KEKCC 再実行が必要。
 - [ ] **ティーチャーデータ拡充**: 更新された vertex 結果から 100–200 クロップを目視確認。
 - [ ] **トラック再解析**: `px_scale=0.29` で `e07analyze` を再実行（`grain_density` 修正）。
-- [ ] **2 頂点探索**: 同一ビュー内 30–167 px 離れた vertex ペア探索 → ΛΛ トポロジー。
 - [ ] **grain density による PID**: 修正後は α / 遅いプロトン / MIP の識別に使用可能。
+
+---
+
+## 2026-05-13 — v5 全スキャン vertex ラン・ΛΛ vertex ペア探索
+
+### v5 KEKCC ラン（KDTree 修正適用）
+
+135 チャンク全てを KDTree union-find 修正済みコードで再実行。
+パラメータは v4 と同一。
+
+| 指標 | v4 | v5 | 変化 |
+|------|----|----|------|
+| マージ済み vertex（min_slices=2） | 207,259 | 212,777 | +2.7% |
+| n_tracks_max ≥ 5 | 102,178 | 114,089 | +11.7% |
+| n_tracks_max ≥ 10 | 2,143 | 3,933 | **+83.5%** |
+
+高多重度 vertex の大幅増加がバグ修正の効果を実証。
+vertex マップ：`results/vertex_map_v5.png`。
+
+### Z 単位の確認
+
+`z_mean` カラムの値は **mm 単位**（スキャナステージ座標）。
+- z_step ≈ 0.003 mm = 3 μm/スライス
+- 全スキャン z 範囲：−0.259〜−0.048 mm（≈ 211 μm 乳剤厚）
+
+これにより vertex ペア探索の dz フィルタは 0.010 mm (10 μm) が適切。
+
+### ΛΛ トポロジー vertex ペア探索
+
+`find_vertex_pairs()` と `scripts/find_pairs.py` を実装。
+
+探索条件：
+- 同一ビュー内
+- XY 距離：30–167 px（90–500 μm）
+- Primary：n_tracks_max ≥ min_n_primary
+- Secondary：n_tracks_max ≥ 3、n_slices ≥ 2
+- dz < 0.010 mm（同一乳剤深さ）
+
+v5 での結果（min_n_primary=5）：
+
+| n_primary カット | ペア数 | ビュー数 |
+|-----------------|-------|---------|
+| ≥ 5 | 95,353 | 2,025 |
+| ≥ 8 | 14,760 | 1,901 |
+| ≥ 10 | 5,059 | 1,153 |
+| ≥ 15 | 1,423 | 250 |
+
+p_ntracks ≥ 10 で 5,059 候補は半自動スキャンが可能な規模。
+次ステップ：上位候補の 2 頂点クロップ画像を生成して目視確認。

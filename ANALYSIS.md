@@ -331,8 +331,8 @@ Tested: `test_special_reader_loads` → 13/13 PASSED (3s).
 - [x] **Ground truth positions**: recorded in `tests/specials_gt.json` (2026-05-12).
 - [x] **Root cause of vertex miss**: grid-hash clustering bug — fixed with KDTree
       union-find (2026-05-13). All 9 specials events now PASS position test.
-- [ ] **v5 vertex run on KEKCC**: re-run full 2025-view vertex finding with
-      KDTree fix to update `vertices_merged_v4.parquet`.
+- [x] **v5 vertex run on KEKCC**: complete (2026-05-13). New results in
+      `results/vertices_merged_v5.parquet`. See 2026-05-13 entry below.
 - [ ] **2D analysis investigation**: per-slice analysis with ±2–4 slice
       superimposition + contrast improvement (CLAHE). Discussed 2026-05-13;
       keep current method but prototype the 2D approach for comparison.
@@ -343,8 +343,9 @@ Tested: `test_special_reader_loads` → 13/13 PASSED (3s).
 - [ ] **Track re-analysis**: re-run `e07analyze` with `px_scale=0.29` to fix
       `grain_density` (currently 10× too low).
 - [ ] **Grain density as PID**: once corrected, distinguishes α / slow proton / MIP.
-- [ ] **Two-vertex search**: find vertex pairs in same view 30–167 px apart
-      → ΛΛ secondary decay topology.
+- [x] **Two-vertex search**: `find_vertex_pairs()` + `scripts/find_pairs.py`
+      implemented (2026-05-13). v5 run: 5,059 candidates (p_ntracks≥10) in
+      1,153 views. See 2026-05-13 entry for details.
 - [ ] **width_px filter**: `mean(width_px) < threshold` at vertex to reject
       thick heavy-track fakes.
 - [ ] **Dip angle improvement**: only ~2% of tracks span >1 slice currently.
@@ -529,3 +530,68 @@ for quick status checks.
 
 Added `ANALYSIS_ja.md` — Japanese mirror of this file, updated in sync.
 `CLAUDE.md` updated to require keeping both files current.
+
+---
+
+## 2026-05-13 — v5 full-scan vertex run; ΛΛ vertex pair search
+
+### v5 KEKCC run (KDTree fix applied)
+
+Re-ran vertex finding for all 135 chunks with the KDTree union-find fix.
+Parameters identical to v4 (`min_tracks=3`, `min_angle_spread=20°`,
+`beam_angle_cut=15°`, `eps=25 px`, `max_ep=150 px`).
+
+| Metric | v4 | v5 | Change |
+|--------|-----|-----|--------|
+| Raw candidates | 1,091,300 | 1,091,300 | same |
+| Merged vertices (min_slices=2) | 207,259 | 212,777 | +2.7% |
+| n_tracks_max ≥ 5 | 102,178 | 114,089 | +11.7% |
+| n_tracks_max ≥ 10 | 2,143 | 3,933 | **+83.5%** |
+
+The dramatic improvement in high-multiplicity vertices confirms the bug fix:
+the old grid-hash was splitting star vertices' intersection clusters, while
+KDTree correctly merges all intersections within `eps_px`. The effect is
+largest for high-n events precisely because they had more intersections to
+be split across grid boundaries.
+
+Vertex map: `results/vertex_map_v5.png` (n_tracks≥5, n_slices≥3; 102,889
+candidates shown).
+
+### Z scale discovery
+
+Z values in `z_mean` column are in **mm** (scanner stage unit), not μm.
+- z_step ≈ 0.003 mm = 3 μm per slice
+- Full-scan z range: −0.259 to −0.048 mm (≈ 211 μm total emulsion thickness)
+- Specials views span 0.177 mm = 177 μm per event
+
+This matters for the dz filter in vertex pair search: threshold of 0.010 mm
+(= 10 μm ≈ 3 z-steps) selects same-layer vertex pairs.
+
+### ΛΛ topology vertex pair search
+
+Implemented `e07fullscan.clustering.find_vertex_pairs()` and
+`scripts/find_pairs.py`.
+
+Search criteria:
+- Same view
+- XY separation: 30–167 px (90–500 μm)
+- Primary: n_tracks_max ≥ min_n_primary
+- Secondary: n_tracks_max ≥ 3, n_slices ≥ 2
+- dz < 0.010 mm (10 μm; both vertices at same emulsion depth)
+
+v5 results (min_n_primary=5):
+
+| n_primary cut | Pairs | Views |
+|---------------|-------|-------|
+| ≥ 5 | 95,353 | 2,025 |
+| ≥ 8 | 14,760 | 1,901 |
+| ≥ 10 | 5,059 | 1,153 |
+| ≥ 15 | 1,423 | 250 |
+
+With p_ntracks ≥ 10: 5,059 candidates in 1,153 views is a manageable
+number for semi-manual scanning. The 9 confirmed ΛΛ events from specials_x20
+should all appear in this list (pending cross-matching with full-scan view IDs).
+
+**Next step**: generate two-vertex crop images (both primary and secondary
+visible) for the top candidates sorted by primary n_tracks_max, for manual
+scanning to identify true ΛΛ events.
