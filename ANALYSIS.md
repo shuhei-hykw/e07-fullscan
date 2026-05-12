@@ -629,3 +629,25 @@ Full-scan results (tol=20 px):
 
 **1,838 connected pairs with p_ntracks≥10 in 819 views** — manageable
 for semi-manual inspection (~2.2 pairs/view).
+
+### Golden ΛΛ candidate selection
+
+Added a physics-motivated multi-level filter:
+1. XY distance: 90–500 μm (30–167 px)
+2. Primary vertex: n_tracks_max 10–20
+3. Secondary vertex: n_tracks_max 3–8 (consistent with ΛΛ decay star)
+4. Connecting track exists (tol=20 px)
+5. Scored by: `p_ntracks × s_ntracks / log(1 + dist_px)`
+
+Result: **1,220 golden candidates in 709 views** (saved as
+`results/vertex_pairs_v5_golden.parquet`).
+- 399 views with exactly 1 pair (highest priority)
+- 202 views with 2 pairs
+
+Top candidate profile (score-ranked):
+- p_ntracks ≈ 16–20, s_ntracks ≈ 6–8
+- dist_um ≈ 150–400 μm
+- p_nslices typically 5–15 (well-confirmed primary)
+
+**Next step**: crop images for the top 200 golden candidates; manual
+inspection to confirm ΛΛ topology (connecting track, star morphology).
