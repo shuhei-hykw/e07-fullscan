@@ -19,7 +19,7 @@
 - Avoid magic numbers; always assign named constants
 
 ## Documentation
-- Always update ANALYSIS.md and README.md in English
+- Always update and review ANALYSIS.md and README.md in English
 - Always update ANALYSIS_ja.md in Japanese (mirrors ANALYSIS.md)
 - ANALYSIS.md / ANALYSIS_ja.md are **chronological development diaries**
   (lab notebook style). Record not just results but also discussions,

@@ -328,20 +328,18 @@ Tested: `test_special_reader_loads` → 13/13 PASSED (3s).
 
 ## Open Questions / Next Steps
 
-- [ ] **Ground truth positions**: use `scripts/click_vertex.py` to record
-      true reaction vertex (x,y) for each specials event → `tests/specials_gt.json`.
-      Then add position-based integration tests.
-- [ ] **Root cause of vertex miss**: pipeline finds 2-track crossings instead
-      of the true reaction vertex in most specials events. Hypotheses:
-      (1) high track density (~660/slice vs ~120 fullscan) → spurious high-n
-      vertices dominate; (2) true vertex tracks have specific properties not
-      matching current quality cuts; (3) geometric intersection bias.
+- [x] **Ground truth positions**: recorded in `tests/specials_gt.json` (2026-05-12).
+- [x] **Root cause of vertex miss**: grid-hash clustering bug — fixed with KDTree
+      union-find (2026-05-13). All 9 specials events now PASS position test.
+- [ ] **v5 vertex run on KEKCC**: re-run full 2025-view vertex finding with
+      KDTree fix to update `vertices_merged_v4.parquet`.
+- [ ] **2D analysis investigation**: per-slice analysis with ±2–4 slice
+      superimposition + contrast improvement (CLAHE). Discussed 2026-05-13;
+      keep current method but prototype the 2D approach for comparison.
 - [ ] **Preprocessing fix**: add `noise_amax_upper` to `preprocess()`;
       requires full re-run of `e07analyze` on KEKCC.
 - [ ] **Expand teacher data**: 5 reaction vertex candidates from 30 crops is too few;
-      inspect 100–200 crops from `vertices_merged_v4.parquet`.
-- [ ] **Parameter reconsideration**: after expanding teacher data, revisit all
-      vertex-finding thresholds using confirmed genuine events.
+      inspect 100–200 crops from updated vertex results.
 - [ ] **Track re-analysis**: re-run `e07analyze` with `px_scale=0.29` to fix
       `grain_density` (currently 10× too low).
 - [ ] **Grain density as PID**: once corrected, distinguishes α / slow proton / MIP.
@@ -474,3 +472,60 @@ pipeline capability and ground truth — passing them is the improvement target.
 
 Updated `scripts/click_vertex.py` to record Z information (slice index and
 z_um from `reader.z_positions()`) when a specific slice file is given.
+
+---
+
+## 2026-05-13 — KDTree clustering fix; pipeline status script; Japanese diary
+
+### Root cause identified: grid-hash clustering bug
+
+The previous intersection clustering in `_vertices_in_group` assigned each
+point to a 25 px grid cell by hashing `gx * 100003 + gy`. Two points
+straddling a cell boundary could be < 25 px apart yet land in different
+clusters. For a star vertex with n tracks producing n(n-1)/2 intersection
+points scattered over ~25–50 px, the grid split them into sub-clusters with
+n_tracks < 3 → rejected by `min_tracks`. This silently missed the true vertex.
+
+**Fix**: replaced grid hash with `cKDTree.query_pairs(eps_px)` + union-find
+(path-compressed). All points within eps_px are guaranteed to merge.
+
+### Verification on all 9 specials events (production cuts, KDTree fix)
+
+Explicit post-fix run confirmed 9/9 PASS:
+
+| Event | n | dist XY | Z |
+|-------|---|---------|---|
+| T011 | 9 | 2 px | −0.1 μm |
+| IBUKI | 14 | 3 px | 0.2 μm |
+| D005 | 12 | 5 px | 0.4 μm |
+| MINO | 10 | 22 px | 0.0 μm |
+| NAGARA | 7 | 25 px | −0.1 μm |
+| IRRAWADY | 7 | 158 px | −0.3 μm |
+| KISO | 9 | 171 px | −0.1 μm |
+| T004 | 11 | 178 px | 0.2 μm |
+| D013 | 12 | 185 px | −0.1 μm |
+
+All within 200 px XY and 30 μm Z tolerance, all n ≥ 5.
+`test_special_vertex_position` confirmed passing for all 9 events.
+
+### Full slow test suite result (2026-05-13)
+
+`pytest -m slow tests/test_specials.py` — **35/35 passed** (1 h 38 min):
+- `test_special_vertex_detected`  13/13 ✓
+- `test_special_vertex_position`   9/9  ✓  (new; ground-truth position test)
+- `test_special_reader_loads`     13/13 ✓
+
+### Pipeline status script
+
+Added `scripts/status.py` (zero arguments):
+```
+python scripts/status.py
+```
+Shows track chunk count, merged parquet row count, vertex chunk progress,
+and KEKCC running jobs in one compact view. Replaces multi-flag monitor.py
+for quick status checks.
+
+### Japanese development diary
+
+Added `ANALYSIS_ja.md` — Japanese mirror of this file, updated in sync.
+`CLAUDE.md` updated to require keeping both files current.

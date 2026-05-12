@@ -288,14 +288,13 @@ python scripts/status.py
 
 ## 未解決課題 / 次のステップ
 
-- [ ] **`pytest -m slow` 全 35 テスト通過確認**（`test_special_vertex_position` を含む）
-- [ ] **2D 解析への移行検討**: Z 投影（±2〜4 スライス）+ コントラスト改善（CLAHE）
-      で個別スライス解析に変更する案を議論済み。現行手法は保持しつつ試験的に実装。
-- [ ] **前処理修正**: `noise_amax_upper` を `preprocess()` に追加；
-      KEKCC での `e07analyze` 再実行が必要。
-- [ ] **ティーチャーデータ拡充**: 30 クロップ中 5 件の反応 vertex 候補は少ない；
-      `vertices_merged_v4.parquet` から 100–200 クロップを目視確認。
-- [ ] **トラック再解析**: `px_scale=0.29` で `e07analyze` を再実行
-      （`grain_density` が現在 10 倍過小評価）。
+- [x] **グラウンドトゥルース記録**: `tests/specials_gt.json` 完成（2026-05-12）
+- [x] **vertex miss の根本原因**: グリッドハッシュクラスタリングバグ → KDTree union-find で修正（2026-05-13）。全 9 イベントが position test をパス。
+- [ ] **v5 vertex ラン（KEKCC）**: KDTree 修正を適用した全 2025 ビューの vertex 再解析。
+- [ ] **2D 解析の試験実装**: ±2〜4 スライス重ね合わせ + コントラスト改善（CLAHE）。
+      現行手法は保持しつつ比較用プロトタイプを実装。
+- [ ] **前処理修正**: `noise_amax_upper` を `preprocess()` に追加；KEKCC 再実行が必要。
+- [ ] **ティーチャーデータ拡充**: 更新された vertex 結果から 100–200 クロップを目視確認。
+- [ ] **トラック再解析**: `px_scale=0.29` で `e07analyze` を再実行（`grain_density` 修正）。
 - [ ] **2 頂点探索**: 同一ビュー内 30–167 px 離れた vertex ペア探索 → ΛΛ トポロジー。
 - [ ] **grain density による PID**: 修正後は α / 遅いプロトン / MIP の識別に使用可能。
