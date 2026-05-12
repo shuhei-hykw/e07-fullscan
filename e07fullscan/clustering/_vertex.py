@@ -361,6 +361,9 @@ def find_vertex_pairs(
       for k, si in enumerate(secondary):
         if si == pi:
           continue
+        # primary must have the higher (or equal) n_tracks
+        if nt[pi] < nt[si]:
+          continue
         d = float(dists[k])
         if d < d_min_px or d > d_max_px:
           continue
