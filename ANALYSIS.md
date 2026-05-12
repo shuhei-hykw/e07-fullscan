@@ -407,3 +407,70 @@ Affected files: `clustering/__init__.py`, `clustering/_cluster.py`,
 `tracking/_finder.py`, `tracking/_track.py`,
 `tests/test_clustering.py`, `tests/test_linking.py`,
 `tests/test_results_viewer.py`.
+
+## 2026-05-12 — Ground truth click session; caveats
+
+Ran `scripts/click_vertex.py` interactively on specials_x20 events.
+Expert (user) clicked on the true reaction vertex for each event.
+Results saved as JSON files under `results/specials_vertex_click/`.
+
+| File | Image | Clicks saved |
+|------|-------|-------------|
+| T011_0025.json | T011/0025.png | 2 (clicks 1,3 of 3) |
+| IBUKI_0010.json | IBUKI/0010.png | 4 (all) |
+| D005_0100.json | D005/0100.png | 2 (all) |
+| D013_0100.json | D013/0100.png | 2 (all) |
+| IRRAWADY_0011.json | IRRAWADY/0011.png | 3 (all) |
+| KISO_0010.json | KISO/0010.png | 5 (all) |
+| MINO_0028.json | MINO/0028.png | 2 (all) |
+| NAGARA_0012.json | NAGARA/0012.png | 3 (all) |
+| T004_0100.json | T004/0100.png | 1 (all) |
+
+**Important caveats (user note):**
+1. Click positions are approximate, not pixel-exact. Do not treat these
+   coordinates as ground truth with sub-pixel accuracy.
+2. Candidates far from the image centre may look vertex-like but are
+   confirmed NOT to be double-track (reaction) vertices. Distance from
+   centre is a useful negative signal.
+
+Next step: use these approximate positions as loose ground truth to
+evaluate pipeline candidates (e.g. within 50–100 px tolerance), keeping
+the caveats above in mind when setting acceptance thresholds.
+
+### Ground truth JSON and position+Z test
+
+Saved `tests/specials_gt.json` with:
+- XY pixel position per event (averaged over near-center clicks)
+- Z coordinate (μm) from `reader.z_positions()[slice_idx]` using the
+  slice number in the click filename (e.g. T011/0025.png → slice 25)
+- Tolerance: `tolerance_xy_px=200`, `tolerance_z_um=30`
+
+Key observation: all ground-truth Z values are within ±0.4 μm of 0,
+confirming that the specials scans are centered on the vertex in Z.
+
+Added `test_special_vertex_position` to `tests/test_specials.py`:
+- Runs full pipeline including `merge_vertex_slices`
+- Checks if any merged candidate is within 200 px XY AND 30 μm Z
+  of the ground-truth position
+- Currently expected to fail for most events (only D005 passes):
+  the pipeline finds 2-track crossings rather than the true star vertex
+
+Pipeline result vs ground truth (200 px XY tolerance):
+
+| Event | True vertex | Pipeline's nearest candidate | dist XY |
+|-------|-------------|------------------------------|---------|
+| D005 | (1020,1023) | (1024,1021) n=12 | **3px** ✓ |
+| KISO | (1096,1028) | (970,1144) n=9 | 171px (candidate within 200px?) |
+| T004 | (1023,1038) | (881,992) n=11 | 149px |
+| T011 | (992,984) | (813,1113) n=10 | 221px |
+| NAGARA | (1020,1021) | (1151,1225) n=7 | 243px |
+| IRRAWADY | (1010,1018) | (826,861) n=9 | 241px |
+| D013 | (998,990) | (833,1321) n=10 | 370px |
+| MINO | (1016,1018) | (725,829) n=11 | 348px |
+| IBUKI | (982,968) | (936,1385) n=10 | 419px |
+
+The `test_special_vertex_position` tests document the gap between current
+pipeline capability and ground truth — passing them is the improvement target.
+
+Updated `scripts/click_vertex.py` to record Z information (slice index and
+z_um from `reader.z_positions()`) when a specific slice file is given.

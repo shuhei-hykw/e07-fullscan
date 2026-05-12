@@ -1,0 +1,16 @@
+{
+  "_comment": "True reaction vertex positions from expert click session 2026-05-12. XY approximate (±50-100 px). Z from clicked slice via reader.z_positions(). All events have vertex near image centre (1024,1024) and z ≈ 0 μm. T004_3body/T004_center/T011_100/T011_200 not measured.",
+  "tolerance_xy_px": 200,
+  "tolerance_z_um": 30,
+  "events": {
+    "D005":     {"vx": 1020, "vy": 1023, "z_um":  0.4, "z_slice": 100, "n_clicks": 1},
+    "D013":     {"vx":  998, "vy":  990, "z_um":  0.0, "z_slice": 100, "n_clicks": 1},
+    "IBUKI":    {"vx":  982, "vy":  968, "z_um":  0.2, "z_slice":  10, "n_clicks": 2},
+    "IRRAWADY": {"vx": 1010, "vy": 1018, "z_um": -0.3, "z_slice":  11, "n_clicks": 3},
+    "KISO":     {"vx": 1096, "vy": 1028, "z_um": -0.2, "z_slice":  10, "n_clicks": 3},
+    "MINO":     {"vx": 1016, "vy": 1018, "z_um":  0.0, "z_slice":  28, "n_clicks": 2},
+    "NAGARA":   {"vx": 1020, "vy": 1021, "z_um": -0.1, "z_slice":  12, "n_clicks": 3},
+    "T004":     {"vx": 1023, "vy": 1038, "z_um":  0.4, "z_slice": 100, "n_clicks": 1},
+    "T011":     {"vx":  992, "vy":  984, "z_um": -0.1, "z_slice":  25, "n_clicks": 2}
+  }
+}

@@ -10,9 +10,16 @@ Note: min_angle_spread=0 is used deliberately — some events (D013, T004,
 T011) have angular spread < 20° at their primary vertex, so the production
 filter would miss them.  These tests validate that the *pipeline* finds
 the event, not that any particular filter setting is optimal.
+
+Ground truth positions are in tests/specials_gt.json (XY pixel + Z in μm),
+recorded by expert click session 2026-05-12. Tolerance: 200 px XY, 30 μm Z.
+test_special_vertex_position currently fails for most events — this documents
+the pipeline gap and defines the improvement target.
 """
 from __future__ import annotations
 
+import json
+import math
 import os
 from pathlib import Path
 
@@ -43,6 +50,11 @@ _ALL_EVENTS = [
 
 # Minimum n_tracks to call the event "detected"
 _MIN_N_TRACKS = 5
+
+
+_GT_PATH = Path(__file__).parent / "specials_gt.json"
+_GT: dict = json.loads(_GT_PATH.read_text()) if _GT_PATH.exists() else {}
+_GT_EVENTS: list[str] = list(_GT.get("events", {}).keys())
 
 
 def _run_pipeline(
@@ -91,6 +103,18 @@ def _run_pipeline(
   )
 
 
+def _run_pipeline_merged(json_path: Path) -> pd.DataFrame:
+  """Run full pipeline including cross-slice merge. Returns merged vertices."""
+  import sys
+  sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+  from e07fullscan.clustering import merge_vertex_slices
+
+  vdf = _run_pipeline(json_path)
+  if vdf.empty:
+    return pd.DataFrame()
+  return merge_vertex_slices(vdf, eps_xy=50.0, min_slices=1)
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("event", _ALL_EVENTS)
 def test_special_vertex_detected(event: str) -> None:
@@ -108,6 +132,49 @@ def test_special_vertex_detected(event: str) -> None:
   assert n_max >= _MIN_N_TRACKS, (
     f"{event}: best vertex has only {n_max} tracks "
     f"(need >= {_MIN_N_TRACKS})"
+  )
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("event", _GT_EVENTS)
+def test_special_vertex_position(event: str) -> None:
+  """Merged vertex must be found within ground-truth XY+Z tolerance.
+
+  Ground truth from expert click session (specials_gt.json).
+  Tolerance: 200 px XY, 30 μm Z.
+  Currently fails for most events — documents the pipeline improvement target.
+  """
+  json_path = SPECIALS_DIR / event / "image.json"
+  if not json_path.exists():
+    pytest.skip(f"specials not found: {json_path}")
+
+  gt = _GT["events"][event]
+  tol_xy = _GT["tolerance_xy_px"]
+  tol_z = _GT["tolerance_z_um"]
+  tvx, tvy, tz = gt["vx"], gt["vy"], gt["z_um"]
+
+  mdf = _run_pipeline_merged(json_path)
+  assert not mdf.empty, f"{event}: no merged vertices"
+
+  mdf["dist_xy"] = ((mdf.vx_px - tvx)**2 + (mdf.vy_px - tvy)**2)**0.5
+  mdf["dist_z"] = (mdf.z_mean - tz).abs()
+  close = mdf[(mdf.dist_xy < tol_xy) & (mdf.dist_z < tol_z)]
+
+  if close.empty:
+    best_xy = mdf.nsmallest(1, "dist_xy").iloc[0]
+    pytest.fail(
+      f"{event}: no merged vertex within {tol_xy}px XY + {tol_z}μm Z "
+      f"of true ({tvx},{tvy},z={tz:.1f}μm). "
+      f"Closest XY: dist={best_xy.dist_xy:.0f}px "
+      f"n={int(best_xy.n_tracks_max)} "
+      f"at ({int(best_xy.vx_px)},{int(best_xy.vy_px)}) "
+      f"z_mean={best_xy.z_mean:.1f}μm"
+    )
+
+  best = close.nlargest(1, "n_tracks_max").iloc[0]
+  assert int(best.n_tracks_max) >= _MIN_N_TRACKS, (
+    f"{event}: vertex near true position has only "
+    f"{int(best.n_tracks_max)} tracks (need >= {_MIN_N_TRACKS})"
   )
 
 
