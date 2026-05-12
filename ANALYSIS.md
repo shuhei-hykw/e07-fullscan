@@ -618,5 +618,14 @@ Tolerance sensitivity (p_ntracks ≥ 10 pairs in one chunk):
 tol=20 px (≈ 6 μm) chosen for balance: enough to account for vertex
 position resolution (~5-15 px), but still discriminating.
 
-Full-scan connected pairs with tol=20 px: pending (running).
-Expected ~50-60% of pairs to pass (consistent with the tolerance test).
+Full-scan results (tol=20 px):
+
+| Filter | Pairs | Views |
+|--------|-------|-------|
+| All pairs (p≥5) | 73,751 | 2,025 |
+| + connecting track (tol=20 px) | 25,842 | 2,023 |
+| + p≥10 | 1,838 | 819 |
+| + p≥15 | 494 | 186 |
+
+**1,838 connected pairs with p_ntracks≥10 in 819 views** — manageable
+for semi-manual inspection (~2.2 pairs/view).
