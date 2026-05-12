@@ -55,3 +55,4 @@ outputs/
 results/
 logs/
 .aider*
+logs/pytest_last.log
