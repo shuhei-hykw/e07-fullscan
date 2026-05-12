@@ -163,9 +163,18 @@ def _display() -> None:
 
   print()
 
-  # [3] maps / crops
-  print(_stage("[3] Vertex map",   bool(list(RESULTS.glob("vertex_map*.png")))))
+  # [3] maps / crops / pairs
+  vmaps = sorted(RESULTS.glob("vertex_map*.png"), reverse=True)
+  print(_stage("[3] Vertex map",
+               bool(vmaps),
+               vmaps[0].name if vmaps else ""))
   print(_stage("    Vertex crops", bool(list(RESULTS.glob("vertex_crops*/")))))
+  vpairs = sorted(RESULTS.glob("vertex_pairs*.parquet"), reverse=True)
+  if vpairs:
+    vp = vpairs[0]
+    print(_stage(f"    {vp.name}", True, _parquet_rows(vp) + " pairs"))
+  else:
+    print(_stage("    Vertex pairs", False, "not yet"))
 
   print()
   print("─" * 52)

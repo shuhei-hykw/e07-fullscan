@@ -29,6 +29,8 @@ def main() -> None:
                   help="Max vertex separation (px, default 600 = 1800 μm)")
   ap.add_argument("--min-n-primary",    type=int,   default=5,
                   help="Min n_tracks_max for primary vertex")
+  ap.add_argument("--max-n-primary",    type=int,   default=0,
+                  help="Max n_tracks_max for primary (0=no limit)")
   ap.add_argument("--min-n-secondary",  type=int,   default=3,
                   help="Min n_tracks_max for secondary vertex")
   ap.add_argument("--min-sl-secondary", type=int,   default=2,
@@ -76,6 +78,10 @@ def main() -> None:
     save_parquet_with_meta(pairs, args.output, run_meta)
     save_run_json(run_meta, args.output)
     return
+
+  if args.max_n_primary > 0:
+    pairs = pairs[pairs['p_ntracks'] <= args.max_n_primary]
+    print(f"  After max_n_primary<={args.max_n_primary}: {len(pairs):,}")
 
   print(f"  Found {len(pairs):,} candidate pairs "
         f"in {pairs['view_id'].nunique()} views")

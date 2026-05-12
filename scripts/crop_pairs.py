@@ -68,6 +68,8 @@ def main() -> None:
   ap.add_argument("--top",            type=int,  default=200,
                   help="Max number of crops to generate")
   ap.add_argument("--min-n-primary",  type=int,  default=10)
+  ap.add_argument("--max-n-primary",  type=int,  default=0,
+                  help="Max n_tracks_max for primary (0=no limit)")
   ap.add_argument("--crop-half",      type=int,  default=320,
                   help="Half-size (px) of crop window around midpoint")
   ap.add_argument("--n-z-project",    type=int,  default=9,
@@ -86,10 +88,14 @@ def main() -> None:
 
   pairs = pairs[pairs['p_ntracks'] >= args.min_n_primary]
   print(f"  {len(pairs):,} after p_ntracks >= {args.min_n_primary}")
+  if args.max_n_primary > 0:
+    pairs = pairs[pairs['p_ntracks'] <= args.max_n_primary]
+    print(f"  {len(pairs):,} after p_ntracks <= {args.max_n_primary}")
 
-  # sort by primary n_tracks_max desc, then distance asc
+  # sort by primary n_tracks_max desc, then secondary n_tracks desc
   pairs = pairs.sort_values(
-    ['p_ntracks', 'dist_px'], ascending=[False, True]
+    ['p_ntracks', 's_ntracks', 'dist_px'],
+    ascending=[False, False, True]
   ).head(args.top)
   print(f"  Generating {len(pairs)} crops → {args.output}")
 
