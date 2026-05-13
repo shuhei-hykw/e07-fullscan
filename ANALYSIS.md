@@ -1035,3 +1035,34 @@ priority candidates for visual inspection.
 - [ ] Apply connecting-track filter to cross-view pairs
 - [ ] Visual inspection of 97 intra-view connected pairs
 - [ ] Determine coordinate offsets for non-KISO specials
+
+### v7_filtered: connecting-track filter の結果
+
+`filter_pairs_by_track.py` を v7 (min_n_primary=10、90-500μm) に適用:
+
+```
+v7_filtered:  540 ペア  (min_n_primary=10, tol=50px)
+  ΛΛ範囲 (p_n:6-20, s_n:3-15, sp>=20):  398 ペア (368 ユニーク)
+    ─ v6_filtered と共通:  97 ペア  ← 全 v6 候補が回収された ✓
+    ─ n順序修正で新規:    301 ペア
+  強候補 (p_sp>=30, s_sp>=25, p_n>=8, s_n>=4):  120 ユニークペア
+```
+
+v6_filtered の97ペアが全て v7_filtered に含まれる: n順序修正は既存の
+候補を失わずに、新たに301ペアを追加した。
+
+**トップ候補 (score = P.n + S.n):**
+
+| view | P pos | P n | P sp | S pos | S n | S sp | dist |
+|------|-------|-----|------|-------|-----|------|------|
+| V00000670 | (1288,1135) | 17 | 30° | (988,1222) | 11 | 40° | 91μm |
+| V00000794 | (564,641) | 14 | 31° | (790,417) | 13 | 36° | 92μm |
+| V00001842 | (1541,1337) | 16 | 35° | (1870,1186) | 11 | 40° | 105μm |
+| V00000441 | (1160,1387) | 16 | 38° | (982,1132) | 9 | 39° | 90μm |
+| V00000871 | (508,1490) | 15 | 37° | (1008,1799) | 10 | 26° | 170μm |
+| V00000851 | (1840,1441) | 19 | 32° | (1499,1279) | 5 | 39° | 110μm |
+
+dist 中央値 ≈ 108μm は物理的に妥当 (ΛΛ の飛行距離: 90-300μm)。
+
+**次のステップ:** 120 強候補の視覚的検査 (crop_pairs.py) で真の ΛΛ
+事象と重核相互作用バックグラウンドを区別する。

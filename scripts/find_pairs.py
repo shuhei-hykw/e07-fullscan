@@ -8,7 +8,9 @@ Usage:
 
 Candidate pairs: one high-multiplicity primary vertex (n_tracks_max >=
 min_n_primary) and one secondary vertex (n_tracks_max >= min_n_secondary)
-in the same view, separated by d_min–d_max px (≈ 100–1800 μm at 3 μm/px).
+in the same view, separated by d_min–d_max px.
+Pixel scale: 0.29 μm/px (FOV=594 μm/2048 px).
+Default range: 310–1724 px ≈ 90–500 μm.
 """
 from __future__ import annotations
 
@@ -23,10 +25,10 @@ def main() -> None:
                   help="Merged vertex parquet (output of merge_vertices.py)")
   ap.add_argument("--output",  type=Path, required=True,
                   help="Output parquet for candidate pairs")
-  ap.add_argument("--d-min",   type=float, default=30.0,
-                  help="Min vertex separation (px, default 30 = 90 μm)")
-  ap.add_argument("--d-max",   type=float, default=600.0,
-                  help="Max vertex separation (px, default 600 = 1800 μm)")
+  ap.add_argument("--d-min",   type=float, default=310.0,
+                  help="Min vertex separation (px, default 310 = 90 μm)")
+  ap.add_argument("--d-max",   type=float, default=1724.0,
+                  help="Max vertex separation (px, default 1724 = 500 μm)")
   ap.add_argument("--min-n-primary",    type=int,   default=5,
                   help="Min n_tracks_max for primary vertex")
   ap.add_argument("--max-n-primary",    type=int,   default=0,

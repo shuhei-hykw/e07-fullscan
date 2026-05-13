@@ -685,3 +685,21 @@ p_ntracks 10-19、p_sp 20-45°、dist 90-307 μm。KISO は含まれない (cros
 - [ ] Cross-view ペアに接続トラックフィルタを適用
 - [ ] 97 intra-view 接続ペアの視覚検査
 - [ ] 非 KISO specials の座標オフセット決定
+
+### v7_filtered: 接続トラックフィルタの結果
+
+`filter_pairs_by_track.py` を v7 (min_n_primary=10、90-500μm) に適用:
+
+```
+v7_filtered:  540 ペア  (min_n_primary=10, tol=50px)
+  ΛΛ範囲 (p_n:6-20, s_n:3-15, sp>=20):  398 ペア (368 ユニーク)
+    ─ v6_filtered と共通:  97 ペア  ← 全 v6 候補が回収された ✓
+    ─ n順序修正で新規:    301 ペア
+  強候補 (p_sp>=30, s_sp>=25, p_n>=8, s_n>=4):  120 ユニークペア
+```
+
+v6_filtered の97ペアが全て v7_filtered に含まれる: n順序修正は既存の
+候補を失わずに、新たに301ペアを追加した。
+
+**次のステップ:** 120 強候補の視覚的検査 (crop_pairs.py) で真の ΛΛ
+事象と重核相互作用バックグラウンドを区別する。

@@ -204,10 +204,15 @@ def main() -> None:
           for i in np.where(mask)[0]
         ]
 
+    # auto-expand crop window to ensure both vertices are visible
+    dist_px_row = float(row['dist_px'])
+    half = max(args.crop_half, int(dist_px_row / 2) + 80)
+    half = min(half, 1000)  # cap at 1000 px to limit file size
+
     vis = _draw_pair_crop(
       img, pvx, pvy, svx, svy,
       int(row['p_ntracks']), int(row['s_ntracks']),
-      half=args.crop_half,
+      half=half,
       conn_tracks=conn_tracks,
       dist_um=float(row.get('dist_um', 0)),
       rank=rank + 1,
