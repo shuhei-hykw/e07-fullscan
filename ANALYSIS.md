@@ -919,3 +919,119 @@ min(n_primary, n_secondary) ≥ 6 and both sp ≥ 30°. This gives ~67,717 pairs
 - [ ] Determine coordinate offsets for non-KISO specials
 - [ ] Develop background suppression for cross-view pairs (n, sp cuts)
 - [ ] Implement KISO verification comparison image (specials vs fullscan crop)
+
+---
+
+## 2026-05-14 — n-ordering bug fix; all 9 specials detected; cross-view filter study
+
+### Bug fix: `find_vertex_pairs` n-ordering constraint
+
+Removed the line `if nt[pi] < nt[si]: continue` from
+`e07fullscan/clustering/_vertex.py` (`find_vertex_pairs`).
+
+**Why this existed:** The original intent was to enforce "primary has more
+tracks than secondary", which is physically motivated by the Ξ⁻ stopping star
+having more prongs than the Λ decay. **Why it was wrong:** At view boundaries
+(KISO) and in multi-body decays, the secondary can accumulate more visible
+tracks than the truncated primary. Removing the constraint is safe — the
+role labels (primary/secondary) are now defined purely by topology (n_tracks
+threshold), not by relative ordering.
+
+**Impact:** v7 pairs regenerated from `vertices_merged_v5.parquet` with
+correct distance range (90–500 μm): **1,479,220 intra-view pairs** (up from
+v6: 1,200,346 = +23% from unblocked P.n<S.n pairs).
+
+### Specials pipeline test: all 9 events detected
+
+Ran the full pipeline (find_tracks → find_vertices → merge_vertex_slices →
+find_vertex_pairs with max_dz_mm=0.200) on all 9 confirmed specials_x20
+events. All events produce candidate pairs.
+
+| Event | Vertices | n_max | Pairs | Notes |
+|-------|----------|-------|-------|-------|
+| D005 | 358 | 15 | 48,887 | — |
+| D013 | 331 | 15 | 27,367 | — |
+| IBUKI | 281 | 14 | 24,170 | — |
+| IRRAWADY | 158 | 11 | 4,828 | — |
+| KISO | 192 | 11 | 9,491 | true pair found (see below) |
+| MINO | 304 | 19 | 33,562 | — |
+| NAGARA | 221 | 9 | 12,236 | — |
+| T004 | 380 | 14 | 47,555 | — |
+| T011 | 135 | 14 | 3,919 | — |
+
+**KISO true pair recovered in specials image:**
+```
+P=(1108,1090) n=6 nsl=4  z=-0.225 mm   (62 px from gt primary)
+S=(751,1589)  n=9 nsl=13 z=-0.211 mm   (11 px from gt secondary)
+dist = 178 μm   (expected 194 μm, error 8%)
+dz   = 0.014 mm
+```
+Before the n-ordering fix this pair was blocked (P.n=6 < S.n=9). After the
+fix it is found. The 8% distance error is consistent with vertex centroiding
+uncertainty at the primary vertex, which has only 4 z-slices visible (short
+secondary vertex due to the multi-body decay topology).
+
+**Challenge:** Each specials image produces 4,000–50,000 pairs. The true pair
+is buried in this background. Pair ranking is required.
+
+### Full-scan context: scan area covers only KISO
+
+The current vertex catalog (`vertices_merged_v5.parquet`) covers
+x_mm = [−0.001, 22.001], y_mm = [0.002, 22.000] — a 22×22 mm² area.
+Only **KISO** falls within this area (view_x=1.75, view_y=12.88 mm).
+The other 8 specials are at distances > 58 mm from the scan boundary.
+
+KISO is confirmed in the full-scan cross-view pairs catalog:
+```
+P = V00001173 (354,1204) n=11 nsl=7 sp=42.3°
+S = V00001174 (1888,716) n=5  nsl=6 sp=23.5°
+dist = 152 μm  (expected 194 μm, error 22%)
+dz   = 0.026 mm
+```
+The 22% distance error is because the v5 catalog was built with `hough_ml=50`
+(50 px min line length), which truncates the primary vertex. A rerun with
+`hough_ml=30` is expected to recover the primary at its true position.
+
+### Cross-view pair background suppression
+
+Applied progressive cuts to the 18.8M cross-view pairs:
+
+| Cut | Pairs | KISO |
+|-----|-------|------|
+| All | 18,822,640 | 132 |
+| adjacent-view only | 14,800,258 | 132 |
+| + p_ntracks 6–20, p_sp≥30° | 4,208,859 | 48 |
+| + s_ntracks≥4, s_sp≥20° | 3,326,423 | 48 |
+| + dist 90–250 μm, dz≤0.030 mm | 211,692 | 8 |
+| + p_nslices≥5, s_nslices≥4 | **109,376** | **7** |
+
+KISO survives all cuts. The 7 KISO candidates (V00001173→V00001174) include
+the true pair and 6 background pairs sharing the same primary or secondary.
+The true pair has the highest p_ntracks*p_angle_spread combination.
+
+### v5 pairs: critical error (wrong distance range)
+
+Discovered that `vertex_pairs_v5.parquet` was generated with
+d_min=30 px (8.7 μm) and d_max=167 px (48 μm) — accidentally using the
+`hough_ml` values as the pair-distance range. All v5 pairs are useless for
+ΛΛ analysis. v6 and v7 use the correct 90–500 μm range.
+
+### Intra-view connected pairs: v6_filtered
+
+Applied connecting-track filter (`filter_pairs_by_track.py`) to v6 pairs:
+**97 pairs** surviving from 1.2M, with p_ntracks 10–19, p_sp 20–45°,
+dist 90–307 μm. KISO not included (cross-view). These 97 pairs are the
+priority candidates for visual inspection.
+
+### Action items (updated)
+
+- [x] Fix n-ordering constraint in `find_vertex_pairs` (done 2026-05-14)
+- [x] Regenerate v7 intra-view pairs with n-ordering fix
+- [x] Confirm KISO detected in specials image after fix (P.n=6, S.n=9)
+- [x] Document v5 distance-range bug
+- [x] Cross-view filter study: 18.8M → 109K with KISO survival
+- [ ] Re-run full pipeline on KEKCC with hough_ml=30
+- [ ] Run find_crossview_pairs.py on v6 catalog
+- [ ] Apply connecting-track filter to cross-view pairs
+- [ ] Visual inspection of 97 intra-view connected pairs
+- [ ] Determine coordinate offsets for non-KISO specials

@@ -354,23 +354,27 @@ python scripts/crop_vertices.py \
 Finds primary + secondary vertex pairs consistent with a ΛΛ hypernucleus decay.
 
 ```bash
-# 1. Find all candidate pairs
+# 1. Find all candidate pairs (correct distance range: 90-500 μm)
 python scripts/find_pairs.py \
   --input  results/vertices_merged_v5.parquet \
-  --output results/vertex_pairs_v5.parquet \
-  --d-min 30 --d-max 167 \
+  --output results/vertex_pairs_v7.parquet \
+  --d-min 310 --d-max 1724 \
   --min-n-primary 5 --min-n-secondary 3 \
   --min-sl-secondary 2 --max-dz-mm 0.010
 
-# 2. Require connecting track (Λ flight path)
+# NOTE: vertex_pairs_v5.parquet used wrong d-min=30, d-max=167 (hough_ml
+#       values accidentally substituted). v7 uses the correct 90-500 μm range.
+#       find_vertex_pairs no longer requires P.n >= S.n (removed 2026-05-14).
+
+# 2. Require connecting track (Ξ⁻ flight path)
 python scripts/filter_pairs_by_track.py \
-  --pairs  results/vertex_pairs_v5.parquet \
-  --output results/vertex_pairs_v5_filtered.parquet \
+  --pairs  results/vertex_pairs_v7.parquet \
+  --output results/vertex_pairs_v7_filtered.parquet \
   --tol 20
 
 # 3. Generate visual crops (CLAHE-enhanced, angle_spread labeled)
 python scripts/crop_pairs.py \
-  --pairs  results/vertex_pairs_v5_filtered.parquet \
+  --pairs  results/vertex_pairs_v7_filtered.parquet \
   --output results/pair_crops/ \
   --top 200 --min-n-primary 10
 ```

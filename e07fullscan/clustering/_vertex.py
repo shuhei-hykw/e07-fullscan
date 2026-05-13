@@ -318,8 +318,9 @@ def merge_vertex_slices(
 
 
 # ΛΛ topology constants (3 μm/px scanner scale)
-_D_MIN_PX    = 30.0   # 90 μm minimum decay length
-_D_MAX_PX    = 167.0  # 500 μm maximum (physical ΛΛ range)
+_PX_SCALE_UM = 0.29   # μm/px confirmed: FOV=594 μm / 2048 px
+_D_MIN_PX    = 310.0  # 90 μm / 0.29 μm/px
+_D_MAX_PX    = 1724.0 # 500 μm / 0.29 μm/px
 _MIN_N_SEC   = 3      # minimum n_tracks_max for secondary vertex
 _MAX_DZ_MM   = 0.010  # max Z separation in mm (10 μm ≈ 3 z-slices)
 _MIN_SL_SEC  = 2      # min n_slices for secondary vertex
@@ -351,7 +352,7 @@ def find_vertex_pairs(
   has_nslices = 'n_slices' in df.columns
   has_spread  = 'angle_spread_best' in df.columns
   records: list[dict] = []
-  PX_SCALE = 3.0  # μm per scanner pixel
+  PX_SCALE = _PX_SCALE_UM  # 0.29 μm/px
 
   for view_id, grp in df.groupby('view_id', sort=False):
     grp = grp.reset_index(drop=True)
@@ -375,9 +376,6 @@ def find_vertex_pairs(
       dz    = np.abs(zv[secondary] - zv[pi])
       for k, si in enumerate(secondary):
         if si == pi:
-          continue
-        # primary must have the higher (or equal) n_tracks
-        if nt[pi] < nt[si]:
           continue
         d = float(dists[k])
         if d < d_min_px or d > d_max_px:
