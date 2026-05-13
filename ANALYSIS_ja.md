@@ -363,3 +363,68 @@ p_ntracks ≥ 10 で 5,059 候補は半自動スキャンが可能な規模。
 
 上位候補プロファイル: p_ntracks≈16-20, s_ntracks≈6-8, dist≈150-400 μm。
 次のステップ: 上位 200 クロップを目視確認して ΛΛ トポロジーを同定。
+
+## 2026-05-13 — 角度広がりの頂点ペア出力への伝播
+
+### angle_spreadカラムの伝播
+
+`merge_vertex_slices()`関数はすでに`angle_spread_best`と`angle_spread_max`を
+マージ済み頂点DataFrameに保持していた（本日earlier追加）。しかし
+`find_vertex_pairs()`がこれらをペア出力に渡していなかった。修正：各ペアレコードに
+`p_angle_spread`と`s_angle_spread`（`angle_spread_best`を使用）を伝播するよう変更。
+
+パイプラインをエンドツーエンドで再実行：
+1. `find_pairs.py` → angle_spreadカラム付き73,751ペア
+2. `filter_pairs_by_track.py`（tol=20 px）→ 25,842フィルタ済みペア
+3. Golden選択 → 1,220ペア（以前と同数、spread情報付き）
+
+### goldencandidatesのangle_spread統計
+
+全頂点は生産カット（min_angle_spread=20°）を通過済みなので全値≥20°。分布：
+
+| 頂点 | 平均 | 中央値 | 25パーセンタイル | 75パーセンタイル |
+|------|------|--------|-----------------|-----------------|
+| Primary   | 31.8° | 32.4° | 26.7° | 37.1° |
+| Secondary | 29.3° | 28.9° | 24.2° | 34.0° |
+
+Secondary頂点はPrimaryより若干低いspread（プロング数3–8 vs 10–20と整合）。
+両分布は大きく重なっており、angle_spread単独では明確な識別子にならない。
+
+goldencandidates中の低spread割合：
+- p_angle_spread < 25°: 18.4%（225/1220）
+- s_angle_spread < 25°: 29.4%（359/1220）
+- 両方 < 25°: 5.4%（66/1220）
+
+両方が25°以下の頂点はゴーストである可能性があり、精査が必要。
+
+### クロップ画像再生成
+
+`crop_pairs.py`を更新し、n_tracksラベルの横に`sp=XX°`を表示するよう変更。
+Top-200 goldenクロップを`results/pair_crops_v5_golden/`に再生成（angle_spreadラベル付き）。
+
+**未解決問題**：
+- [ ] angle_spreadとs_ntracksの組み合わせでより良い背景除去ができるか？
+- [ ] 両方低spread（66ペア）は本当にゴーストか、それとも整列崩壊幾何の実事象か？
+
+### クロップ画像のCLAHEコントラスト強調
+
+`crop_pairs.py`でアノテーション前にCLAHE（clipLimit=2.0, tileGridSize=8×8）を適用。
+z投影画像に適用してトラックと頂点構造が目視確認しやすいよう局所コントラストを強調。
+
+rank-1候補への効果: raw平均=183 → CLAHE平均=160（コントラスト拡張）。
+200枚のgoldenクロップを`results/pair_crops_v5_golden/`にCLAHE付きで再生成済み。
+
+### noise_amax_upper: 前処理での大型アーティファクト除去
+
+`e07fullscan/tracking/_finder.py`の`preprocess()`に`noise_amax_upper`パラメータを追加。
+0より大きい値を設定すると、Houghライン検出前に面積>閾値のバイナリblob を除去する。
+
+目的：大型銀粒子クラスタ、乳剤fold、宇宙線ミューオン残留トラックを除去。
+デフォルト=0（後方互換のため無効）。YAMLで設定可能：`noise_amax_upper: N`。
+
+KENKCCでの`e07analyze`再実行が必要（将来のタスク）。
+
+### Teacher dataの拡充
+
+v5マージ済み頂点からteacher crop 200枚を生成（n_tracks≥8, n_slices≥4）、
+`results/vertex_crops_teacher_v5/`に保存。既存60枚と合計260枚のteacher dataset。

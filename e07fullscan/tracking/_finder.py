@@ -12,6 +12,7 @@ _FOG_KSIZE   = 51
 _NOISE_AMIN  = 2
 _NOISE_AMAX  = 100
 _NOISE_CMP   = 50
+_NOISE_AMAX_UPPER = 0  # 0 = disabled; >0 removes blobs larger than this
 _HOUGH_THR   = 20
 _HOUGH_ML    = 25
 _HOUGH_MG    = 4
@@ -108,8 +109,13 @@ def preprocess(
   noise_amin: int = _NOISE_AMIN,
   noise_amax: int = _NOISE_AMAX,
   noise_cmp: int  = _NOISE_CMP,
+  noise_amax_upper: int = _NOISE_AMAX_UPPER,
 ) -> np.ndarray:
-  """Fog removal → Otsu threshold → noise removal. Returns binary image."""
+  """Fog removal → Otsu threshold → noise removal. Returns binary image.
+
+  noise_amax_upper > 0: also remove blobs with area > noise_amax_upper
+  (large artifacts such as emulsion folds or grain clusters).
+  """
   k = fog_ksize if fog_ksize % 2 == 1 else fog_ksize + 1
   blurred = cv2.GaussianBlur(img, (k, k), 0)
   current = cv2.subtract(blurred, img)
@@ -125,6 +131,9 @@ def preprocess(
   for cnt in contours:
     area = cv2.contourArea(cnt)
     if area < noise_amin:
+      noise.append(cnt)
+      continue
+    if noise_amax_upper > 0 and area > noise_amax_upper:
       noise.append(cnt)
       continue
     perimeter = cv2.arcLength(cnt, True)
@@ -145,6 +154,7 @@ def find_tracks(
   noise_amin: int = _NOISE_AMIN,
   noise_amax: int = _NOISE_AMAX,
   noise_cmp: int  = _NOISE_CMP,
+  noise_amax_upper: int = _NOISE_AMAX_UPPER,
   hough_thr: int  = _HOUGH_THR,
   hough_min_line: int  = _HOUGH_ML,
   hough_max_gap: int   = _HOUGH_MG,
@@ -186,6 +196,7 @@ def find_tracks(
     noise_amin=noise_amin,
     noise_amax=noise_amax,
     noise_cmp=noise_cmp,
+    noise_amax_upper=noise_amax_upper,
   )
 
   lines = cv2.HoughLinesP(

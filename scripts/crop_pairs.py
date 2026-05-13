@@ -28,6 +28,8 @@ def _draw_pair_crop(
   conn_tracks: "list[tuple] | None" = None,
   dist_um: float = 0.0,
   rank: int = 0,
+  p_spread: float = 0.0,
+  s_spread: float = 0.0,
 ) -> np.ndarray:
   import cv2
 
@@ -56,13 +58,17 @@ def _draw_pair_crop(
 
   # primary vertex: large green circle
   cv2.circle(vis, pc, 18, (0, 220, 0), 2)
-  cv2.putText(vis, f"P n={p_ntracks}", (pc[0]+20, pc[1]-10),
-              cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 220, 0), 1)
+  p_label = (f"P n={p_ntracks} sp={p_spread:.0f}"
+             if p_spread > 0 else f"P n={p_ntracks}")
+  cv2.putText(vis, p_label, (pc[0]+20, pc[1]-10),
+              cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 220, 0), 1)
 
   # secondary vertex: cyan circle
   cv2.circle(vis, sc, 14, (255, 200, 0), 2)
-  cv2.putText(vis, f"S n={s_ntracks}", (sc[0]+16, sc[1]-10),
-              cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 200, 0), 1)
+  s_label = (f"S n={s_ntracks} sp={s_spread:.0f}"
+             if s_spread > 0 else f"S n={s_ntracks}")
+  cv2.putText(vis, s_label, (sc[0]+16, sc[1]-10),
+              cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 0), 1)
 
   # info text
   if dist_um > 0:
@@ -169,7 +175,10 @@ def main() -> None:
     half_z = args.n_z_project // 2
     lo = max(0, best - half_z)
     hi = min(len(stack) - 1, best + half_z)
-    img = stack[lo:hi + 1].mean(axis=0).astype(np.uint8)
+    proj = stack[lo:hi + 1].mean(axis=0)
+    # CLAHE for local contrast enhancement before annotation
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    img = clahe.apply(proj.astype(np.uint8))
 
     pvx = int(round(row['p_vx']))
     pvy = int(round(row['p_vy']))
@@ -202,6 +211,8 @@ def main() -> None:
       conn_tracks=conn_tracks,
       dist_um=float(row.get('dist_um', 0)),
       rank=rank + 1,
+      p_spread=float(row.get('p_angle_spread', 0)),
+      s_spread=float(row.get('s_angle_spread', 0)),
     )
 
     dist_px = int(round(row['dist_px']))

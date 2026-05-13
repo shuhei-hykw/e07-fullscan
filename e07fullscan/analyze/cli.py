@@ -114,6 +114,7 @@ def _analyze_view(
             noise_amin=cfg.get("noise_amin", 2),
             noise_amax=cfg.get("noise_amax", 100),
             noise_cmp=cfg.get("noise_cmp", 50),
+            noise_amax_upper=cfg.get("noise_amax_upper", 0),
             hough_thr=cfg.get("hough_thr", 20),
             hough_min_line=cfg.get("hough_ml", 25),
             hough_max_gap=cfg.get("hough_mg", 4),

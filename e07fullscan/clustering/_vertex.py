@@ -256,6 +256,7 @@ def merge_vertex_slices(
     z_mean        — weighted mean z
     z_min, z_max  — z depth range of contributing slices
   """
+  has_spread = 'angle_spread' in df.columns
   records: list[dict] = []
 
   for view_id, grp in df.groupby('view_id', sort=False):
@@ -265,6 +266,8 @@ def merge_vertex_slices(
     sl  = grp['slice_idx'].values
     zv  = grp['z'].values.astype(np.float32)
     mi  = grp['mean_intens'].values.astype(np.float32)
+    sp  = (grp['angle_spread'].values.astype(np.float32)
+           if has_spread else None)
     n   = len(grp)
     assigned = np.zeros(n, dtype=bool)
 
@@ -286,19 +289,28 @@ def merge_vertex_slices(
       n_sl = int(np.unique(sl[near]).size)
       if n_sl < min_slices:
         continue
-      records.append({
-        'view_id':      view_id,
-        'vx_px':        vxm,
-        'vy_px':        vym,
-        'n_tracks_max': int(nt[near].max()),
-        'n_slices':     n_sl,
-        'z_mean':       zm,
-        'z_min':        float(zv[near].min()),
-        'z_max':        float(zv[near].max()),
-        'mean_intens':  float(mi[near].mean()),
-        'view_x_mm':    float(grp['view_x_mm'].iloc[0]),
-        'view_y_mm':    float(grp['view_y_mm'].iloc[0]),
-      })
+      rec = {
+        'view_id':           view_id,
+        'vx_px':             vxm,
+        'vy_px':             vym,
+        'n_tracks_max':      int(nt[near].max()),
+        'n_slices':          n_sl,
+        'z_mean':            zm,
+        'z_min':             float(zv[near].min()),
+        'z_max':             float(zv[near].max()),
+        'mean_intens':       float(mi[near].mean()),
+        'view_x_mm':         float(grp['view_x_mm'].iloc[0]),
+        'view_y_mm':         float(grp['view_y_mm'].iloc[0]),
+      }
+      if has_spread:
+        # use spread from the highest-n slice (most reliable)
+        best_i = int(np.argmax(nt[near]))
+        rec['angle_spread_best'] = float(
+          sp[near][best_i] if not np.isnan(sp[near][best_i]) else 0.0
+        )
+        valid = sp[near][~np.isnan(sp[near])]
+        rec['angle_spread_max'] = float(valid.max()) if len(valid) else 0.0
+      records.append(rec)
 
   if not records:
     return pd.DataFrame()
@@ -337,6 +349,7 @@ def find_vertex_pairs(
     dist_px, dist_um, dz_um
   """
   has_nslices = 'n_slices' in df.columns
+  has_spread  = 'angle_spread_best' in df.columns
   records: list[dict] = []
   PX_SCALE = 3.0  # μm per scanner pixel
 
@@ -347,6 +360,8 @@ def find_vertex_pairs(
     nt = grp['n_tracks_max'].values
     zv = grp['z_mean'].values.astype(np.float32)
     nsl = grp['n_slices'].values if has_nslices else np.ones(len(grp))
+    sp  = (grp['angle_spread_best'].values.astype(np.float32)
+           if has_spread else None)
 
     primary = np.where(nt >= min_n_primary)[0]
     secondary = np.where(
@@ -369,7 +384,7 @@ def find_vertex_pairs(
           continue
         if float(dz[k]) > max_dz_mm:
           continue
-        records.append({
+        rec = {
           'view_id':    view_id,
           'view_x_mm':  float(grp['view_x_mm'].iloc[0]),
           'view_y_mm':  float(grp['view_y_mm'].iloc[0]),
@@ -386,7 +401,13 @@ def find_vertex_pairs(
           'dist_px':    d,
           'dist_um':    d * PX_SCALE,
           'dz_mm':      float(dz[k]),
-        })
+        }
+        if has_spread and sp is not None:
+          rec['p_angle_spread'] = (
+            float(sp[pi]) if not np.isnan(sp[pi]) else 0.0)
+          rec['s_angle_spread'] = (
+            float(sp[si]) if not np.isnan(sp[si]) else 0.0)
+        records.append(rec)
 
   if not records:
     return pd.DataFrame()

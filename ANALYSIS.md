@@ -651,3 +651,83 @@ Top candidate profile (score-ranked):
 
 **Next step**: crop images for the top 200 golden candidates; manual
 inspection to confirm ΛΛ topology (connecting track, star morphology).
+
+## 2026-05-13 — Angle spread propagation into vertex pair output
+
+### angle_spread column propagation
+
+The `merge_vertex_slices()` function already preserves `angle_spread_best`
+and `angle_spread_max` in the merged vertex DataFrame (added earlier today).
+However, `find_vertex_pairs()` was not forwarding these values into the
+pair output. Fixed: the function now propagates `p_angle_spread` and
+`s_angle_spread` (using `angle_spread_best`) into each pair record.
+
+The pipeline was re-run end-to-end:
+1. `find_pairs.py` → 73,751 pairs with angle_spread columns
+2. `filter_pairs_by_track.py` (tol=20 px) → 25,842 filtered pairs
+3. Golden selection → 1,220 pairs (same as before, now with spread data)
+
+### angle_spread statistics in golden candidates
+
+All vertices passed the production cut min_angle_spread=20°, so all
+values are ≥ 20°. Distribution:
+
+| Vertex | mean | median | 25th pct | 75th pct |
+|--------|------|--------|----------|----------|
+| Primary   | 31.8° | 32.4° | 26.7° | 37.1° |
+| Secondary | 29.3° | 28.9° | 24.2° | 34.0° |
+
+Secondary vertices show slightly lower spread than primaries, consistent
+with fewer prongs (3–8 vs 10–20). The distributions overlap strongly;
+angle_spread alone is not a sharp discriminator at these statistics.
+
+Low-spread fractions among golden candidates:
+- p_angle_spread < 25°: 18.4% (225/1220)
+- s_angle_spread < 25°: 29.4% (359/1220)
+- both < 25°: 5.4% (66/1220)
+
+Vertices with both < 25° may warrant closer inspection as possible
+ghost vertices (tracks nearly parallel → not a real star topology).
+
+### Crop image regeneration
+
+`crop_pairs.py` updated to display `sp=XX°` next to n_tracks label
+for both primary and secondary vertices. The top-200 golden crops were
+regenerated in `results/pair_crops_v5_golden/` with angle_spread labels.
+
+**Open questions**:
+- [ ] Can angle_spread in combination with s_ntracks provide a cleaner
+      background rejection? (ΛΛ decay: expect moderate spread 25–45°)
+- [ ] Are the 66 both-low-spread pairs truly ghosts, or can they be
+      genuine events with aligned decay geometry?
+
+### CLAHE contrast enhancement for crop images
+
+Added CLAHE (Contrast-Limited Adaptive Histogram Equalization, clipLimit=2.0,
+tileGridSize=8×8) to `crop_pairs.py` before annotation. Applied to the
+z-projected image to enhance local contrast so tracks and vertex structure
+are more visible during manual inspection.
+
+Effect on rank-1 candidate: raw mean=183 → CLAHE mean=160 (contrast stretched).
+All 200 golden crops regenerated with CLAHE in `results/pair_crops_v5_golden/`.
+
+### noise_amax_upper: large artifact removal in preprocessing
+
+Added `noise_amax_upper` parameter to `preprocess()` in
+`e07fullscan/tracking/_finder.py`. When set > 0, removes binary blobs
+with area > threshold from the processed image before Hough line detection.
+
+Purpose: suppress large silver grain clusters, emulsion folds, and cosmic
+muon track residuals that are larger than any single track segment but
+still pass the current small-blob noise filter. Default = 0 (disabled) for
+backward compatibility. Can be enabled via YAML config: `noise_amax_upper: N`.
+
+A full re-run of `e07analyze` would be needed to propagate this change to
+the chunk parquet files; this is a future task for KEKCC.
+
+### Teacher data expansion
+
+Generated 200 new teacher crops from v5 merged vertices (n_tracks≥8,
+n_slices≥4) in `results/vertex_crops_teacher_v5/`. Combined with the
+existing 60 crops in `results/vertex_crops_teacher/`, the total teacher
+dataset is now 260 crops for visual training/validation.

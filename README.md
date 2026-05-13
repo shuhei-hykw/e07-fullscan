@@ -170,6 +170,7 @@ Key parameters for track quality and physics sensitivity:
 | `zpj_half` | 4 | Z-projection half-range (slices) |
 | `fog_ksize` | 51 | Gaussian kernel size for fog removal |
 | `grain_radius` | 10 | Grain association radius (px) |
+| `noise_amax_upper` | 0 | Remove blobs larger than this (px²); 0=disabled |
 
 ## KEKCC Batch Pipeline
 
@@ -347,6 +348,50 @@ python scripts/crop_vertices.py \
 | `--shuffle` | off | Random sample (default: top-n by n_tracks_max) |
 | `--zpj-half` | 4 | Z-projection half-range for fog/binary panels |
 | `--zpj-mode` | mean | Projection mode: `mean` or `max` |
+
+## ΛΛ Vertex Pair Search
+
+Finds primary + secondary vertex pairs consistent with a ΛΛ hypernucleus decay.
+
+```bash
+# 1. Find all candidate pairs
+python scripts/find_pairs.py \
+  --input  results/vertices_merged_v5.parquet \
+  --output results/vertex_pairs_v5.parquet \
+  --d-min 30 --d-max 167 \
+  --min-n-primary 5 --min-n-secondary 3 \
+  --min-sl-secondary 2 --max-dz-mm 0.010
+
+# 2. Require connecting track (Λ flight path)
+python scripts/filter_pairs_by_track.py \
+  --pairs  results/vertex_pairs_v5.parquet \
+  --output results/vertex_pairs_v5_filtered.parquet \
+  --tol 20
+
+# 3. Generate visual crops (CLAHE-enhanced, angle_spread labeled)
+python scripts/crop_pairs.py \
+  --pairs  results/vertex_pairs_v5_filtered.parquet \
+  --output results/pair_crops/ \
+  --top 200 --min-n-primary 10
+```
+
+Output columns of `find_pairs.py`:
+
+| Column | Description |
+|---|---|
+| `p_vx, p_vy` | Primary vertex position (px) |
+| `p_ntracks` | Max track count at primary vertex |
+| `p_nslices` | Slice count at primary vertex |
+| `p_z` | Depth of primary vertex (mm) |
+| `s_vx, s_vy, s_ntracks, s_nslices, s_z` | Same for secondary vertex |
+| `dist_px, dist_um` | XY separation (px and μm) |
+| `dz_mm` | Z separation (mm) |
+| `p_angle_spread` | Angular spread of primary vertex tracks (°) |
+| `s_angle_spread` | Angular spread of secondary vertex tracks (°) |
+
+`angle_spread` reflects the directional diversity of tracks: a genuine
+interaction vertex typically has spread > 25°; values near 20° (the
+production-cut minimum) may indicate ghost vertices.
 
 ## Clustering API
 
