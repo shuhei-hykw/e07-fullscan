@@ -164,7 +164,7 @@ Key parameters for track quality and physics sensitivity:
 | Parameter | Default | Description |
 |---|---|---|
 | `hough_thr` | 35 | Hough accumulator threshold (higher → fewer noise tracks) |
-| `hough_ml` | 50 | Minimum line length (px) = 14.5 μm at 0.29 μm/px |
+| `hough_ml` | 30 | Minimum line length (px) = 8.7 μm at 0.29 μm/px |
 | `hough_mg` | 5 | Maximum line gap (px) = 1.5 μm |
 | `px_scale_um` | 0.29 | Pixel scale confirmed from scan geometry (μm/px) |
 | `zpj_half` | 4 | Z-projection half-range (slices) |
@@ -393,6 +393,37 @@ Output columns of `find_pairs.py`:
 interaction vertex typically has spread > 25°; values near 20° (the
 production-cut minimum) may indicate ghost vertices.
 
+## Cross-View ΛΛ Pair Search
+
+When the primary vertex of a ΛΛ event falls near the boundary between two
+adjacent scan views, intra-view pair finding misses it.
+`scripts/find_crossview_pairs.py` handles this case by matching vertices from
+different views using their physical (stage) coordinates.
+
+```bash
+python scripts/find_crossview_pairs.py \
+  --vertices results/vertices_merged_v5.parquet \
+  --output   results/vertex_pairs_xview_v1.parquet \
+  --min-n-primary 5 --min-n-secondary 3 \
+  --d-min-um 90 --d-max-um 500 --max-dz-mm 0.200
+```
+
+Stage coordinates are computed using **Convention C** (x-axis mirrored):
+```
+stage_x = view_cx - (vx_px - 1024) × 0.00029 mm
+stage_y = view_cy + (vy_px - 1024) × 0.00029 mm
+```
+
+The `max_dz_mm` default is 0.200 mm (vs 0.010 mm for intra-view) to allow
+for dip angles up to ~45° at 500 μm flight distance.  The "primary must have
+≥ n_tracks as secondary" constraint is removed because a view-boundary primary
+is truncated and may appear weaker.
+
+**KISO result**: with the v5 catalog (hough_ml=50), KISO appears as a
+cross-view pair P=(432,1241) n=6 ↔ S=(1888,716) n=5 with d=171 μm (expected
+193 μm, 11% error).  With hough_ml=30 the detected primary improves to
+(1854,630) sp=35.6 giving d=198 μm (expected 193 μm, 2.6% error).
+
 ## Clustering API
 
 ```python
@@ -448,7 +479,7 @@ ssh -L 8000:localhost:8000 username@login.kekcc.jp
 | 2 | Fog Removal | ksize=51 |
 | 3 | Otsu Threshold | — |
 | 4 | Noise Removal | area_max=100, compactness=50 |
-| 5 | Hough Lines | minLen=50 px, maxGap=5, threshold=35 |
+| 5 | Hough Lines | minLen=30 px, maxGap=5, threshold=35 |
 | 6 | Tracks Only | — |
 
 ![Pipeline: all 6 processing steps](docs/pipeline.png)

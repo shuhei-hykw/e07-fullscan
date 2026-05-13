@@ -731,3 +731,191 @@ Generated 200 new teacher crops from v5 merged vertices (n_tracks≥8,
 n_slices≥4) in `results/vertex_crops_teacher_v5/`. Combined with the
 existing 60 crops in `results/vertex_crops_teacher/`, the total teacher
 dataset is now 260 crops for visual training/validation.
+
+## 2026-05-13 — Pixel scale correction, v6 pipeline, and KISO specials investigation
+
+### Critical: pixel scale was 10× wrong
+
+The production constant `PX_SCALE = 3.0` μm/px in `_vertex.py` was wrong by
+a factor of 10. The correct value, confirmed from the SPNG scanner JSON
+(`AffineP2S = [0.00028889, ...]`) and from scan geometry (2048 px × 0.29 =
+594 μm ≈ 0.5 mm FOV spacing), is **0.29 μm/px**.
+
+Consequence: the old v5 pair search used d=30–167 px ≈ 9–48 μm — an order of
+magnitude too small for ΛΛ events (expected 90–500 μm). All v5 "golden"
+candidates were at the wrong scale.
+
+Fix: `_PX_SCALE_UM = 0.29`, `_D_MIN_PX = 310` (90 μm), `_D_MAX_PX = 1724`
+(500 μm) in `e07fullscan/clustering/_vertex.py`.
+
+### v6 pipeline run with corrected scale
+
+Re-ran the full pipeline with corrected distance cuts:
+
+| File | Count | Notes |
+|---|---|---|
+| `vertex_pairs_v6.parquet` | 1,200,346 | all pairs d=90–500 μm |
+| `vertex_pairs_v6_prefilter.parquet` | 43,013 | p:10–20, s:3–8 |
+| `vertex_pairs_v6_filtered.parquet` | 97 | connecting-track filter tol=30 px |
+
+The connecting-track filter (requiring a Hough track spanning P→S) gives 97
+pairs but all turn out to be heavy ionising particle tracks (a single track
+that happens to stop or scatter). This filter selects the wrong topology: it
+finds heavy particle tracks rather than ΛΛ pairs. Root cause: only 0.47% of
+Hough segments are ≥310 px (Λ flight path) because each z-slice only captures
+a 3-μm window, keeping segments short (≈50–100 px typical). The connecting-
+track filter is **abandoned** for v6 and will be rethought.
+
+### Coordinate system characterisation
+
+Comparing stage positions between the KISO special event scan (NLAB-PC06) and
+the fullscan (NLAB-PC13), the correct pixel-to-stage mapping for fullscan is:
+
+```
+stage_x = view_cx - (px_x - 1024) × 0.00029 mm   (x axis mirrored)
+stage_y = view_cy + (px_y - 1024) × 0.00029 mm   (y axis same)
+```
+
+with `view_cx, view_cy` = the stage centre of the view (mm), taken from
+the `x, y` fields of the view JSON.
+
+Verification: applying this convention to KISO in V00001173 (view centre
+1.499, 13.001):
+- Primary expected stage (1.748, 12.882) → pixel (95, 617)  ✓ (distance 666 px = 193 μm to secondary matches KISO P-S distance exactly)
+- Secondary expected stage (1.668, 13.048) → pixel (441, 1186)  ✓ (nearest detected vertex: (432, 1241) n=6 at 56 px)
+
+### KISO specials matching result
+
+KISO is the **only** special event with stage coordinates within the fullscan
+plate range (1.748, 12.882 mm). Other specials (D005, D013, IBUKI, etc.) were
+scanned on different microscope setups with different coordinate origins and
+cannot be matched without additional calibration.
+
+For KISO in view V00001173:
+- **Primary (95, 617)**: 6–9 Hough lines detected per z-slice with hough_ml=25
+  (lengths 25–50 px). With the production threshold hough_ml=50, these tracks
+  are below the minimum length and the vertex is **not detected**.
+  Reason: near-surface vertex (~top 2–3 z-slices, z ≈ −0.076 mm) with short
+  track projections due to steep dip angles.
+- **Secondary (432, 1241) n=6 sp=24.8**: detected and in the vertex catalog.
+  Distance from expected KISO secondary position: 56 px ≈ 16 μm.
+
+**KISO is NOT in v6_prefilter pairs** because the primary vertex was not
+detected. The secondary appears in v6 pairs but only paired with unrelated
+primaries (distance 90–308 μm to those primaries).
+
+Root cause of KISO primary miss: `hough_min_line = 50 px` (14.5 μm). Near the
+emulsion surface, track projections in a 3-μm z-slice can be as short as
+25–40 px for tracks with dip angles > ~11°. Lowering `hough_min_line` to
+25–30 px should allow detection.
+
+Side effect risk: shorter line threshold increases noise hits. Needs careful
+benchmarking against n_tracks / angle_spread distributions.
+
+### Action items
+
+- [ ] Lower `hough_min_line` to 30 px and re-run vertex finding on views
+      near confirmed specials to test recovery
+- [ ] Determine coordinate offsets for non-KISO specials (requires calibration
+      data or overlap of known features)
+- [ ] Rethink connecting-track filter: grain-density cut on primary→secondary
+      direction, or directional isolation cut at primary vertex instead
+- [ ] Consider line-intersection vertex finder as a supplement to the current
+      endpoint-convergence finder (needed for high-dip-angle tracks)
+
+---
+
+## 2026-05-13 — Cross-view vertex pair finder; KISO recovery
+
+### Discovery: KISO primary straddles view boundary
+
+The KISO event was expected at stage (1.769, 12.883) for the primary and
+(1.668, 13.048) for the secondary. In the fullscan layout:
+
+| View | Center (mm) | KISO primary px | KISO secondary px |
+|---|---|---|---|
+| V00001173 | (1.499, 13.001) | (93, 617) — near LEFT edge | (441, 1186) → detected (432, 1241) |
+| V00001174 | (2.000, 13.001) | (1821, 617) — near RIGHT edge | (2169, 1186) — outside |
+
+The KISO primary is at pixel x ≈ 93 in V00001173 (2048-wide view), only
+93 px from the left edge. Tracks extending toward lower x are cut off by
+the view boundary. With hough_ml=50, the vertex finder detects at most n=5
+near this position (high-n vertex (354,1204) n=11 is 86 px away and is
+actually the secondary of a different interaction).
+
+In V00001174, the primary expected position is at pixel (1821, 617), near
+the right edge. With hough_ml=30, a vertex (1854, 630) n=5 sp=35.6 is found
+at 37 px from the expected position (stage distance 10 μm).
+
+**Conclusion: KISO spans the V00001173 / V00001174 view boundary.** A single-
+view vertex pair finder cannot recover it.
+
+### Cross-view pair finder: `scripts/find_crossview_pairs.py`
+
+Implemented a new script that:
+1. Computes stage (mm) coordinates for every vertex using Convention C.
+2. Builds a cKDTree on stage coordinates.
+3. For each candidate primary (n ≥ min_n_primary), searches all vertices in
+   **different views** within [d_min_mm, d_max_mm] stage distance.
+4. Applies Z-separation cut (max_dz_mm; default 0.200 mm for cross-view
+   since dip angle at ~20° gives dz ≈ 66 μm for a 193-μm flight).
+
+Key difference from intra-view finder: the "primary must have ≥ n_tracks as
+secondary" constraint is removed, because at view boundaries the physical
+primary appears weaker (tracks cut off).
+
+Default max_dz_mm was raised from 0.010 mm (intra-view) to 0.200 mm for
+cross-view, because the KISO primary-secondary dz = 70.2 μm (dip angle ~21°).
+
+### KISO cross-view detection result
+
+Running on `vertices_merged_v5.parquet` (hough_ml=50):
+
+```
+P=(432,1241) n=6 sp=24.8 in V00001173   (physical secondary, higher n)
+S=(1888,716) n=5 sp=23.5 in V00001174   (physical primary, truncated)
+dist = 171.5 μm   (expected 193 μm, error = 11%)
+dz   = 70.2 μm    (consistent with dip angle ~21°)
+```
+
+**KISO IS recovered as a cross-view pair**, but with roles swapped (the
+physical secondary has higher n than the physical primary, so it appears as
+"P" in the output). The distance error of 22 μm comes from vertex position
+errors (~35 μm for the truncated primary, ~16 μm for the secondary).
+
+With hough_ml=30 in V00001174, the primary candidate improves to
+(1854, 630) n=5 sp=35.6 at 36 px from expected, giving:
+```
+cross-view distance = 198.0 μm   (expected 193 μm, error = 2.6%)
+```
+
+### Config change: hough_ml 50 → 30
+
+Updated `config/default.yaml`: `hough_ml: 50` → `hough_ml: 30`
+(8.7 μm at 0.29 μm/px). This improves detection of short track segments at
+surface vertices and view-boundary primaries. The full pipeline (2025 views ×
+58 slices) must be re-run on KEKCC to apply this to the vertex catalog.
+
+### Cross-view background and scale
+
+Running `find_crossview_pairs.py` on v5 catalog with min_n=5/3, d=90–500 μm,
+max_dz=200 μm gives 18,822,640 cross-view pairs. A systematic background is
+observed: the pair pattern (px ≈ 430,1240) in one view ↔ (px ≈ 1890,720) in
+the adjacent x+1 view with d ≈ 165–177 μm recurs across many view-row
+positions. This arises because the same relative stage offset corresponds to
+similar pixel positions in every pair of adjacent views — likely a heavy-
+particle track (beam particle or knock-on electron) traversing the view
+boundary, creating fake star-vertex signatures on both sides.
+
+To suppress: require max(n_primary, n_secondary) ≥ 10 and
+min(n_primary, n_secondary) ≥ 6 and both sp ≥ 30°. This gives ~67,717 pairs.
+
+### Action items (updated)
+
+- [x] Lower `hough_min_line` to 30 px (done in config/default.yaml)
+- [ ] Re-run full pipeline on KEKCC with hough_ml=30 to regenerate
+      chunk parquets and vertices_merged_v6.parquet
+- [ ] Run `find_crossview_pairs.py` on v6 catalog to find cross-view ΛΛ pairs
+- [ ] Determine coordinate offsets for non-KISO specials
+- [ ] Develop background suppression for cross-view pairs (n, sp cuts)
+- [ ] Implement KISO verification comparison image (specials vs fullscan crop)
