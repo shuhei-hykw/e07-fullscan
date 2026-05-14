@@ -1,0 +1,16 @@
+job:
+  name:     e07v6       # LSF job name (array index appended automatically)
+  queue:    s            # s: priority 120 (highest)
+  n_cores:  2            # CPU slots per job (-n)
+  mem_mb:   4000         # memory limit per job in MB (-M)
+  walltime: "01:00"      # wall time HH:MM (-W)
+  n_jobs:   135          # 2025/135=15 views/job
+
+data:
+  input: /gpfs/group/had/sks/E07/tohoku/fullscan/MOD108/PL12/tohoku-v1/AREA00/IMAGE00_AREA00
+  output_dir: results/chunks_v6
+  total_views: 2025
+
+analysis:
+  config:  config/default.yaml   # hough_ml=30 (fixed from v5 which used 50)
+  workers: 1

@@ -35,6 +35,14 @@
 - New Markdown log entries should include both date and time, preferably in
   `YYYY-MM-DD HH:MM JST` form. Do not rewrite older date-only entries just to
   add times.
+- In this collaboration, Codex is discussion-main: Codex monitors and
+  maintains `discussion.md` / `discussion_ja.md`, while Claude performs
+  actual coding and implementation work.
+- Codex must treat non-Markdown files as read-only. Codex may inspect code,
+  scripts, configs, data files, and generated outputs for context, but must
+  not edit them.
+- Codex Markdown edits should stay limited to discussion coordination and
+  user-requested documentation updates.
 - Keep both discussion files append-only. Never reorganise or remove existing
   entries.
 - Before editing files that another agent lists as active, record the intent

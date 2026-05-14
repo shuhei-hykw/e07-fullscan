@@ -30,6 +30,8 @@ def _draw_pair_crop(
   rank: int = 0,
   p_spread: float = 0.0,
   s_spread: float = 0.0,
+  conn_intens: float = 0.0,
+  conn_gd: float = 0.0,
 ) -> np.ndarray:
   import cv2
 
@@ -74,6 +76,10 @@ def _draw_pair_crop(
   if dist_um > 0:
     cv2.putText(vis, f"#{rank} d={dist_um:.0f}um", (4, 18),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
+  if conn_intens > 0:
+    flag_col = (0, 80, 255) if conn_intens > 35 else (160, 160, 160)
+    cv2.putText(vis, f"I={conn_intens:.1f} gd={conn_gd:.2f}", (4, 36),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.4, flag_col, 1)
 
   return vis
 
@@ -218,6 +224,8 @@ def main() -> None:
       rank=rank + 1,
       p_spread=float(row.get('p_angle_spread', 0)),
       s_spread=float(row.get('s_angle_spread', 0)),
+      conn_intens=float(row.get('conn_mean_intens', 0)),
+      conn_gd=float(row.get('conn_grain_density', 0)),
     )
 
     dist_px = int(round(row['dist_px']))

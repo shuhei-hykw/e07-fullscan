@@ -1066,3 +1066,285 @@ dist 中央値 ≈ 108μm は物理的に妥当 (ΛΛ の飛行距離: 90-300μm
 
 **次のステップ:** 120 強候補の視覚的検査 (crop_pairs.py) で真の ΛΛ
 事象と重核相互作用バックグラウンドを区別する。
+
+## 2026-05-14 — Connecting-track annotation and Tier A candidate selection
+
+### Connecting-track property annotation
+
+All 123 strong candidates annotated with connecting-track properties
+using `scripts/annotate_pairs.py` (tolerance 50 px):
+
+- `conn_mean_intens`: mean intensity of the best connecting track
+- `conn_grain_density`: grain density of connecting track
+- `conn_angle_diff`: angle between track direction and P→S vector
+- `conn_len_ratio`: track length / dist_px
+
+Key findings:
+- `conn_angle_diff` ≈ 0° for virtually all candidates (all connecting
+  tracks are co-linear with P→S, not useful as discriminator)
+- `conn_mean_intens`: mean=16.8, std=6.1; only 2 pairs exceed 35
+  (rank2 at 37.1 and rank11 at 39.8)
+- Visual false positives (rank1,4,5) have moderate intens (25.5, 13.9,
+  12.4) — connecting-track intensity alone cannot identify heavy-particle
+  fakes because the heavy-particle track may be split into multiple short
+  segments in tracking, and the "connecting track" found may be a
+  secondary (delta ray) rather than the primary particle
+
+### Tier A / B / C classification
+
+Applied multi-criteria tiers to the 123 strong candidates:
+
+| Tier | Criteria | Count |
+|------|----------|-------|
+| A | s_n≥8, p_sp≥30°, s_sp≥28°, d=90-400μm, I<38 | 25 |
+| B | s_n≥6, p_sp≥28°, s_sp≥25°, d=90-500μm | 53 |
+| C | rest | 45 |
+
+Tier A corresponds most closely to the known specials parameter range
+(all 9 specials have s_n=9–13, both sp>25°). The hough_ml=50 truncation
+means we might be missing tracks, so s_n≥8 rather than s_n≥9 is used.
+
+Output files:
+- `results/vertex_pairs_v7_strong_ann.parquet`: 123 pairs with conn props
+- `results/vertex_pairs_v7_tier_a.parquet`: 25 Tier A pairs
+- `results/pair_crops_v7_ann/`: 123 annotated PNG crops (I= printed)
+- `results/pair_crops_v7_tier_a/`: 25 Tier A crops (priority inspection)
+
+### Tier A top candidates
+
+| # | View | Pn | Psp | Sn | Ssp | d(μm) | I | Notes |
+|---|------|----|-----|----|-----|-------|---|-------|
+| 1 | V00000670 | 17 | 30° | 11 | 40° | 91 | 25.5 | — |
+| 2 | V00000794 | 14 | 31° | 13 | 36° | 92 | 37.1 | visual ΛΛ ◎ |
+| 3 | V00001842 | 16 | 35° | 11 | 40° | 105 | 13.4 | visual ΛΛ ○ |
+| 4 | V00000441 | 16 | 38° | 9 | 39° | 90 | 16.5 | visual ΛΛ ○ |
+| 5 | V00000102 | 11 | 44° | 11 | 35° | 97 | 16.8 | visual ΛΛ ○ |
+| 8 | V00001832 | 10 | 37° | 11 | 36° | 101 | 20.6 | — |
+| 10 | V00001542 | 12 | 39° | 10 | 40° | 228 | 8.0 | — |
+
+Visual inspection summary (top 10 from previous session):
+- rank2, rank6(=tier4), rank8(=tier5): confirmed ΛΛ candidate topology
+- rank1, rank4orig, rank5orig: heavy-particle false positive (visual)
+  (note: rank mapping shifted after Tier A re-ordering)
+
+### Next steps
+1. Visual inspection of 25 Tier A crops in `pair_crops_v7_tier_a/`
+2. Cross-view connecting-track filter for 109,376 xview pairs
+   (Ξ⁻ track at view edge: primary has track ending at right edge,
+   secondary has track starting from left edge of adjacent view)
+3. KEKCC rerun with hough_ml=30 (full 22×22 mm² → full scan area)
+
+## 2026-05-14 — Cross-view connecting-track filter (filter_xview_pairs.py)
+
+### Method
+
+`scripts/filter_xview_pairs.py` checks for boundary-crossing tracks:
+- **Primary view**: track with one endpoint within 60 px of P vertex,
+  the other endpoint within 300 px of the view edge facing the secondary
+- **Secondary view**: track with one endpoint within 60 px of S vertex,
+  the other endpoint within 300 px of the view edge facing the primary
+
+View-edge direction inferred from VX/VY indices via the stage-to-pixel
+convention: stage_x = view_cx − (vx_px − 1024) × 0.00029 mm, so
+higher VX ↔ higher stage_x ↔ lower pixel_x. This means:
+- Secondary at higher VX → P exits via LEFT (x<300), S enters via RIGHT (x>1748)
+- Secondary at lower  VX → P exits via RIGHT, S enters via LEFT
+- Analogous for VY
+
+### Results
+
+Input: 29,408 pairs (pre-cuts: p_n≥8, s_n≥4, p_sp≥28°, s_sp≥20°,
+d≤250μm, dz≤0.028mm)
+
+| Stage | Count |
+|-------|-------|
+| Pre-cut input | 29,408 |
+| After boundary-crossing filter | 2,986 |
+| After ΛΛ range (p_n≤20, s_n≤15) | 2,952 |
+| Strong (s_n≥5, p_sp≥30°, s_sp≥22°, d≤230μm) | 1,596 |
+
+KISO true pair (P=(354,1204) n=11 sp=42° → S=(1888,716) n=5 sp=23°,
+d=152μm, dz=0.026mm) survives all stages ✓ (rank 988/2952 in ΛΛ-range).
+
+Output files:
+- `results/vertex_pairs_xview_v1_conn.parquet`: 2,986 pairs
+- `results/vertex_pairs_xview_v1_conn_ll.parquet`: 2,952 ΛΛ-range
+- `results/vertex_pairs_xview_v1_strong.parquet`: 1,596 strong candidates
+
+Top cross-view strong candidates (by score = P.n × S.n / log(d_px)):
+
+| # | P view | S view | Pn | Psp | Sn | Ssp | d(μm) | dz |
+|---|--------|--------|----|-----|----|-----|-------|-----|
+| 1 | V00001748 | V00001749 | 19 | 40° | 15 | 23° | 198 | 0.000 |
+| 2 | V00000749 | V00000750 | 17 | 32° | 14 | 26° | 183 | 0.005 |
+| 6 | V00001222 | V00001223 | 16 | 35° | 12 | 30° | 161 | 0.001 |
+| 7 | V00000336 | V00000337 | 18 | 42° | 11 | 33° | 212 | 0.000 |
+| 10 | V00000871 | V00000872 | 15 | 37° | 13 | 37° | 210 | 0.003 |
+| KISO | V00001173 | V00001174 | 11 | 42° | 5 | 23° | 152 | 0.026 |
+
+### Summary of candidate catalog (2026-05-14)
+
+| Catalog | Count | KISO ✓? | Notes |
+|---------|-------|---------|-------|
+| vertex_pairs_v7_strong.parquet | 123 intra-view | N/A | KISO is cross-view |
+| vertex_pairs_v7_tier_a.parquet | 25 | — | priority inspection |
+| vertex_pairs_xview_v1_strong.parquet | 1,596 | ✓ | cross-view, s_n≥5 |
+| vertex_pairs_xview_v1_conn_ll.parquet | 2,952 | ✓ | full ΛΛ-range |
+
+---
+
+## 2026-05-14 — v6 pipeline: intra-view and cross-view pair finding
+
+### Context
+
+v6 tracking used hough_ml=30 (correct, vs hough_ml=50 in v5), producing
+70.8M tracks (3× more than v5's 24M). Vertex merging gave 237,029
+vertices (+11% vs v5's 212,777).
+
+### Intra-view pairs (vertex_pairs_v6)
+
+Run:
+```
+python scripts/find_pairs.py \
+  --input  results/vertices_merged_v6.parquet \
+  --output results/vertex_pairs_v6.parquet \
+  --d-min  310 --d-max 1724 \
+  --min-n-primary 5 --min-n-secondary 3 \
+  --max-dz-mm 0.010
+```
+Result: **1,851,442 pairs** (+25% vs v7's 1,479,220 from hough_ml=50
+vertices). Next step: apply connecting-track filter and strong
+selection, analogous to v7_filtered → v7_strong pipeline.
+
+### Cross-view pairs (vertex_pairs_xview_v6)
+
+Raw generation produced **23,474,643 pairs** (90–500 μm, dz≤0.200 mm).
+
+Applying the same pre-filter as v1 (adjacent-view, p_sp≥30°, s_sp≥20°,
+p_nslices≥5, s_nslices≥4, p_ntracks≥6) gives **2,219,749 pairs**, which
+is 20× more than v1's 109,376. Investigation:
+- Unique primary-quality vertices: v6 30,585 vs v5 26,207 (+17%)
+- Unique secondary-quality vertices: v6 127,613 vs v5 115,121 (+11%)
+- Pairs per primary: v6 72.1 vs v1 4.7 — discrepancy unexplained
+
+The large pair count makes the boundary-crossing filter impractical at
+that scale (~50 hours estimated). Applied stricter pre-cuts that
+preserve KISO-like signal (KISO: P.sp=42°, P.n=11, S.sp=23°, S.n=5,
+d=152μm):
+
+| Cut | Count |
+|-----|-------|
+| Adjacent-view + p_sp≥30°, s_sp≥20°, p_nsl≥5, s_nsl≥4, p_n≥6 | 2,219,749 |
+| + p_sp≥35°, p_n≥8, d≤400μm | 204,405 |
+
+Applied boundary-crossing filter to 204,405 pairs (in progress as of
+2026-05-14). KISO would pass all cuts (p_sp=42°>35°, p_n=11>8,
+d=152μm<400μm).
+
+Output files:
+- `results/vertex_pairs_xview_v6.parquet`: 23,474,643 raw pairs
+- `results/vertex_pairs_xview_v6_filtered.parquet`: 2,219,749 pre-filtered
+- `results/vertex_pairs_xview_v6_prefiltered.parquet`: 204,405 strict pre-filter
+- `results/vertex_pairs_xview_v6_conn.parquet`: **5,113 pairs** (conn filter complete)
+
+### Intra-view filter and strong selection (completed 2026-05-14)
+
+Parallelized via KEKCC array jobs (15 intra + 20 xconn), split by chunk-group
+to keep per-job memory under 2 GB (queue hard limit: 4 GB). Round-robin
+slicing caused TERM_MEMLIMIT (each job loaded all 135 chunks); chunk-group
+splitting fixed this.
+
+| Stage | Count | Notes |
+|-------|-------|-------|
+| vertex_pairs_v6.parquet | 1,851,442 | raw |
+| vertex_pairs_v6_filtered.parquet | 641 | conn-track filter (min_n=10) |
+| vertex_pairs_v6_ann.parquet | 641 | + conn-track properties |
+| vertex_pairs_v6_strong.parquet | 169 | p_sp≥30°, s_sp≥25°, p_n≥8, s_n≥4, d≤400μm |
+| vertex_pairs_v6_tier_a.parquet | 168 | + conn_intens<38 |
+
+v5/v7 comparison: strong 169 vs 123 (+37%), xview_conn 5,113 vs 2,986 (+71%).
+
+Crops for visual inspection: `results/pair_crops_v6_strong/` (169 images).
+
+---
+
+## 2026-05-14 — Shared discussion log for parallel agents
+
+Claude Code is also running in the repository, so we introduced
+`discussion.md` as an append-only coordination log. The goal is to keep active
+assumptions, edited files, and open questions visible while preserving the
+chronological diary style in `ANALYSIS.md` and `ANALYSIS_ja.md`.
+
+Initial Codex note to Claude records the observed dirty working tree and asks
+for clarification on the v6 cross-view excess: whether the large candidate
+increase is best explained by the lower Hough minimum length, view-neighboring
+logic, or coordinate/indexing conventions. The note also proposes recording
+intended output filenames before script changes to avoid overwriting
+intermediate products.
+
+---
+
+## 2026-05-14 — Japanese discussion log added
+
+Created `discussion_ja.md` as a Japanese counterpart to `discussion.md` after
+the user requested it. The file mirrors the initial Codex-to-Claude
+coordination message in Japanese and explicitly asks Claude to append current
+tasks, assumptions, edited files, and planned output filenames.
+
+README coordination guidance was updated to mention both logs. This preserves
+the English log for concise cross-agent handoff while giving Japanese notes a
+dedicated place consistent with the repository instructions.
+
+---
+
+## 2026-05-14 — Discussion monitoring added to agent rules
+
+The user requested that the discussion-log monitoring rule be promoted into
+both `AGENTS.md` and `CLAUDE.md`. Added an Agent Coordination section to both
+files requiring agents to check `discussion.md` and `discussion_ja.md` before
+repository work, before editing shared files, and before final reporting.
+
+The rule keeps both discussion logs append-only and asks agents to record
+intended inputs, outputs, generated directories, and file ownership before
+launching jobs or changing scripts. README was updated to point to the
+mandatory rule.
+
+---
+
+## 2026-05-14 — Direction change: individual vertex detection
+
+Until now the pipeline focused on finding ΛΛ Primary/Secondary pairs.
+The user decided to abandon the paired-topology requirement and instead detect
+individual reaction vertices directly (nuclear stars, α-decay, single Λ,
+ΛΛ primaries — any visible vertex topology).
+
+Rationale: pair topology enforces a specific signal model and leaves many
+signal vertices undetected.  A direct vertex catalogue gives a more complete
+view of the emulsion events.
+
+### Quality filter on merged vertices
+
+Applied cuts to `results/vertices_merged_v6.parquet` (237,029 vertices):
+
+| Cut | Value |
+|-----|-------|
+| n_tracks_max | ≥ 8 |
+| angle_spread_best | ≥ 28° |
+| n_slices | ≥ 4 |
+
+Output: `results/vertices_quality_v6.parquet` — **10,750 vertices**.
+
+### Crop generation
+
+Generated image crops for the top 500 candidates sorted by n_tracks_max
+(descending).  Output directory: `results/vertex_crops_v6/` (500 PNG files).
+
+Range covered: n_tracks_max 82 → 15, across the full 45×45 view grid.
+
+Crops are named:
+```
+NNN_V{view_id}_L0_VX{vx}_VY{vy}_..._n{ntracks}_sl{nslices}_z0_x{px}_y{py}.png
+```
+
+Next step: visual inspection of the 500 crops to assess background
+contamination and identify candidate vertices for follow-up measurement.

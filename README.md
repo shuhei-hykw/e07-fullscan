@@ -45,6 +45,18 @@ e07fullscan/
 └── utils/
 ```
 
+## Agent Coordination
+
+When multiple coding agents are active, use `discussion.md` as an append-only
+coordination log and `discussion_ja.md` as its Japanese counterpart. Record
+the current task, assumptions, files being edited, and open questions before
+making overlapping changes.
+
+`AGENTS.md` and `CLAUDE.md` now make this coordination mandatory: agents must
+check both discussion logs before repository work, before editing shared files,
+and before final reporting. Job launches, generated outputs, and script changes
+should be announced there with intended inputs, outputs, and file ownership.
+
 ## SPNG Format
 
 A proprietary format used in E07 full-scan data. Each view (field of view)
@@ -349,35 +361,37 @@ python scripts/crop_vertices.py \
 | `--zpj-half` | 4 | Z-projection half-range for fog/binary panels |
 | `--zpj-mode` | mean | Projection mode: `mean` or `max` |
 
-## ΛΛ Vertex Pair Search
+## Vertex Pair Search
 
-Finds primary + secondary vertex pairs consistent with a ΛΛ hypernucleus decay.
+Finds primary + secondary vertex pairs for hypernuclear event pickup
+(ΛΛ, single Λ, alpha stars). Current pipeline uses **v6 vertices**
+(hough_ml=30, 237k vertices across 2025 views).
 
 ```bash
-# 1. Find all candidate pairs (correct distance range: 90-500 μm)
+# 1. Find all candidate pairs (90-500 μm)
 python scripts/find_pairs.py \
-  --input  results/vertices_merged_v5.parquet \
-  --output results/vertex_pairs_v7.parquet \
+  --input  results/vertices_merged_v6.parquet \
+  --output results/vertex_pairs_v6.parquet \
   --d-min 310 --d-max 1724 \
   --min-n-primary 5 --min-n-secondary 3 \
-  --min-sl-secondary 2 --max-dz-mm 0.010
+  --max-dz-mm 0.010
 
-# NOTE: vertex_pairs_v5.parquet used wrong d-min=30, d-max=167 (hough_ml
-#       values accidentally substituted). v7 uses the correct 90-500 μm range.
-#       find_vertex_pairs no longer requires P.n >= S.n (removed 2026-05-14).
-
-# 2. Require connecting track (Ξ⁻ flight path)
+# 2. Require connecting track (connecting particle flight path)
 python scripts/filter_pairs_by_track.py \
-  --pairs  results/vertex_pairs_v7.parquet \
-  --output results/vertex_pairs_v7_filtered.parquet \
-  --tol 20
+  --pairs  results/vertex_pairs_v6.parquet \
+  --output results/vertex_pairs_v6_filtered.parquet \
+  --min-n-primary 10
 
-# 3. Generate visual crops (CLAHE-enhanced, angle_spread labeled)
+# 3. Generate visual crops
 python scripts/crop_pairs.py \
-  --pairs  results/vertex_pairs_v7_filtered.parquet \
-  --output results/pair_crops/ \
+  --pairs  results/vertex_pairs_v6_filtered.parquet \
+  --output results/pair_crops_v6/ \
   --top 200 --min-n-primary 10
 ```
+
+**v5/v7 note**: vertex_pairs_v5.parquet used wrong d-min=30, d-max=167
+(hough_ml values accidentally substituted). v7 (from v5 vertices,
+hough_ml=50) used the correct range; v6 (hough_ml=30) supersedes it.
 
 Output columns of `find_pairs.py`:
 
@@ -405,11 +419,22 @@ adjacent scan views, intra-view pair finding misses it.
 different views using their physical (stage) coordinates.
 
 ```bash
+# v6 pipeline (current)
 python scripts/find_crossview_pairs.py \
-  --vertices results/vertices_merged_v5.parquet \
-  --output   results/vertex_pairs_xview_v1.parquet \
+  --vertices results/vertices_merged_v6.parquet \
+  --output   results/vertex_pairs_xview_v6.parquet \
   --min-n-primary 5 --min-n-secondary 3 \
   --d-min-um 90 --d-max-um 500 --max-dz-mm 0.200
+
+# Pre-filter before boundary-crossing filter (reduces 23M → 204k)
+# Cuts: adjacent-view, p_sp≥35°, s_sp≥20°, p_nsl≥5, s_nsl≥4,
+#       p_n≥8, d≤400μm (KISO passes: sp=42°>35°, n=11>8, d=152μm<400μm)
+
+# Boundary-crossing track filter (Ξ⁻ exits primary view edge)
+python scripts/filter_xview_pairs.py \
+  --pairs  results/vertex_pairs_xview_v6_prefiltered.parquet \
+  --chunks results/chunks_v6 \
+  --output results/vertex_pairs_xview_v6_conn.parquet
 ```
 
 Stage coordinates are computed using **Convention C** (x-axis mirrored):
@@ -419,14 +444,11 @@ stage_y = view_cy + (vy_px - 1024) × 0.00029 mm
 ```
 
 The `max_dz_mm` default is 0.200 mm (vs 0.010 mm for intra-view) to allow
-for dip angles up to ~45° at 500 μm flight distance.  The "primary must have
-≥ n_tracks as secondary" constraint is removed because a view-boundary primary
-is truncated and may appear weaker.
+for dip angles up to ~45° at 500 μm flight distance.
 
-**KISO result**: with the v5 catalog (hough_ml=50), KISO appears as a
-cross-view pair P=(432,1241) n=6 ↔ S=(1888,716) n=5 with d=171 μm (expected
-193 μm, 11% error).  With hough_ml=30 the detected primary improves to
-(1854,630) sp=35.6 giving d=198 μm (expected 193 μm, 2.6% error).
+**KISO result** (v6, hough_ml=30): P=(354,1204) n=11 sp=42° ↔
+S=(1888,716) n=5 sp=23°, d=152 μm, dz=0.026 mm. Detected in
+vertex_pairs_xview_v1_conn_ll.parquet (v5 vertices) at rank 988/2952.
 
 ## Clustering API
 
