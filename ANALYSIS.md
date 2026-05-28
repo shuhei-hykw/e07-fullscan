@@ -1502,3 +1502,70 @@ ranking. (Earlier diary entries are left intact per lab-notebook policy.)
   mismatch alone does not disqualify specials_x20.
 - Low-sp specials (T011/T004/D013): bounded Hough failure-mode diagnostic
   around the clicked GT vertex (4 categories) before any graph-branch call.
+
+---
+
+## 2026-05-28 — Step-5 compatibility check: specials_x20 vs fullscan-image
+
+Validated whether specials_x20 can serve as a sanity-check anchor for the
+conventional Hough branch, by comparing both sources *after the same step-5
+preprocessing* (the shared boundary before the Hough/graph split). Per the
+2026-05-28 scope lock, **the visual-review server was not used; the batch
+`e07fullscan.tracking._finder.preprocess()` was called directly**, so the
+statistics match exactly what the batch pipeline sees (noise_amax_upper=0).
+Script: `scripts/step5_compat.py`; outputs in `results/step5_compat/`.
+
+Sources: fullscan view V00001173 (holds the KISO catalog match), KISO, and
+T011 (smallest low-sp special). For each, the find_tracks ±4 mean
+z-projection at the center slice was fed to preprocess().
+
+| metric                 | fullscan V00001173 | KISO        | T011         |
+|------------------------|--------------------|-------------|--------------|
+| shape / dtype          | 2048² uint8        | same        | same         |
+| n_slices               | 58                 | 60          | 50           |
+| dz (µm/slice)          | 3.00               | 3.00        | 3.00         |
+| px scale (µm)          | 0.29 (config)      | 0.289       | 0.289        |
+| raw proj mean / std    | 182.5 / 39.3       | 98.0 / 54.7 | 145.6 / 19.8 |
+| post-step5 fg fraction | 7.27%              | 6.64%       | 4.17%        |
+| CC count               | 2548               | 1353        | 1532         |
+| CC area median (px²)   | 62                 | 125         | 55           |
+
+### Findings
+
+- **Geometry is identical** across sources (2048² uint8, 3.0 µm/slice,
+  0.289 µm/px). (Note: fullscan view JSON stores an identity AffineP2S; its
+  physical scale comes from config, 0.29 µm/px.)
+- **Raw intensity differs substantially** (acquisition exposure/contrast;
+  NLAB-PC13 vs PC06) — but, conservatively, this alone does not disqualify
+  specials_x20 as reference data.
+- **After step-5 the representations converge**: foreground fractions all
+  land in the 4–7% band, connected-component counts/areas are the same order,
+  and track-like structures visibly survive in all three (montage.png). The
+  normalizing mechanism is fog removal (GaussianBlur − img) followed by
+  per-image Otsu, which adapts the threshold and absorbs the raw-brightness
+  difference.
+
+### Conclusion
+
+specials_x20 is usable as a sanity-check anchor for the conventional Hough
+branch *after the same step-5 preprocessing*; no extra normalization beyond
+step-5 is required for qualitative/sanity use. Open expert question:
+NLAB-PC06 vs PC13 optics/illumination/camera equivalence — but step-5 absorbs
+the main concern (raw brightness).
+
+### Note on a dormant duplication (to fix before debris tuning)
+
+Code review (discussion 2026-05-28) found that `server/app.py` reimplements
+fog/Otsu/noise in `_process()`/`_collect_stats()` and **omits the
+`noise_amax_upper` branch** present in `tracking.preprocess()`. Currently
+harmless because `noise_amax_upper = 0`, but the viewer would silently
+under-clean relative to batch once large-blob removal is enabled. Agreed
+(Codex/Claude) to extract a branch-neutral preprocessing module and have both
+tracking and server call it — as a separate behavior-preserving task (with an
+old-vs-new regression test), not mixed with scoring/compatibility work.
+
+### Next steps
+
+- Low-sp specials (T011/T004/D013): bounded Hough failure-mode diagnostic
+  around the clicked GT vertex (tracks lost in preprocessing / Hough line
+  extraction miss / vertex merge fails / vertex exists but low scalar score).

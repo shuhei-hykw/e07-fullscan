@@ -1032,3 +1032,65 @@ Codex/Claude共同合意（discussion 17:01 JST）:
   解釈は保守的に ― raw輝度の不一致だけでspecials_x20を失格にしない。
 - low-sp specials（T011/T004/D013）: graph-branch判断の前に、clicked GT
   頂点周辺でbounded Hough failure-mode diagnostic（4カテゴリ）。
+
+---
+
+## 2026-05-28 — Step-5 互換性チェック: specials_x20 vs fullscan-image
+
+specials_x20 を conventional Hough branch の sanity-check anchor として使える
+かを、両ソースを*同じ step-5 preprocessing 後*（Hough/graph 分岐前の共有境界）
+で比較して検証した。2026-05-28 の scope lock に従い、**visual-review server は
+使わず、batch の `e07fullscan.tracking._finder.preprocess()` を直接呼んだ**ので、
+統計は batch パイプラインが見るものと完全一致（noise_amax_upper=0）。スクリプト:
+`scripts/step5_compat.py`、出力: `results/step5_compat/`。
+
+ソース: fullscan view V00001173（KISO カタログマッチを含む）、KISO、T011
+（最小の low-sp special）。各々で find_tracks の中心スライス ±4 平均投影を
+preprocess() に通した。
+
+| metric                 | fullscan V00001173 | KISO        | T011         |
+|------------------------|--------------------|-------------|--------------|
+| shape / dtype          | 2048² uint8        | same        | same         |
+| n_slices               | 58                 | 60          | 50           |
+| dz (µm/slice)          | 3.00               | 3.00        | 3.00         |
+| px scale (µm)          | 0.29 (config)      | 0.289       | 0.289        |
+| raw proj mean / std    | 182.5 / 39.3       | 98.0 / 54.7 | 145.6 / 19.8 |
+| post-step5 前景率      | 7.27%              | 6.64%       | 4.17%        |
+| CC count               | 2548               | 1353        | 1532         |
+| CC area 中央値 (px²)   | 62                 | 125         | 55           |
+
+### 所見
+
+- **幾何はソース間で完全一致**（2048² uint8、3.0 µm/slice、0.289 µm/px）。
+  （注: fullscan view JSON は identity AffineP2S を持ち、物理スケールは config
+  の 0.29 µm/px に由来。）
+- **生輝度は大きく異なる**（取得時の露光/コントラスト、NLAB-PC13 vs PC06）―
+  ただし保守的には、これだけで specials_x20 を参照データとして失格にしない。
+- **step-5 後に表現が収束**: 前景率はすべて 4〜7% 帯に収まり、connected-
+  component の count/area も同オーダー、トラック様構造が3ソースすべてで視覚的に
+  生存（montage.png）。正規化機序は fog removal（GaussianBlur − img）に続く
+  画像ごとの Otsu で、閾値が適応し生輝度差を吸収する。
+
+### 結論
+
+specials_x20 は*同じ step-5 preprocessing 後*なら conventional Hough branch の
+sanity-check anchor として利用可能。定性/sanity 用途では step-5 を超える正規化
+は不要。expert への未解決質問: NLAB-PC06 vs PC13 の光学/照明/カメラ等価性 ―
+だが主な懸念（生輝度）は step-5 が吸収する。
+
+### dormant な重複についての注記（debris チューニング前に修正）
+
+コードレビュー（discussion 2026-05-28）で、`server/app.py` が
+`_process()`/`_collect_stats()` で fog/Otsu/noise を再実装し、
+`tracking.preprocess()` にある **`noise_amax_upper` 分岐を欠く**ことが判明。
+`noise_amax_upper = 0` のため現状は無害だが、大型ブロブ除去を有効化した瞬間に
+viewer が batch より under-clean になる。branch-neutral な preprocessing
+モジュールを抽出し tracking と server の両方が呼ぶことで合意（Codex/Claude）。
+これは scoring/compatibility と混ぜず、behavior-preserving な別タスク
+（旧/新の回帰テスト付き）として実施する。
+
+### 次のステップ
+
+- low-sp specials（T011/T004/D013）: clicked GT 頂点周辺での bounded Hough
+  failure-mode diagnostic（preprocessing でトラック消失 / Hough 線抽出失敗 /
+  頂点マージ失敗 / 頂点はあるが scalar score 低）。
