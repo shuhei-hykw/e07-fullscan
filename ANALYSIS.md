@@ -1348,3 +1348,157 @@ NNN_V{view_id}_L0_VX{vx}_VY{vy}_..._n{ntracks}_sl{nslices}_z0_x{px}_y{py}.png
 
 Next step: visual inspection of the 500 crops to assess background
 contamination and identify candidate vertices for follow-up measurement.
+
+---
+
+## 2026-05-27 10:28 JST — Ranking change: n_tracks_max → sp×nsl; visual inspection
+
+### Dead end: n_tracks_max ranking
+
+Sorting by `n_tracks_max` alone was counterproductive: the top-500
+(`vertex_crops_v6/`) was dominated by beam pile-up and heavy-particle
+fakes (n_tracks_max 82→15). KISO's nearest candidate (n=8, sp=36°,
+nsl=9) was not in the top-500.
+
+### New ranking: score = angle_spread_best × n_slices
+
+Adopted `score = angle_spread_best × n_slices` as the ranking criterion,
+following joint Codex/Claude discussion (2026-05-14 21:56 JST). Rationale:
+- Rewards star-like angular spread (genuine multi-prong topology)
+- Rewards cross-slice persistence (not a single-layer artefact)
+- Does not directly reward high track multiplicity (avoids heavy-particle bias)
+
+New crop set: `results/vertex_crops_v6_sp_nsl/` (500 images).
+Script: `crop_vertices.py --sort-by sp_nsl --n-samples 500`.
+
+### Visual inspection result (2026-05-27)
+
+User inspected all 500 crops. **Dramatic improvement** over the previous
+n_tracks_max ranking:
+
+- Reaction vertex-like images (multi-prong stars) increased significantly
+- Remaining background contamination — two types:
+  1. **Large debris / grid points**: emulsion artefacts or scanner grid
+     features misidentified as vertices
+  2. **Unrelated track crossings**: two unrelated tracks crossing at a
+     point; not a physical reaction vertex
+
+**Conclusion**: sp×nsl confirmed as the ranking score going forward.
+
+### Next steps
+
+- Assess whether debris and crossing-track backgrounds can be suppressed
+  by additional quality cuts (e.g. minimum angular spread between the two
+  most-separated tracks, or a circularity/isotropy measure)
+- Generate labelled catalog from visual inspection results
+- `specials_x20/` is a symlink to `../specials_x20` (external reference
+  image data for the 9 confirmed special events; read-only, not a pipeline
+  output — resolved in discussion 2026-05-27)
+
+---
+
+## 2026-05-27 21:31 JST — Thesis-informed ranking review
+
+The user added `S.H.Hayakawa_D.pdf`, the related doctoral thesis. Codex
+reviewed the relevant parts of Chapter 4 and Chapter 5 for the current
+vertex-preprocessing discussion.
+
+Key interpretation: the thesis event categorization did not use a single
+star-like score. It used topology plus track context: distorted vs straight
+incoming track, charged-particle emission, and whether a beam track was
+visible at the vertex. Hypernuclear production is classified as a
+`sigma-stop`, i.e. a stopping negative track with endpoint distortion and
+charged-particle emission, not simply as a high-multiplicity star.
+
+This supports the current recall-first preprocessing policy. The Hough-based
+features are useful for broad image retrieval, but they do not yet encode
+the physics-relevant endpoint context. High `n_tracks_max`, high
+`n_slices`, and visually strong nuclear stars should not dominate the only
+ranking, because known hypernuclear events such as KISO can be less visually
+extreme.
+
+Next algorithmic direction: keep multiple preprocessing channels
+(broad reaction-like, hypernuclear-recall, background-rich reserve), and
+move toward a graph/topology representation with candidate vertices,
+track endpoints, track-segment edges, incoming-track straightness or
+distortion, outgoing prongs, beam-track evidence, and nearby secondary
+vertices.
+
+---
+
+## 2026-05-28 — Score-formula quantification; two-channel ranking decision
+
+Quantified the score alternatives proposed on 2026-05-27 against the one
+special inside the fullscan plate range (KISO), to decide the ranking score
+for the recall-first preprocessing stage. Discussion: discussion.md
+2026-05-28 15:48–17:01 JST.
+
+### KISO rank under each score (vertices_quality_v6, N=10,750)
+
+KISO anchor = its nearest match in V00001173 (sp=41.4°, nsl=7, n=9).
+
+| Score              | KISO rank   | percentile | top-500 needs |
+|--------------------|-------------|------------|---------------|
+| `sp` alone         | **798**     | 7.4%       | nsl≥4         |
+| `sp × sqrt(nsl)`   | 4,475       | 41.6%      | nsl≥12        |
+| `sp × log(nsl)`    | 4,227       | 39.3%      | nsl≥11        |
+| `sp × min(nsl,10)` | 5,947       | 55.3%      | nsl≥10        |
+| `sp × nsl` (prev)  | 6,188       | 57.6%      | nsl≥14        |
+
+### Key finding: capping/damping nsl does NOT rescue KISO
+
+The `sp × min(nsl,10)` formula we had been leaning toward barely helps
+(rank 5,947 vs 6,188). KISO's nsl=7 is *below* the cap of 10, so min(7,10)=7
+gives it no boost; the cap only damps the 35% of vertices with nsl>10. Any
+score that multiplies by nsl penalizes a genuine localized reaction vertex
+whose tracks span only a moderate z-depth. Only dropping nsl from the
+ranking (`sp` alone) brings KISO into a usable candidate budget (top-800).
+
+Dropping nsl does **not** flood the list with shallow artefacts: the sp≥41.4°
+pool (816 vertices) has a healthy n_slices spread (4-7: 24%, 8-10: 33%,
+11-13: 24%, ≥14: 19%) and only 4% at n_tracks_max≥17, since the nsl≥4 quality
+floor is already applied.
+
+### Two-list diagnostic (the persistence bias, made visible)
+
+- `hough_recall_sp`    = rank by `sp`, nsl≥4 floor only
+- `hough_broad_sp_nsl` = rank by `sp × nsl` (previous sole ranking)
+
+Top-N overlap: 500→15%, 1000→23%, 2000→36%. Top-500 composition:
+
+| feature           | recall_sp | broad_sp_nsl |
+|-------------------|-----------|--------------|
+| sp median         | 43.2      | 38.2         |
+| nsl median        | 10        | 18           |
+| nsl ≥14           | 19%       | **100%**     |
+| n_tracks_max ≥17  | **4%**    | **14%**      |
+
+`broad_sp_nsl` top-500 is fully saturated at nsl≥14 and carries 14% of the
+n≥17 background-rich stratum; `recall_sp` keeps a balanced nsl spread and
+much less heavy-star contamination.
+
+### Decision: keep both as separate ranked views (not replacement)
+
+Joint Codex/Claude agreement (discussion 17:01 JST):
+
+- **`hough_recall_sp`** — `sp`-dominant, nsl≥4 floor only, n≥17 as a
+  background flag → the **hypernuclear-recall route** for this recall-first
+  stage. No nsl multiplier (even a weak one) is added, since nsl is the
+  source of the bias being avoided here.
+- **`hough_broad_sp_nsl`** — the previous `sp × nsl` ranking, retained for
+  broad reaction-like / heavy-nuclear-star surveying.
+
+This **scopes** the 2026-05-27 conclusion ("sp×nsl confirmed as the ranking
+score going forward") to the *broad* channel only; it is no longer the sole
+ranking. (Earlier diary entries are left intact per lab-notebook policy.)
+
+### Next steps
+
+- Step-5 (noise-removal) compatibility artifact before any new large crop
+  production: one fullscan view + KISO + T011 (smallest low-sp special)
+  through `e07fullscan/tracking/_finder.py::preprocess()`; compare
+  post-noise foreground fraction, connected-component area quantiles, and
+  matched projections. Interpretation kept conservative — raw-intensity
+  mismatch alone does not disqualify specials_x20.
+- Low-sp specials (T011/T004/D013): bounded Hough failure-mode diagnostic
+  around the clicked GT vertex (4 categories) before any graph-branch call.

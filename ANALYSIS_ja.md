@@ -888,3 +888,147 @@ NNN_V{view_id}_L0_VX{vx}_VY{vy}_..._n{ntracks}_sl{nslices}_z0_x{px}_y{py}.png
 
 次ステップ：500枚のクロップを目視確認し、バックグラウンドの混入状況を
 評価するとともに、詳細測定候補の頂点を特定する。
+
+---
+
+## 2026-05-27 10:28 JST — ランキング変更: n_tracks_max → sp×nsl; 目視検査
+
+### Dead end: n_tracks_max ランキング
+
+`n_tracks_max` だけで並べると逆効果だった。
+top-500（`vertex_crops_v6/`）はビームパイルアップや重粒子フェイクに
+支配されていた（n_tracks_max: 82→15）。
+KISOの最近傍候補（n=8, sp=36°, nsl=9）はtop-500に含まれていなかった。
+
+### 新ランキング: score = angle_spread_best × n_slices
+
+Codex/Claude合同議論（2026-05-14 21:56 JST）を経て、
+`score = angle_spread_best × n_slices` を採用した。理由:
+- 多方向への広がり（真の多プロング星型トポロジー）を評価する
+- z方向での再現性（単層アーチファクトでない）を評価する
+- 高トラック多重度を直接報酬せず、重粒子バイアスを回避する
+
+新クロップセット: `results/vertex_crops_v6_sp_nsl/`（500枚）。
+コマンド: `crop_vertices.py --sort-by sp_nsl --n-samples 500`。
+
+### 目視検査結果（2026-05-27）
+
+ユーザーが500枚全てを確認。旧n_tracks_maxランキングから**劇的に改善**:
+
+- 反応点らしい画像（多プロング星型）が大幅に増加
+- 残存バックグラウンドは2種類:
+  1. **大きなゴミ・グリッドポイント**: 乳剤アーチファクトまたは
+     スキャナグリッドが誤って頂点として検出されたもの
+  2. **無関係な交差飛跡**: 無関係な2本の飛跡が交差しているだけで、
+     物理的な反応点ではないもの
+
+**結論**: sp×nsl を今後のランキングスコアとして正式採用。
+
+### 次のステップ
+
+- ゴミ・交差飛跡バックグラウンドを追加カット
+  （例: 2本の最大離角、等方性指標）で抑制できるか検討する
+- 目視検査結果からラベル付きカタログを生成する
+- `specials_x20/` は `../specials_x20` へのシンボリックリンク（9事象の
+  確認済みスペシャルイベントの外部参照画像データ、読み取り専用、
+  パイプライン生成物ではない — 2026-05-27 discussion にて解決済み）
+
+---
+
+## 2026-05-27 21:31 JST — 博士論文に基づくranking review
+
+ユーザーが関連する博士論文 `S.H.Hayakawa_D.pdf` を追加した。Codexは現在の
+vertex preprocessing議論に関係するChapter 4とChapter 5を確認した。
+
+重要な解釈: 論文中のevent categorizationは、単一のstar-like scoreではなく、
+topologyとtrack contextを組み合わせている。具体的にはincoming trackが
+distortedかstraightか、charged-particle emissionがあるか、beam trackが
+vertexに見えるかを使っている。Hypernuclear productionは `sigma-stop`、
+つまりendpoint近傍で乱れたstopping negative trackとcharged-particle
+emissionとして分類されており、単なる高multiplicity starではない。
+
+これは現在のrecall-first preprocessing方針を支持する。Hough-based featureは
+広いimage retrievalには有用だが、物理的に重要なendpoint contextをまだ持って
+いない。高い `n_tracks_max`、高い `n_slices`、見た目に強いnuclear starを
+唯一のrankingで支配的にすると、KISOのような既知ハイパー核事象を落とす
+危険がある。
+
+次のalgorithmic direction: broad reaction-like、hypernuclear-recall、
+background-rich reserveの複数preprocessing channelを維持する。その上で、
+candidate vertices、track endpoints、track-segment edges、incoming-trackの
+straightness/distortion、outgoing prongs、beam-track evidence、nearby secondary
+verticesを含むgraph/topology表現へ進む。
+
+---
+
+## 2026-05-28 — スコア式の定量化; 2チャンネルranking決定
+
+2026-05-27に提案したscore代替案を、fullscan plate range内にある唯一の
+special（KISO）に対して定量化し、recall-first preprocessing段の
+ranking scoreを決定した。議論: discussion_ja.md 2026-05-28 15:48–17:01 JST。
+
+### 各scoreでのKISO rank（vertices_quality_v6、N=10,750）
+
+KISO anchor = V00001173内の最近傍マッチ（sp=41.4°、nsl=7、n=9）。
+
+| Score              | KISO rank   | パーセンタイル | top-500必要条件 |
+|--------------------|-------------|------------|---------------|
+| `sp` のみ          | **798**     | 7.4%       | nsl≥4         |
+| `sp × sqrt(nsl)`   | 4,475       | 41.6%      | nsl≥12        |
+| `sp × log(nsl)`    | 4,227       | 39.3%      | nsl≥11        |
+| `sp × min(nsl,10)` | 5,947       | 55.3%      | nsl≥10        |
+| `sp × nsl`（従来）  | 6,188       | 57.6%      | nsl≥14        |
+
+### 重要な発見: nslのcap/減衰はKISOを救済しない
+
+傾いていた `sp × min(nsl,10)` はほぼ効かない（rank 5,947 対 6,188）。
+KISOのnsl=7はcap値10を*下回る*ためmin(7,10)=7で恩恵ゼロ；capはnsl>10の
+頂点（全体の35%）をdampするだけ。nslを掛けるscoreはすべて、z深さ方向に
+中程度しか広がらない真の局所反応頂点にペナルティを与える。rankingから
+nslを外す（`sp`のみ）場合のみ、KISOが使えるcandidate budget（top-800）に
+入る。
+
+nslを外しても浅いartefactでlistは埋まらない: sp≥41.4°のpool（816頂点）は
+n_slicesが健全に分散（4-7: 24%、8-10: 33%、11-13: 24%、≥14: 19%）し、
+n_tracks_max≥17は4%のみ（nsl≥4のquality floorが既に適用済みのため）。
+
+### 2リスト診断（persistence biasの可視化）
+
+- `hough_recall_sp`    = `sp` でrank、nsl≥4はfloorのみ
+- `hough_broad_sp_nsl` = `sp × nsl` でrank（従来の唯一ranking）
+
+top-N重複: 500→15%、1000→23%、2000→36%。top-500の構成:
+
+| feature           | recall_sp | broad_sp_nsl |
+|-------------------|-----------|--------------|
+| sp 中央値          | 43.2      | 38.2         |
+| nsl 中央値         | 10        | 18           |
+| nsl ≥14           | 19%       | **100%**     |
+| n_tracks_max ≥17  | **4%**    | **14%**      |
+
+`broad_sp_nsl` top-500はnsl≥14で完全飽和し、n≥17のbackground-rich層を14%
+含む；`recall_sp`はnsl分布がバランス良く、重粒子star混入もはるかに少ない。
+
+### 決定: 両者を別々のranked viewとして維持（置換ではない）
+
+Codex/Claude共同合意（discussion 17:01 JST）:
+
+- **`hough_recall_sp`** — `sp`主導、nsl≥4はfloorのみ、n≥17はbackground
+  flag → このrecall-first段の**hypernuclear-recallルート**。nsl乗数は
+  （弱いものでも）加えない。nslこそここで避けたいbiasの源だから。
+- **`hough_broad_sp_nsl`** — 従来の `sp × nsl` ranking。broad
+  reaction-like / 重い核star のサーベイ用に維持。
+
+これにより2026-05-27の結論（「sp×nslを今後のranking scoreとして確認」）は
+*broad* channelのみに**限定**され、唯一のrankingではなくなる。
+（過去のdiary entryはlab-notebook方針に従いそのまま残す。）
+
+### 次のステップ
+
+- 新規の大規模crop生成より先に、step-5（noise-removal）互換性artifact:
+  fullscan 1 view + KISO + T011（最小のlow-sp special）を
+  `e07fullscan/tracking/_finder.py::preprocess()` に通し、post-noiseの
+  前景率、connected-componentの面積分位、matched projectionを比較。
+  解釈は保守的に ― raw輝度の不一致だけでspecials_x20を失格にしない。
+- low-sp specials（T011/T004/D013）: graph-branch判断の前に、clicked GT
+  頂点周辺でbounded Hough failure-mode diagnostic（4カテゴリ）。

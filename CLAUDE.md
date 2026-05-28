@@ -26,6 +26,14 @@
   hypotheses, dead ends, and the reasoning behind decisions.
   Each entry is dated and appended at the bottom; never reorganise or remove
   existing entries. New entries go under `## YYYY-MM-DD — <title>`.
+- For every work session recorded in ANALYSIS.md (every dated entry, not just
+  major milestones), also create a corresponding entry in the Notion
+  **image-pre-processing DB** (ID: `7849f15c90f643eb97a471342e02e42d`).
+  Use the Notion MCP server (`notion` in ~/.claude/.mcp.json) when available,
+  or `notion-client` Python library as fallback.
+  Entry schema: Title=date, Date=YYYY-MM-DD, Status=Done/In Progress,
+  Type=Analysis/Experiment/Commit, Summary=one-line memo.
+  Page body: ## What I did / ## Results / ## Next steps sections.
 
 ## Agent Coordination
 - Always check both `discussion.md` and `discussion_ja.md` before starting

@@ -158,13 +158,31 @@ def _show_candidates() -> None:
 # ── crops ─────────────────────────────────────────────────────────────
 
 def _show_crops() -> None:
-  crop_dirs = sorted(RESULTS.glob("pair_crops_*"))
+  crop_dirs = sorted(
+    d for d in list(RESULTS.glob("pair_crops_*"))
+             + list(RESULTS.glob("vertex_crops_*"))
+    if d.is_dir()
+  )
   if not crop_dirs:
     return
   _section("Crop images")
   for d in crop_dirs:
     n = len(list(d.glob("*.png")))
-    print(f"    {_tick(n>0)}  {d.name:<30} {n} images")
+    # check if crop_vertices.py is still writing to this dir
+    meta = d / "run_params.json"
+    target = None
+    if meta.exists():
+      import json as _json
+      try:
+        p = _json.loads(meta.read_text())
+        target = int(p.get("n_samples") or p.get("n-samples") or 0)
+      except Exception:
+        pass
+    if target and n < target:
+      bar = _bar(n, target, width=14)
+      print(f"    {_tick(False)}  {d.name:<30} {bar} (generating)")
+    else:
+      print(f"    {_tick(n>0)}  {d.name:<30} {n} images")
 
 
 # ── KEKCC ─────────────────────────────────────────────────────────────
@@ -310,6 +328,11 @@ def _display() -> None:
   print(f"[{now}]  {'running' if active else 'idle'}  →  {nxt}")
   for ln in lines:
     print(ln)
+
+  _section("Pipeline")
+  _show_pipeline("v6", RESULTS / "chunks_v6", "v6")
+  _show_candidates()
+  _show_crops()
 
 
 def main() -> None:

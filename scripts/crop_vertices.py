@@ -114,24 +114,19 @@ def _crop_and_pad(
 
 
 def _draw_crosshair(img_bgr: np.ndarray, half: int) -> np.ndarray:
-    """Draw red edge ticks + a small filled dot at the centre.
-
-    The dot marks the exact vertex position without obscuring the surrounding
-    structure; edge ticks help locate it at a glance.
+    """Draw a gap crosshair: full red lines edge-to-edge with a clear gap
+    around the vertex centre so the vertex itself is not obscured.
     """
     out = img_bgr.copy()
     cx, cy = half, half
     sz = img_bgr.shape[0]
-    tick  = max(8, sz // 12)
-    thick = max(1, sz // 120)
-    color = (0, 0, 255)   # red in BGR
-    # edge ticks
-    cv2.line(out, (cx, 0),      (cx, tick),      color, thick)
-    cv2.line(out, (cx, sz - 1), (cx, sz - tick), color, thick)
-    cv2.line(out, (0, cy),      (tick, cy),       color, thick)
-    cv2.line(out, (sz - 1, cy), (sz - tick, cy),  color, thick)
-    # small centre dot (radius 1 px)
-    cv2.circle(out, (cx, cy), 1, color, -1)
+    gap   = max(12, sz // 20)
+    thick = max(1, sz // 200)
+    color = (0, 0, 255)
+    cv2.line(out, (0, cy),          (cx - gap, cy),   color, thick)
+    cv2.line(out, (cx + gap, cy),   (sz - 1, cy),     color, thick)
+    cv2.line(out, (cx, 0),          (cx, cy - gap),   color, thick)
+    cv2.line(out, (cx, cy + gap),   (cx, sz - 1),     color, thick)
     return out
 
 
@@ -218,14 +213,19 @@ def main() -> None:
         default=Path("results/vertex_crops_raw"),
     )
     ap.add_argument("--n-samples",  type=int,   default=20)
-    ap.add_argument("--crop-size",  type=int,   default=300,
+    ap.add_argument("--crop-size",  type=int,   default=200,
                     help="Crop half-size in pixels (total = 2×crop-size)")
     ap.add_argument("--min-tracks", type=int,   default=3)
     ap.add_argument("--min-slices", type=int,   default=1)
     ap.add_argument("--max-tracks", type=int,   default=None)
     ap.add_argument("--shuffle",    action="store_true",
-                    help="Random sample instead of top-n by n_tracks_max")
+                    help="Random sample instead of top-n by sort column")
     ap.add_argument("--seed",       type=int,   default=42)
+    ap.add_argument("--sort-by",    default="n_tracks_max",
+                    choices=["n_tracks_max", "sp_nsl", "angle_spread_best"],
+                    help="Ranking score: n_tracks_max (default), "
+                         "sp_nsl (angle_spread_best×n_slices), "
+                         "or angle_spread_best")
     ap.add_argument("--fog-ksize",  type=int,   default=51)
     ap.add_argument("--zpj-half",   type=int,   default=4,
                     help="Z-projection half-range (slices); "
@@ -254,16 +254,29 @@ def main() -> None:
     if args.max_tracks is not None:
         sel = sel[sel['n_tracks_max'] <= args.max_tracks]
 
+    SORT_COL = args.sort_by
+    if SORT_COL == "sp_nsl":
+        sel = sel.copy()
+        sel["_score"] = (
+            sel["angle_spread_best"] * sel["n_slices"]
+        )
+        SORT_COL = "_score"
+
     if args.shuffle:
         sel = sel.sample(
             min(args.n_samples, len(sel)), random_state=args.seed
         )
     else:
-        sel = sel.nlargest(args.n_samples, 'n_tracks_max')
+        sel = sel.nlargest(args.n_samples, SORT_COL)
 
-    print(f"Sampling {len(sel)} vertices "
-          f"(n_tracks_max {sel['n_tracks_max'].min()}–"
-          f"{sel['n_tracks_max'].max()})")
+    score_range = (
+        f"score(sp×nsl) {sel['_score'].min():.0f}–"
+        f"{sel['_score'].max():.0f}"
+        if "_score" in sel.columns
+        else f"n_tracks_max {sel['n_tracks_max'].min()}–"
+             f"{sel['n_tracks_max'].max()}"
+    )
+    print(f"Sampling {len(sel)} vertices ({score_range})")
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     json_path = save_run_json(run_meta, args.output_dir)
