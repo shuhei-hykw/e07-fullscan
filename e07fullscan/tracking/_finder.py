@@ -6,6 +6,9 @@ import cv2
 import numpy as np
 
 from ._track import Track
+# Shared branch-neutral preprocessing. Re-exported so existing callers of
+# `from e07fullscan.tracking._finder import preprocess` keep working.
+from e07fullscan.preprocess import fog_remove, preprocess
 
 _ZPJ_HALF    = 4
 _FOG_KSIZE   = 51
@@ -103,47 +106,6 @@ def _pixel_to_stage(
   return a00 * px + a01 * py + tx, a10 * px + a11 * py + ty
 
 
-def preprocess(
-  img: np.ndarray,
-  fog_ksize: int  = _FOG_KSIZE,
-  noise_amin: int = _NOISE_AMIN,
-  noise_amax: int = _NOISE_AMAX,
-  noise_cmp: int  = _NOISE_CMP,
-  noise_amax_upper: int = _NOISE_AMAX_UPPER,
-) -> np.ndarray:
-  """Fog removal → Otsu threshold → noise removal. Returns binary image.
-
-  noise_amax_upper > 0: also remove blobs with area > noise_amax_upper
-  (large artifacts such as emulsion folds or grain clusters).
-  """
-  k = fog_ksize if fog_ksize % 2 == 1 else fog_ksize + 1
-  blurred = cv2.GaussianBlur(img, (k, k), 0)
-  current = cv2.subtract(blurred, img)
-
-  _, current = cv2.threshold(
-    current, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU
-  )
-
-  contours, _ = cv2.findContours(
-    current, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-  )
-  noise = []
-  for cnt in contours:
-    area = cv2.contourArea(cnt)
-    if area < noise_amin:
-      noise.append(cnt)
-      continue
-    if noise_amax_upper > 0 and area > noise_amax_upper:
-      noise.append(cnt)
-      continue
-    perimeter = cv2.arcLength(cnt, True)
-    if (perimeter > 0 and area < noise_amax
-        and (perimeter ** 2) / area < noise_cmp):
-      noise.append(cnt)
-  cv2.drawContours(current, noise, -1, 0, thickness=-1)
-  return current
-
-
 def find_tracks(
   reader,
   idx: int,
@@ -186,9 +148,8 @@ def find_tracks(
     slices = [reader.read(i) for i in range(lo, hi + 1)]
     img = np.mean(slices, axis=0).astype(np.uint8)
 
-  # fog-removed image for intensity measurement
-  k = fog_ksize if fog_ksize % 2 == 1 else fog_ksize + 1
-  fog_img = cv2.subtract(cv2.GaussianBlur(img, (k, k), 0), img)
+  # fog-removed image for intensity measurement (same impl as preprocess)
+  fog_img = fog_remove(img, fog_ksize)
 
   binary = preprocess(
     img,

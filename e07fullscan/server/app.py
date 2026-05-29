@@ -17,6 +17,7 @@ from flask import (
 )
 
 from e07fullscan.io import load_spng
+from e07fullscan.preprocess import fog_remove, otsu_binarize, remove_noise
 from e07fullscan.tracking import Track, find_tracks
 from e07fullscan.server.results import (
   ResultsStore, render_image, render_stats,
@@ -421,31 +422,14 @@ def _process(
   current = img
 
   if fog:
-    k = fog_k if fog_k % 2 == 1 else fog_k + 1
-    blurred = cv2.GaussianBlur(current, (k, k), 0)
-    current = cv2.subtract(blurred, current)
+    current = fog_remove(current, fog_k)
 
   if thr:
-    _, current = cv2.threshold(
-      current, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU
-    )
+    _, current = otsu_binarize(current)
 
   # den requires a binary image; skip silently if thr was not applied
   if den and thr:
-    contours, _ = cv2.findContours(
-      current, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-    )
-    noise = []
-    for cnt in contours:
-      area = cv2.contourArea(cnt)
-      if area < noise_amin:
-        noise.append(cnt)
-        continue
-      perimeter = cv2.arcLength(cnt, True)
-      if (perimeter > 0 and area < noise_amax
-          and (perimeter ** 2) / area < noise_cmp):
-        noise.append(cnt)
-    cv2.drawContours(current, noise, -1, 0, thickness=-1)
+    current = remove_noise(current, noise_amin, noise_amax, noise_cmp)
 
   if hough or trk:
     output = (
@@ -479,16 +463,12 @@ def _collect_stats(
   stats["raw_hist"] = np.bincount(current.ravel(), minlength=256)
 
   if fog:
-    k = fog_k if fog_k % 2 == 1 else fog_k + 1
-    blurred = cv2.GaussianBlur(current, (k, k), 0)
-    current = cv2.subtract(blurred, current)
+    current = fog_remove(current, fog_k)
     stats["fog_hist"] = np.bincount(current.ravel(), minlength=256)
 
   if thr:
-    otsu_val, current = cv2.threshold(
-      current, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU
-    )
-    stats["otsu_val"] = float(otsu_val)
+    otsu_val, current = otsu_binarize(current)
+    stats["otsu_val"] = otsu_val
 
   # contour analysis only on binary image (after thr)
   if thr:
@@ -498,17 +478,7 @@ def _collect_stats(
     stats["blob_areas_before"] = [cv2.contourArea(c) for c in cnts]
 
     if den:
-      noise = []
-      for cnt in cnts:
-        area = cv2.contourArea(cnt)
-        if area < noise_amin:
-          noise.append(cnt)
-          continue
-        perimeter = cv2.arcLength(cnt, True)
-        if (perimeter > 0 and area < noise_amax
-            and (perimeter ** 2) / area < noise_cmp):
-          noise.append(cnt)
-      cv2.drawContours(current, noise, -1, 0, thickness=-1)
+      current = remove_noise(current, noise_amin, noise_amax, noise_cmp)
       cnts_after, _ = cv2.findContours(
         current, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
       )

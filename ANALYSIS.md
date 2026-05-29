@@ -1752,3 +1752,44 @@ candidate** (physics label deferred to expert).
 Next: code cleanup (branch-neutral preprocess extraction + server dedup +
 diagnostics packaging), as a separate behavior-preserving task with an
 old-vs-new regression test.
+
+---
+
+## 2026-05-29 — Code cleanup step 1+2: shared preprocessing extraction
+
+Started the structural cleanup agreed with Codex (discussion 2026-05-28 17:22
+/ 2026-05-29 14:28). Behavior-preserving; the analysis behavior of the v6
+pipeline is unchanged under current config.
+
+### Changes
+
+- New module `e07fullscan/preprocess.py` (branch-neutral, the shared boundary
+  before the Hough/graph split): `fog_remove`, `otsu_binarize`,
+  `remove_noise` (single source of the 3-branch connected-component area
+  filter), and `preprocess` = fog→Otsu→noise.
+- `tracking/_finder.py`: local `preprocess` removed; imports and re-exports
+  from `e07fullscan.preprocess` (callers using
+  `from tracking._finder import preprocess` keep working). `fog_img` for
+  intensity measurement now uses `fog_remove`, so fog removal has one
+  implementation.
+- `server/app.py`: `_process`/`_collect_stats` no longer reimplement
+  fog/Otsu/noise; they call the shared functions. This **closes the dormant
+  `noise_amax_upper` omission** (the server filter previously lacked the
+  large-blob branch). Under default config (`noise_amax_upper=0`) server
+  output is unchanged; the difference only appears once large-blob removal is
+  enabled — the fix we agreed to make before debris tuning.
+
+### Verification
+
+- `tests/test_preprocess.py` (new): new `preprocess` is byte-identical to a
+  frozen copy of the old `_finder.preprocess` (default and with
+  `noise_amax_upper`), `remove_noise(amax_upper=0)` matches the old server
+  2-branch filter, and `amax_upper>0` removes the large blob. 4/4 pass.
+- `pytest -m "not slow"`: 52 passed, no regressions.
+
+### Deferred (Codex sequencing)
+
+- Step 3: move reusable diagnostic helpers (tracks_to_df, projection,
+  TRACK_CFG, shared across step5_compat/lowsp_diag/lowsp_spread_radius/
+  bg_cost_spread) under `e07fullscan/diagnostics/`, thinning the scripts.
+- Step 4: targeted sub-vertex merge (the T011-type Hough-branch recall fix).

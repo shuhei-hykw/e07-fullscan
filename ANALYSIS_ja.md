@@ -1268,3 +1268,42 @@ candidate**（物理ラベルは専門家待ち）。
 
 次: コード cleanup（branch-neutral preprocess 抽出 + server dedup + 診断
 packaging）、behavior-preserving な別タスクとして旧/新の回帰テスト付きで。
+
+---
+
+## 2026-05-29 — コード cleanup step 1+2: 共有 preprocessing 抽出
+
+Codex と合意した構造 cleanup を開始（discussion 2026-05-28 17:22 /
+2026-05-29 14:28）。behavior-preserving；現行 config 下で v6 パイプラインの
+解析挙動は不変。
+
+### 変更
+
+- 新規モジュール `e07fullscan/preprocess.py`（branch-neutral、Hough/graph
+  分岐前の共有境界）: `fog_remove`、`otsu_binarize`、`remove_noise`（3分岐
+  connected-component 面積フィルタの単一ソース）、`preprocess` =
+  fog→Otsu→noise。
+- `tracking/_finder.py`: ローカル `preprocess` 削除；`e07fullscan.preprocess`
+  から import + re-export（`from tracking._finder import preprocess` を使う
+  呼び出しは引き続き動く）。intensity 測定用 `fog_img` も `fog_remove` を使い、
+  fog 除去の実装を1本化。
+- `server/app.py`: `_process`/`_collect_stats` が fog/Otsu/noise を再実装
+  しなくなり、共有関数を呼ぶ。これで **dormant な `noise_amax_upper` 欠落を
+  解消**（server フィルタは以前 large-blob 分岐を欠いていた）。既定 config
+  （`noise_amax_upper=0`）では server 出力は不変；差は large-blob 除去を
+  有効化したときのみ ― debris tuning 前に直すと合意した fix。
+
+### 検証
+
+- `tests/test_preprocess.py`（新規）: 新 `preprocess` が旧 `_finder.preprocess`
+  の凍結コピーと byte 一致（既定と `noise_amax_upper` 指定）、
+  `remove_noise(amax_upper=0)` が旧 server 2分岐フィルタと一致、`amax_upper>0`
+  で大型ブロブ除去。4/4 合格。
+- `pytest -m "not slow"`: 52 passed、回帰なし。
+
+### 先送り（Codex sequencing）
+
+- Step 3: 再利用可能な診断ヘルパ（tracks_to_df、projection、TRACK_CFG;
+  step5_compat/lowsp_diag/lowsp_spread_radius/bg_cost_spread で共通）を
+  `e07fullscan/diagnostics/` へ移動し、スクリプトを薄くする。
+- Step 4: targeted sub-vertex merge（T011 型の Hough-branch recall fix）。
