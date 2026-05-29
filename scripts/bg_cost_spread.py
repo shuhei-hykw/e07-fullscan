@@ -26,15 +26,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from e07fullscan.io import load_spng                          # noqa: E402
-from e07fullscan.tracking import find_tracks                 # noqa: E402
 from e07fullscan.clustering._vertex import _angle_spread_deg  # noqa: E402
+from e07fullscan.diagnostics import find_tracks_cfg           # noqa: E402
 
-TRACK_CFG = dict(
-    zpj_half=4, fog_ksize=51,
-    noise_amin=2, noise_amax=100, noise_cmp=50, noise_amax_upper=0,
-    hough_thr=35, hough_min_line=30, hough_max_gap=5,
-    grain_radius=15, px_scale_um=0.29,
-)
 R_TIGHT = 25.0
 R_WIDE = 50.0
 SP_CUT = 28.0
@@ -69,7 +63,6 @@ def main() -> None:
     print(f"n=8-10 band: {len(band)}; sampled {len(sample)} (seed={SEED})")
     print(f"R_tight={R_TIGHT} R_wide={R_WIDE} sp_cut={SP_CUT}\n")
 
-    tcfg = {k: v for k, v in TRACK_CFG.items() if k != "px_scale_um"}
     rows = []
     for i, r in sample.iterrows():
         try:
@@ -79,10 +72,7 @@ def main() -> None:
             continue
         zpos = reader.z_positions()
         sl = int(np.argmin(np.abs(zpos - r["z_mean"])))
-        tracks = find_tracks(
-            reader, sl, view_id=str(r["view_id"]),
-            px_scale_um=TRACK_CFG["px_scale_um"], **tcfg,
-        )
+        tracks = find_tracks_cfg(reader, sl, str(r["view_id"]))
         ax, ay = float(r["vx_px"]), float(r["vy_px"])
         sp25, n25 = anchor_spread(tracks, ax, ay, R_TIGHT)
         sp50, n50 = anchor_spread(tracks, ax, ay, R_WIDE)

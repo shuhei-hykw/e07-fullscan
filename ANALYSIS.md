@@ -1793,3 +1793,38 @@ pipeline is unchanged under current config.
   TRACK_CFG, shared across step5_compat/lowsp_diag/lowsp_spread_radius/
   bg_cost_spread) under `e07fullscan/diagnostics/`, thinning the scripts.
 - Step 4: targeted sub-vertex merge (the T011-type Hough-branch recall fix).
+
+---
+
+## 2026-05-29 — Code cleanup step 3: diagnostics packaging
+
+Completed the structural cleanup. Behavior-preserving pure refactor of the
+diagnostic scripts.
+
+### Changes
+
+- New `e07fullscan/diagnostics/` package (`__init__` + `_common.py`) holding
+  helpers that were duplicated across the 4 diagnostic scripts: `TRACK_CFG`
+  (v6 config), `DF_COLS`, `tracks_to_df`, `projection`, `find_tracks_cfg`.
+- step5_compat, lowsp_diag, lowsp_spread_radius, bg_cost_spread thinned to
+  import these; each keeps only its unique logic.
+- CLAUDE.md updated: `diagnostics` added to subpackages, `preprocess` noted as
+  the shared branch-neutral module.
+
+### Verification
+
+- `lowsp_spread_radius.py` re-run gives numbers identical to the 2026-05-29
+  record (T011 R25=28.5/R50=34.3, T004 3.1/3.7, D013 29.2/27.2) — pure refactor.
+- `pytest -m "not slow"`: 52 passed.
+
+### Structural cleanup complete
+
+- #1 branch-neutral `preprocess` extraction ✓
+- #2 tracking + server call it; dormant `noise_amax_upper` omission closed ✓
+- #3 diagnostics packaging; 4 scripts thinned ✓
+- #4 targeted sub-vertex merge — deferred recall feature (not structural)
+
+The shared step-5 boundary is now a single implementation used by both the
+batch tracking path and the viewer, and the diagnostic scripts share one
+helper module. Next analysis work (when resumed): the T011-type targeted
+sub-vertex merge as a Hough-branch recall fix.

@@ -22,40 +22,20 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from e07fullscan.io import load_spng                          # noqa: E402
-from e07fullscan.tracking import find_tracks                 # noqa: E402
 from e07fullscan.clustering import find_vertices             # noqa: E402
 from e07fullscan.clustering._vertex import _angle_spread_deg  # noqa: E402
-
-TRACK_CFG = dict(
-    zpj_half=4, fog_ksize=51,
-    noise_amin=2, noise_amax=100, noise_cmp=50, noise_amax_upper=0,
-    hough_thr=35, hough_min_line=30, hough_max_gap=5,
-    grain_radius=15, px_scale_um=0.29,
+from e07fullscan.diagnostics import (                        # noqa: E402
+    tracks_to_df, find_tracks_cfg,
 )
+
 RADII = [25, 50, 75, 100, 150, 200]
 EVENTS = ["T011", "T004", "D013"]
 GT_PATH = ROOT / "tests" / "specials_gt.json"
-
-_DF_COLS = [
-    "view_id", "slice_idx", "px1", "py1", "px2", "py2",
-    "length_px", "angle_deg", "mean_intens", "z", "view_x_mm", "view_y_mm",
-]
-
-
-def tracks_to_df(tracks, slice_idx):
-    return pd.DataFrame([{
-        "view_id": t.view_id, "slice_idx": slice_idx,
-        "px1": t.px1, "py1": t.py1, "px2": t.px2, "py2": t.py2,
-        "length_px": t.length_px, "angle_deg": t.angle_deg,
-        "mean_intens": t.mean_intens, "z": t.z,
-        "view_x_mm": t.view_x_mm, "view_y_mm": t.view_y_mm,
-    } for t in tracks], columns=_DF_COLS)
 
 
 def main():
@@ -66,11 +46,7 @@ def main():
         g = gt[name]
         gx, gy, zc = g["vx"], g["vy"], g["z_slice"]
         reader = load_spng(str(ROOT / "specials_x20" / name / "image.json"))
-        tcfg = {k: v for k, v in TRACK_CFG.items() if k != "px_scale_um"}
-        tracks = find_tracks(
-            reader, zc, view_id=name,
-            px_scale_um=TRACK_CFG["px_scale_um"], **tcfg,
-        )
+        tracks = find_tracks_cfg(reader, zc, name)
         df = tracks_to_df(tracks, zc)
         vdf = find_vertices(df)
         if len(vdf):

@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT))
 
 from e07fullscan.io import load_spng                       # noqa: E402
 from e07fullscan.tracking._finder import preprocess, _ZPJ_HALF  # noqa: E402
+from e07fullscan.diagnostics import projection             # noqa: E402
 
 # Step-5 params (config/default.yaml defaults; noise_amax_upper disabled)
 FOG_KSIZE = 51
@@ -42,14 +43,6 @@ SOURCES = [
     ("KISO", str(ROOT / "specials_x20" / "KISO" / "image.json")),
     ("T011", str(ROOT / "specials_x20" / "T011" / "image.json")),
 ]
-
-
-def mean_projection(reader, center: int) -> np.ndarray:
-    """Reproduce find_tracks() local ±zpj_half mean projection."""
-    lo = max(0, center - _ZPJ_HALF)
-    hi = min(len(reader) - 1, center + _ZPJ_HALF)
-    slices = [reader.read(i) for i in range(lo, hi + 1)]
-    return np.mean(slices, axis=0).astype(np.uint8), lo, hi
 
 
 def quantiles(arr: np.ndarray, qs=(0, 25, 50, 75, 90, 100)) -> str:
@@ -73,7 +66,7 @@ def analyse(name: str, json_path: str) -> dict:
     px_note = " (identity; physical 0.29 from config)" if px_raw == 1.0 else ""
     center = n // 2
 
-    proj, lo, hi = mean_projection(reader, center)
+    proj, lo, hi = projection(reader, center)
     binary = preprocess(
         proj,
         fog_ksize=FOG_KSIZE,

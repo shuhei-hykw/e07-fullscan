@@ -5,7 +5,10 @@
 
 ## Package structure
 - Main package: e07fullscan
-- Subpackages: io, tracking, analyze, merge, clustering, server, utils
+- Subpackages: io, tracking, analyze, merge, clustering, server, utils,
+  diagnostics
+- Shared module: preprocess (branch-neutral fog/Otsu/noise, used by tracking
+  and server)
 
 ## Style
 - Indentation: 2 spaces (never tabs)

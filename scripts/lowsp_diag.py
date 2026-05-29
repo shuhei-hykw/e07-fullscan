@@ -33,18 +33,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from e07fullscan.io import load_spng                              # noqa: E402
-from e07fullscan.tracking import find_tracks                     # noqa: E402
-from e07fullscan.tracking._finder import preprocess, _ZPJ_HALF   # noqa: E402
+from e07fullscan.tracking._finder import preprocess              # noqa: E402
 from e07fullscan.clustering import find_vertices, merge_vertex_slices  # noqa: E402
 from e07fullscan.clustering._vertex import _angle_spread_deg     # noqa: E402
-
-# config/default.yaml viewer block (v6 production)
-TRACK_CFG = dict(
-    zpj_half=4, fog_ksize=51,
-    noise_amin=2, noise_amax=100, noise_cmp=50, noise_amax_upper=0,
-    hough_thr=35, hough_min_line=30, hough_max_gap=5,
-    grain_radius=15, px_scale_um=0.29,
+from e07fullscan.diagnostics import (                            # noqa: E402
+    TRACK_CFG, tracks_to_df, projection, find_tracks_cfg,
 )
+
 R_PRIMARY = 200.0   # px, = GT tolerance
 R_SENS = 300.0      # px, sensitivity window
 WINDOW = 12         # +/- slices for the merged "would the catalog see it" pass
@@ -52,22 +47,6 @@ WINDOW = 12         # +/- slices for the merged "would the catalog see it" pass
 GT_PATH = ROOT / "tests" / "specials_gt.json"
 OUT_DIR = ROOT / "results" / "lowsp_diag"
 EVENTS = ["T011", "T004", "D013"]
-
-_DF_COLS = [
-    "view_id", "slice_idx", "px1", "py1", "px2", "py2",
-    "length_px", "angle_deg", "mean_intens", "z", "view_x_mm", "view_y_mm",
-]
-
-
-def tracks_to_df(tracks, slice_idx: int) -> pd.DataFrame:
-    rows = [{
-        "view_id": t.view_id, "slice_idx": slice_idx,
-        "px1": t.px1, "py1": t.py1, "px2": t.px2, "py2": t.py2,
-        "length_px": t.length_px, "angle_deg": t.angle_deg,
-        "mean_intens": t.mean_intens, "z": t.z,
-        "view_x_mm": t.view_x_mm, "view_y_mm": t.view_y_mm,
-    } for t in tracks]
-    return pd.DataFrame(rows, columns=_DF_COLS)
 
 
 def seg_dist(px, py, x1, y1, x2, y2) -> float:
@@ -79,13 +58,6 @@ def seg_dist(px, py, x1, y1, x2, y2) -> float:
         return float(np.hypot(wx, wy))
     s = max(0.0, min(1.0, (wx * vx + wy * vy) / L2))
     return float(np.hypot(px - (x1 + s * vx), py - (y1 + s * vy)))
-
-
-def projection(reader, center: int) -> np.ndarray:
-    lo = max(0, center - _ZPJ_HALF)
-    hi = min(len(reader) - 1, center + _ZPJ_HALF)
-    slices = [reader.read(i) for i in range(lo, hi + 1)]
-    return np.mean(slices, axis=0).astype(np.uint8)
 
 
 def fg_fraction_near(binary, gx, gy, r) -> float:
@@ -137,7 +109,7 @@ def analyse(name: str, gt: dict) -> None:
           f"n_slices={len(reader)} ===")
 
     # ---- Stage 0: preprocess survival at GT slice ----
-    proj = projection(reader, zc)
+    proj, _, _ = projection(reader, zc)
     binary = preprocess(
         proj, fog_ksize=TRACK_CFG["fog_ksize"],
         noise_amin=TRACK_CFG["noise_amin"], noise_amax=TRACK_CFG["noise_amax"],
@@ -150,11 +122,7 @@ def analyse(name: str, gt: dict) -> None:
           f"R300={fg300*100:.2f}%")
 
     # ---- Stage 1: Hough extraction at GT slice ----
-    tcfg = {k: v for k, v in TRACK_CFG.items() if k != "px_scale_um"}
-    tracks_gt = find_tracks(
-        reader, zc, view_id=str(json_path),
-        px_scale_um=TRACK_CFG["px_scale_um"], **tcfg,
-    )
+    tracks_gt = find_tracks_cfg(reader, zc, str(json_path))
     for r in (R_PRIMARY, R_SENS):
         m = hough_metrics(tracks_gt, gx, gy, r)
         sp = (f"{m['angle_spread']:.1f}" if not np.isnan(m['angle_spread'])
@@ -182,10 +150,7 @@ def analyse(name: str, gt: dict) -> None:
     stack = reader.read_stack()
     frames = []
     for idx in range(lo, hi + 1):
-        tk = find_tracks(
-            reader, idx, view_id=str(json_path),
-            px_scale_um=TRACK_CFG["px_scale_um"], _stack=stack, **tcfg,
-        )
+        tk = find_tracks_cfg(reader, idx, str(json_path), stack=stack)
         frames.append(tracks_to_df(tk, idx))
     df_win = pd.concat(frames, ignore_index=True)
     vmerged = merge_vertex_slices(find_vertices(df_win))

@@ -1307,3 +1307,36 @@ Codex と合意した構造 cleanup を開始（discussion 2026-05-28 17:22 /
   step5_compat/lowsp_diag/lowsp_spread_radius/bg_cost_spread で共通）を
   `e07fullscan/diagnostics/` へ移動し、スクリプトを薄くする。
 - Step 4: targeted sub-vertex merge（T011 型の Hough-branch recall fix）。
+
+---
+
+## 2026-05-29 — コード cleanup step 3: 診断 packaging
+
+構造 cleanup を完了。診断スクリプトの behavior-preserving な pure refactor。
+
+### 変更
+
+- 新規 `e07fullscan/diagnostics/` パッケージ（`__init__` + `_common.py`）に、
+  4診断スクリプトで重複していたヘルパを集約: `TRACK_CFG`（v6 config）、
+  `DF_COLS`、`tracks_to_df`、`projection`、`find_tracks_cfg`。
+- step5_compat, lowsp_diag, lowsp_spread_radius, bg_cost_spread を薄型化して
+  これらを import；各々固有ロジックのみ保持。
+- CLAUDE.md 更新: subpackages に `diagnostics` 追加、`preprocess` を共有
+  branch-neutral モジュールとして注記。
+
+### 検証
+
+- `lowsp_spread_radius.py` 再実行で 2026-05-29 記録と数値一致（T011
+  R25=28.5/R50=34.3、T004 3.1/3.7、D013 29.2/27.2）― pure refactor。
+- `pytest -m "not slow"`: 52 passed。
+
+### 構造 cleanup 完了
+
+- #1 branch-neutral `preprocess` 抽出 ✓
+- #2 tracking + server がそれを呼ぶ；dormant `noise_amax_upper` 欠落解消 ✓
+- #3 診断 packaging；4スクリプト薄型化 ✓
+- #4 targeted sub-vertex merge — 先送りの recall 機能（構造でない）
+
+共有 step-5 境界が batch tracking path と viewer の両方で使う単一実装になり、
+診断スクリプトが1ヘルパモジュールを共有。次の解析作業（再開時）: T011 型の
+targeted sub-vertex merge（Hough-branch recall fix）。
