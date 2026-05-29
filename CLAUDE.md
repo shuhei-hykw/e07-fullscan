@@ -3,6 +3,10 @@
 ## Language
 - Always respond in Japanese
 
+## Git commits
+- Never add `Co-Authored-By` trailers (or any AI co-authorship attribution
+  such as "Generated with Claude Code") to commit messages or PR bodies.
+
 ## Package structure
 - Main package: e07fullscan
 - Subpackages: io, tracking, analyze, merge, clustering, server, utils,
