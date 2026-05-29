@@ -1698,3 +1698,57 @@ Corrected position:
   physically a sigma-stop / forward-boosted hypernuclear topology is an
   emulsion-physics interpretation, not a code-derived fact. Flagged as a
   question for the user / domain expert, not asserted.
+
+---
+
+## 2026-05-29 — Background-cost of wider spread radius; T004 z-persistence
+
+Closed the low-sp scoring thread with two bounded tests (batch functions
+called directly; design agreed with Codex, discussion 2026-05-29 11:06).
+
+### Background-cost check (`scripts/bg_cost_spread.py`)
+
+Sampled 80 broad-catalog n_tracks_max 8–10 vertices from
+vertices_merged_v6 (seed=7; 63 usable), recomputed anchor angle_spread at
+R=25 (tight) vs R=50 (the T011-recovering radius), same method as the
+2026-05-29 sweep.
+
+| metric | R=25 | R=50 |
+|--------|------|------|
+| spread median | 29.6 | 32.2 |
+| spread p90    | 38.4 | 38.2 |
+| Δ(R50−R25) median / p90 | — | 2.2 / 15.4 |
+
+- 27/63 below sp=28 at R=25; **10 of those (37%) promoted ≥28 at R=50**
+  (16% of all). Top inflations are near-collinear backgrounds blown up by the
+  wider radius (sp25 0.4→28.1, 1.3→38.1, 1.8→27.5).
+- **Conclusion: do not adopt R=50 globally** — it promotes crossing/parallel
+  backgrounds across the cut. Keep the tight radius.
+
+Why T011 still recoverable without the global cost: at its true vertex anchor
+T011 already reads 28.5° at R=25; its catalog sp was 12.7° only because the
+25 px clustering split the star into an offset sub-vertex. The fix is a
+targeted sub-vertex merge near the true vertex (recover at tight radius,
+leave background untouched), not a global radius change.
+
+### T004 z-persistence
+
+Swept slices 92–108 around GT (z_slice 100). The vertex nearest GT
+(dist ≤32 px) is low-sp at every slice (sp 2.5–7.4 at dist ≤18 px;
+14.0 at slice 102 only because nearest is 271 px away). A few sp~32 vertices
+sit 100–200 px from GT — separate structures, not the GT vertex. The low-sp
+core persists across the z-neighborhood: **T004 is a robust graph-branch
+candidate** (physics label deferred to expert).
+
+### Scoring-thread conclusion (before code cleanup)
+
+1. Hypernuclear-recall ranking = `sp` (no nsl multiplier; nsl≥4 floor only)
+   [decided 2026-05-28].
+2. Spread-association radius stays tight (R=25); not widened globally.
+3. T011-type fragmentation → targeted sub-vertex merge, deferred to the
+   post-cleanup Hough-branch implementation (not done now).
+4. D013 removed from low-sp set; T004 = graph-branch candidate.
+
+Next: code cleanup (branch-neutral preprocess extraction + server dedup +
+diagnostics packaging), as a separate behavior-preserving task with an
+old-vs-new regression test.

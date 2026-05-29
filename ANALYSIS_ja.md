@@ -1218,3 +1218,53 @@ catalog レベルの確認が必要。
   sigma-stop / forward-boosted ハイパー核トポロジーかどうかは乳剤物理の
   解釈であり、コード由来の事実ではない。ユーザー / ドメイン専門家への質問
   として flag、断定しない。
+
+---
+
+## 2026-05-29 — 広い spread 半径の background-cost; T004 z-persistence
+
+low-sp scoring スレッドを2つの bounded テストで締めた（batch 関数を直接呼出、
+設計は Codex と合意、discussion 2026-05-29 11:06）。
+
+### Background-cost チェック（`scripts/bg_cost_spread.py`）
+
+vertices_merged_v6 から broad-catalog の n_tracks_max 8–10 頂点を 80 サンプル
+（seed=7、63 が usable）、アンカー angle_spread を R=25（tight）vs R=50
+（T011 回収半径）で再計算、2026-05-29 sweep と同方法。
+
+| metric | R=25 | R=50 |
+|--------|------|------|
+| spread 中央値 | 29.6 | 32.2 |
+| spread p90    | 38.4 | 38.2 |
+| Δ(R50−R25) 中央値 / p90 | — | 2.2 / 15.4 |
+
+- 63 のうち 27 が R=25 で sp<28；**そのうち 10 個（37%）が R=50 で ≥28 に昇格**
+  （全体の 16%）。高膨張は広半径で膨らんだ near-collinear background
+  （sp25 0.4→28.1、1.3→38.1、1.8→27.5）。
+- **結論: R=50 のグローバル採用は不可** ― crossing/parallel background を
+  カット越えに昇格させる。tight 半径を維持。
+
+global コストなしで T011 を回収できる理由: 真の頂点アンカーで T011 は R=25 で
+既に 28.5°。catalog sp が 12.7° だったのは 25px clustering が星をずれた
+sub-vertex に分割したから。修正は真の頂点近傍の targeted sub-vertex merge
+（tight 半径で回収、background は不変）で、global な半径変更ではない。
+
+### T004 z-persistence
+
+GT（z_slice 100）周辺の slice 92–108 を掃引。GT に最も近い頂点（dist ≤32px）は
+全 slice で低 sp（dist ≤18px で sp 2.5–7.4；slice 102 の 14.0 は nearest が
+271px 離れているため）。sp~32 の頂点は GT から 100–200px 離れた別構造で GT
+頂点ではない。low-sp core は z 近傍全体で持続: **T004 は robust な graph-branch
+candidate**（物理ラベルは専門家待ち）。
+
+### scoring スレッドの結論（コード cleanup の前）
+
+1. Hypernuclear-recall ranking = `sp`（nsl 乗数なし；nsl≥4 floor のみ）
+   [2026-05-28 決定]。
+2. spread-association 半径は tight（R=25）維持；global に広げない。
+3. T011 型 fragmentation → targeted sub-vertex merge、cleanup 後の Hough-branch
+   実装に先送り（今はやらない）。
+4. D013 は low-sp 集合から除外；T004 = graph-branch candidate。
+
+次: コード cleanup（branch-neutral preprocess 抽出 + server dedup + 診断
+packaging）、behavior-preserving な別タスクとして旧/新の回帰テスト付きで。
