@@ -1569,3 +1569,132 @@ old-vs-new regression test), not mixed with scoring/compatibility work.
 - Low-sp specials (T011/T004/D013): bounded Hough failure-mode diagnostic
   around the clicked GT vertex (tracks lost in preprocessing / Hough line
   extraction miss / vertex merge fails / vertex exists but low scalar score).
+
+---
+
+## 2026-05-28 — Low-sp specials failure-mode diagnostic
+
+Walked the conventional Hough branch at the clicked GT vertex for the three
+low-sp confirmed specials (T011/T004/D013), to decide whether their low angle
+spread is a preprocessing/extraction/association failure or a genuine
+topology limit. Batch functions called directly; design agreed with Codex
+(discussion 2026-05-28 19:04/19:11). Script: `scripts/lowsp_diag.py`; crops
+in `results/lowsp_diag/`. find_tracks v6 config (hough_ml=30), find_vertices
+defaults (min_angle_spread=0), merged over ±12 slices, two radii (200/300 px).
+
+| event | fg@R200 | endpts/body in R200 | near-GT spread R200/R300 | single vtx | merged vtx (±12) |
+|-------|---------|---------------------|--------------------------|------------|------------------|
+| T011  | 6.4%    | 38 / 38             | 32.4° / 31.6°            | d=3px n=5 sp=16.7 | d=10px n=10 nsl=8 sp=12.7 |
+| T004  | 6.0%    | 17 / 17             | 22.6° / 34.0°            | d=2px n=6 sp=2.5  | d=11px n=10 nsl=10 sp=8.2 |
+| D013  | 7.4%    | 48 / 48             | 29.8° / 29.0°            | d=14px n=13 sp=31.8 | d=9px n=13 nsl=12 sp=31.8 |
+
+### Findings
+
+- **No cat 1/2/3 hard failure for any of the three.** Structure survives
+  preprocessing (fg 6–7% at GT), Hough lines are extracted with endpoint
+  support at GT (endpoints_in == body_in → not through-going; min_body
+  0.4–7.5 px), and a vertex forms within tolerance (2–14 px). The low-sp
+  issue is at the spread/scoring step, not the image/Hough/association-
+  existence step.
+
+- **D013 is not actually low-sp.** Its GT vertex is detected cleanly
+  (sp=31.8°, n=13, nsl=12) and would rank fine under sp-recall. The
+  historical "D013 sp=13.4°" (2026-05-10) measured a *different* best-n
+  vertex, not the true GT vertex. D013 leaves the low-sp problem set.
+
+- **T011 is a fragmentation / under-association artifact.** The crop shows a
+  clear multi-prong star at GT and the near-GT endpoint-supported lines span
+  32°, yet the detected vertex sp is only 12.7°. The 25 px clustering
+  (eps_px) + endpoint cuts split the genuine star into a more-collinear
+  sub-vertex; the angular diversity is present in the image but the scalar
+  vertex sp under-captures it. Likely recoverable inside the Hough branch.
+
+- **T004 is the genuine low-sp core.** Immediate vertex sp=2.5° (single) /
+  8.2° (merged); near-GT spread 22.6° at R200 widening to 34° at R300 — a
+  near-collinear core with prongs at larger radius (forward-boosted topology).
+  The real graph-branch candidate.
+
+### Implication
+
+The recall worry about low-sp specials is largely a measurement/fragmentation
+artifact (T011, D013), not a fundamental Hough-representation limit. Only T004
+clearly needs the graph branch.
+
+### Next steps
+
+- Hough-branch test (before graph work): recompute vertex angle_spread over a
+  wider endpoint-association radius, or merge adjacent sub-vertices within ~the
+  GT tolerance before scoring, and check whether T011 recovers toward its 32°
+  near-GT spread while T004 stays low. If T011 recovers, sp-recall ranking
+  catches it without the graph branch.
+
+---
+
+## 2026-05-29 — T011 spread-recovery test: fragmentation confirmed
+
+Tested the proposed Hough-branch fix from the 2026-05-28 low-sp diagnostic:
+is T011's low vertex spread a clustering-fragmentation artifact? At the GT
+slice, anchored at the detected vertex nearest GT, swept the endpoint-
+association radius R and recomputed angle_spread over tracks whose nearest
+endpoint lies within R. Script: `scripts/lowsp_spread_radius.py`; plot
+`results/lowsp_diag/spread_vs_radius.png`. Batch functions called directly.
+
+| event | detected sp | R=25 | R=50 | R=75 | R=100 | R=150 | R=200 |
+|-------|-------------|------|------|------|-------|-------|-------|
+| T011  | 16.7        | 28.5 | 34.3 | 34.6 | 32.5  | 33.1  | 32.4  |
+| T004  | 2.5         | 3.1  | 3.7  | 5.6  | 21.5  | 24.2  | 22.6  |
+| D013  | 31.8        | 29.2 | 27.2 | 31.7 | 32.3  | 33.1  | 30.1  |
+
+### Findings
+
+- **T011: fragmentation artifact, fully recoverable.** Spread reaches 28.5°
+  at R=25 and ~34° at R=50, vs the detected scalar sp of 12.7–16.7°. The
+  genuine multi-prong star sits right at the vertex; the 25 px intersection
+  clustering split it into a collinear sub-vertex. A wider spread radius
+  recovers it inside the Hough branch — no graph work needed for T011.
+- **T004: genuine collinear core.** 3–6° within R≤75; only reaches ~22° at
+  R≥100 by absorbing distant tracks, never cleanly clearing the sp=28 cut.
+  The immediate vertex is genuinely near-collinear (forward-boosted) — a real
+  graph-branch candidate.
+- **D013: not low-sp** (≥27° at every radius) — positive control.
+
+Net: of the three "low-sp" specials, D013 was a wrong-vertex mislabel, T011
+is recoverable with a wider spread radius, and only T004 is a true low-sp
+core. The recall concern about low-sp events is mostly a measurement artifact.
+
+### Caveat before adopting a wider spread radius
+
+The test shows wider-radius spread recovers signal (T011) but not its cost:
+widening globally would also raise the spread of crossing-track / background
+vertices and could hurt sp-recall purity. The signal side is validated; the
+background side needs a catalog-level check before adoption.
+
+### Next steps
+
+- Measure the background cost: recompute wider-radius spread on a sample of
+  broad-catalog n=8–10 vertices and count how many cross sp=28. If wider
+  radius inflates background spread badly, keep the tight radius.
+- T004: graph-branch candidate (pending Codex confirmation / other-z recheck).
+
+---
+
+## 2026-05-29 — Correction: T004 low-sp is algorithmic, physics label deferred
+
+Correction to the 2026-05-28/05-29 low-sp entries (kept above per the
+append-only lab-notebook policy; this entry qualifies them). Following Codex's
+note (discussion 2026-05-28 22:06), the description of T004 as a
+"forward-boosted topology" / sigma-stop overstated what the code shows.
+
+Corrected position:
+
+- **Factual (from code)**: T004's clicked GT vertex is detected within
+  tolerance but its angular spread stays low (~2.5° immediate; only ~22° at
+  R≥100 by absorbing distant tracks) and does not cleanly clear the sp=28
+  quality cut. This is a genuine low-sp core in the Hough scalar
+  representation, distinct from T011's clustering-fragmentation artifact.
+  Algorithmically, T004 is the graph/topology-branch candidate among the
+  three.
+- **Deferred to expert (not from code)**: whether that low-sp core is
+  physically a sigma-stop / forward-boosted hypernuclear topology is an
+  emulsion-physics interpretation, not a code-derived fact. Flagged as a
+  question for the user / domain expert, not asserted.

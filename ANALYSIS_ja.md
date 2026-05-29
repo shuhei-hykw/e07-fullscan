@@ -1094,3 +1094,127 @@ viewer が batch より under-clean になる。branch-neutral な preprocessing
 - low-sp specials（T011/T004/D013）: clicked GT 頂点周辺での bounded Hough
   failure-mode diagnostic（preprocessing でトラック消失 / Hough 線抽出失敗 /
   頂点マージ失敗 / 頂点はあるが scalar score 低）。
+
+---
+
+## 2026-05-28 — low-sp specials failure-mode diagnostic
+
+3つの low-sp 確認事象（T011/T004/D013）について、clicked GT 頂点で
+conventional Hough branch を段階的にウォークし、低い angle spread が
+preprocessing/抽出/association の失敗か、それとも真のトポロジー限界かを判定
+した。batch 関数を直接呼出、設計は Codex と合意（discussion 2026-05-28
+19:04/19:11）。スクリプト: `scripts/lowsp_diag.py`、crops:
+`results/lowsp_diag/`。find_tracks は v6 config（hough_ml=30）、find_vertices
+既定（min_angle_spread=0）、±12 スライスでマージ、2半径（200/300px）。
+
+| event | fg@R200 | endpts/body in R200 | near-GT spread R200/R300 | single vtx | merged vtx (±12) |
+|-------|---------|---------------------|--------------------------|------------|------------------|
+| T011  | 6.4%    | 38 / 38             | 32.4° / 31.6°            | d=3px n=5 sp=16.7 | d=10px n=10 nsl=8 sp=12.7 |
+| T004  | 6.0%    | 17 / 17             | 22.6° / 34.0°            | d=2px n=6 sp=2.5  | d=11px n=10 nsl=10 sp=8.2 |
+| D013  | 7.4%    | 48 / 48             | 29.8° / 29.0°            | d=14px n=13 sp=31.8 | d=9px n=13 nsl=12 sp=31.8 |
+
+### 所見
+
+- **3つとも cat 1/2/3 の hard failure はない。** 構造は preprocessing を生存
+  （GT で fg 6–7%）、Hough 線は GT で端点サポート付きに抽出
+  （endpoints_in == body_in → through-going でない；min_body 0.4–7.5px）、
+  頂点も tolerance 内に形成（2–14px）。low-sp 問題は spread/scoring 段で
+  あって、画像/Hough/association 存在の段ではない。
+
+- **D013 は実際には low-sp でない。** GT 頂点はきれいに検出（sp=31.8°、
+  n=13、nsl=12）、sp-recall で問題なく上位。旧「D013 sp=13.4°」
+  （2026-05-10）は*別の* best-n 頂点を測ったもので、真の GT 頂点ではない。
+  D013 は low-sp 問題集合から外れる。
+
+- **T011 は断片化/under-association の artifact。** crop は GT に明確な
+  多飛跡星を示し、近傍の端点サポート付き線は 32° に広がるが、検出頂点 sp は
+  12.7° のみ。25px clustering（eps_px）+ endpoint cut が真の星をより共線な
+  sub-vertex に分割している。diversity は画像に存在するが scalar 頂点 sp が
+  取りこぼす。Hough branch 内で回収可能とみられる。
+
+- **T004 は真性な low-sp core。** 直近頂点 sp=2.5°（single）/8.2°（merged）、
+  near-GT spread は R200 で 22.6°、R300 で 34° に広がる ― 共線に近い core に
+  大きな半径で prong（forward-boosted トポロジー）。本当の graph-branch
+  candidate。
+
+### 含意
+
+low-sp specials の recall 懸念は、大半が測定/断片化の artifact（T011, D013）
+であって、Hough 表現の根本的限界ではない。graph branch が明確に要るのは
+T004 のみ。
+
+### 次のステップ
+
+- Hough-branch テスト（graph 着手前）: 頂点 angle_spread をより広い
+  endpoint-association 半径で再計算する、または scoring 前に GT tolerance
+  程度で隣接 sub-vertex をマージし、T011 が 32° の near-GT spread に向けて
+  回収する一方 T004 は低いままか確認。T011 が回収するなら sp-recall ranking
+  が graph branch なしで拾える。
+
+---
+
+## 2026-05-29 — T011 spread-recovery テスト: 断片化を確認
+
+2026-05-28 の low-sp diagnostic で提案した Hough-branch 修正を検証: T011 の
+低い頂点 spread は clustering-fragmentation の artifact か? GT スライスで GT
+に最も近い検出頂点をアンカーとし、endpoint-association 半径 R を掃引、最近傍
+端点が R 内のトラックで angle_spread を再計算。スクリプト:
+`scripts/lowsp_spread_radius.py`、プロット
+`results/lowsp_diag/spread_vs_radius.png`。batch 関数を直接呼出。
+
+| event | 検出 sp | R=25 | R=50 | R=75 | R=100 | R=150 | R=200 |
+|-------|---------|------|------|------|-------|-------|-------|
+| T011  | 16.7    | 28.5 | 34.3 | 34.6 | 32.5  | 33.1  | 32.4  |
+| T004  | 2.5     | 3.1  | 3.7  | 5.6  | 21.5  | 24.2  | 22.6  |
+| D013  | 31.8    | 29.2 | 27.2 | 31.7 | 32.3  | 33.1  | 30.1  |
+
+### 所見
+
+- **T011: 断片化 artifact、完全に回収可能。** R=25 で 28.5°、R=50 で ~34°
+  に達する（検出 scalar sp は 12.7–16.7°）。真の多飛跡星は頂点直上にあり、
+  25px の交点 clustering がそれを共線 sub-vertex に分割した。広い spread
+  半径で Hough branch 内で回収できる ― T011 に graph 作業は不要。
+- **T004: 真性な共線 core。** R≤75 で 3–6°、R≥100 で遠方トラックを取り込んで
+  ようやく ~22° だが sp=28 cut をきれいに超えない。直近頂点は本当に共線
+  （forward-boosted）― 真の graph-branch candidate。
+- **D013: low-sp でない**（どの半径でも ≥27°）― positive control。
+
+総じて、3つの「low-sp」specials のうち D013 は wrong-vertex の誤ラベル、T011
+は広い spread 半径で回収可能、真性 low-sp core は T004 のみ。low-sp 事象の
+recall 懸念は大半が測定 artifact。
+
+### 広い spread 半径を採用する前の注意
+
+このテストは広半径 spread が signal を回収する（T011）ことを示すが、コストは
+未検証: 全体で広げると crossing-track / background 頂点の spread も上がり、
+sp-recall purity を損ないうる。signal 側は検証済み、background 側は採用前に
+catalog レベルの確認が必要。
+
+### 次のステップ
+
+- background コストの測定: broad-catalog の n=8–10 頂点サンプルで広半径
+  spread を再計算し、sp=28 を超える数を数える。広半径が background spread を
+  ひどく膨らませるなら tight 半径を維持。
+- T004: graph-branch candidate（Codex 確認 / 他 z での再確認待ち）。
+
+---
+
+## 2026-05-29 — 訂正: T004 の low-sp は algorithmic、物理ラベルは保留
+
+2026-05-28/05-29 の low-sp エントリへの訂正（append-only 方針により上記は
+残し、本エントリで限定する）。Codex の指摘（discussion 2026-05-28 22:06）を
+受け、T004 を「forward-boosted topology」/ sigma-stop と記述したのは
+コードが示す内容を超えていた。
+
+訂正後の立場:
+
+- **事実（コードから）**: T004 の clicked GT 頂点は tolerance 内に検出される
+  が angle spread は低いまま（直近 ~2.5°、R≥100 で遠方トラックを取り込んで
+  ようやく ~22°）、sp=28 quality cut をきれいに超えない。Hough scalar 表現
+  における真性な low-sp core で、T011 の clustering-fragmentation artifact
+  とは異なる。algorithmically、3つのうち T004 が graph/topology-branch
+  candidate。
+- **専門家に保留（コードからでない）**: その low-sp core が物理的に
+  sigma-stop / forward-boosted ハイパー核トポロジーかどうかは乳剤物理の
+  解釈であり、コード由来の事実ではない。ユーザー / ドメイン専門家への質問
+  として flag、断定しない。
