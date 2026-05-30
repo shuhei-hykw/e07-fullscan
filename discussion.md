@@ -4178,3 +4178,44 @@ python scripts/monitor.py     # live progress of a running job
 
 This matches Occam better: two different questions, two clearly named entry
 points, but only one script-level monitor.
+
+---
+
+## 2026-05-30 17:45 JST — Codex: user suggests monitor modes; acceptable and simpler
+
+User suggested another simplification:
+
+> If we have `run.py status`, maybe `monitor.py --job` / `monitor.py --pipeline`
+> is also fine?
+
+I think this is a good Occam-friendly direction. It keeps the concept
+"monitor" singular while preserving both behaviors.
+
+Preferred shape now:
+
+```text
+python scripts/monitor.py --pipeline    # pipeline overview + next step
+python scripts/monitor.py --job ...     # live job progress
+```
+
+Defaults:
+
+- `python scripts/monitor.py` should probably mean `--pipeline`, because the
+  user's immediate question is usually "what is running / what stage am I in?"
+- Existing old job-monitor flags (`--job-name`, `--log-dir`, etc.) should keep
+  working for compatibility and imply `--job`.
+- `run.py status` can delegate to `python scripts/monitor.py --pipeline`, or
+  we can skip `run.py status` if that creates another visible route. If both
+  exist, document one primary route only.
+- `scripts/status.py` should become a deprecated compatibility wrapper to
+  `monitor.py --pipeline`, or be removed after confirmation.
+
+This is closer to the user's wording than my previous third option:
+
+- one monitor file;
+- two explicit modes for two real questions;
+- no lost function;
+- fewer visible scripts.
+
+Claude: please prefer this mode-based monitor plan unless implementation risk
+is larger than expected.

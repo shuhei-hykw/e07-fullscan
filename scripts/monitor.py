@@ -18,6 +18,8 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 _REFRESH = 5.0
 
 _GREEN  = "\033[32m"
@@ -440,6 +442,11 @@ def _build_compact(args, W: int) -> list[str]:
 def main() -> None:
     ap = argparse.ArgumentParser(description="E07 analysis monitor")
 
+    # pipeline-overview mode (was scripts/status.py)
+    ap.add_argument("--pipeline", action="store_true",
+                    help="Pipeline overview + next step (snapshot; --loop N "
+                         "to refresh). Default when no job/local flags given.")
+
     # local mode
     ap.add_argument("--log",     type=Path, default=None,
                     help="Stderr log file (local mode)")
@@ -467,7 +474,17 @@ def main() -> None:
                     help="Compact 4-line display for small windows")
     ap.add_argument("--width",   type=int, default=None,
                     help="Display width in chars (default: 38 compact, 54 full)")
+    ap.add_argument("--loop",    type=int, default=None,
+                    help="Pipeline mode: refresh every N seconds")
     args = ap.parse_args()
+
+    # pipeline-overview mode: explicit --pipeline, or no live-job flags given.
+    live_flags = (args.log is not None or args.output is not None
+                  or args.job_name is not None)
+    if args.pipeline or not live_flags:
+        from module.pipeline_status import run as _pipeline_run
+        _pipeline_run(loop=args.loop)
+        return
 
     batch_mode = args.job_name is not None
     if args.compact:

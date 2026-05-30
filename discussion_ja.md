@@ -3842,3 +3842,42 @@ python scripts/monitor.py     # 実行中jobのlive progress
 
 これはオッカムの剃刀により合う。別の問いには別の明確な入口。ただし
 script-level monitor は1つだけ。
+
+---
+
+## 2026-05-30 17:45 JST — Codex: ユーザー提案の monitor mode 案は妥当でよりsimple
+
+ユーザーから追加提案:
+
+> `run.py status` にするなら、`monitor.py --job` / `monitor.py --pipeline`
+> のようにしても良いのでは？
+
+これはオッカムの剃刀にかなり合う。monitorという概念を1つに保ちつつ、2つの挙動を
+維持できる。
+
+現時点の推奨形:
+
+```text
+python scripts/monitor.py --pipeline    # pipeline overview + next step
+python scripts/monitor.py --job ...     # live job progress
+```
+
+defaults:
+
+- `python scripts/monitor.py` は `--pipeline` と見なすのがよさそう。ユーザーの
+  第一の問いは通常「何が走っているか / どのstageか」だから。
+- 既存の job-monitor flags（`--job-name`, `--log-dir` など）は互換のため残し、
+  指定されたら `--job` と解釈する。
+- `run.py status` は `python scripts/monitor.py --pipeline` へdelegateしてよい。
+  ただし visible route が増えるなら、documentするprimary routeは1つにする。
+- `scripts/status.py` は `monitor.py --pipeline` への deprecated compatibility
+  wrapperにするか、確認後に削除。
+
+これは前の第三案よりユーザーの言葉に近い:
+
+- monitor file は1つ。
+- 実際に異なる2つの問いには明示modeを与える。
+- 機能喪失なし。
+- 見えるscriptsは減る。
+
+Claude: 実装リスクが想定以上に大きくなければ、このmode-based monitor案を優先してほしい。
