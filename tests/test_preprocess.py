@@ -1,14 +1,14 @@
 """Regression tests for the extracted branch-neutral preprocessing module.
 
 Proves the extraction is behavior-preserving: the new
-`e07fullscan.preprocess.preprocess` matches a frozen copy of the old
+`module.preprocess.preprocess` matches a frozen copy of the old
 `tracking._finder.preprocess`, and `remove_noise(noise_amax_upper=0)` matches
 the server's old 2-branch noise filter, on a synthetic image.
 """
 import cv2
 import numpy as np
 
-from e07fullscan.preprocess import preprocess, remove_noise
+from module.preprocess import preprocess, remove_noise
 
 
 def _synthetic() -> np.ndarray:

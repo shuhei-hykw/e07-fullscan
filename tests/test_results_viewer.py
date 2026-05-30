@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from e07fullscan.server.app import create_app
-from e07fullscan.server.results import (
+from module.server.app import create_app
+from module.server.results import (
   ResultsStore, render_image, render_stats,
 )
 
@@ -47,7 +47,7 @@ def mock_reader():
 @pytest.fixture
 def client(tmp_path, store, mock_reader):
   with patch(
-    "e07fullscan.server.app.load_spng", return_value=mock_reader
+    "module.server.app.load_spng", return_value=mock_reader
   ):
     app = create_app(tmp_path, results=store)
     app.config["TESTING"] = True

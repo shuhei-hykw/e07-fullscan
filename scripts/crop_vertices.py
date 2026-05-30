@@ -36,7 +36,7 @@ def _load_zproject(
     Returns (projected_image, centre_slice_index).
     """
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from e07fullscan.io.image_reader import SpngReader
+    from module.io.image_reader import SpngReader
     reader = SpngReader(json_path)
     zpos = reader.z_positions()
     centre = int(np.argmin(np.abs(zpos - z_target)))
@@ -70,7 +70,7 @@ def _fog_remove(img: np.ndarray, fog_ksize: int = 51) -> np.ndarray:
 
 def _binary(img: np.ndarray, fog_ksize: int = 51) -> np.ndarray:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from e07fullscan.tracking._finder import preprocess
+    from module.tracking._finder import preprocess
     return preprocess(img, fog_ksize=fog_ksize)
 
 
@@ -139,7 +139,7 @@ def _fog_remove_max(
     track regardless of depth.
     """
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from e07fullscan.io.image_reader import SpngReader
+    from module.io.image_reader import SpngReader
     reader = SpngReader(json_path)
     acc = None
     for i in range(len(reader)):
@@ -160,7 +160,7 @@ def _load_min_projection(json_path: Path) -> np.ndarray:
     the full 0-255 dynamic range is used for clear visualisation.
     """
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from e07fullscan.io.image_reader import SpngReader
+    from module.io.image_reader import SpngReader
     reader = SpngReader(json_path)
     acc = None
     for i in range(len(reader)):
@@ -236,7 +236,7 @@ def main() -> None:
     args = ap.parse_args()
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from e07fullscan.utils import (
+    from module.utils import (
       make_run_id, build_run_meta, save_run_json,
     )
 

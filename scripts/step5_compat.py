@@ -5,7 +5,7 @@ Compares fullscan-image vs specials_x20 *after the same step-5 preprocessing*,
 to decide whether specials_x20 is usable as a sanity-check anchor for the
 conventional Hough branch.
 
-Batch preprocessing (e07fullscan.tracking.preprocess) is called directly.
+Batch preprocessing (module.tracking.preprocess) is called directly.
 The visual-review server is NOT used, so reported statistics match exactly
 what the batch pipeline sees.
 """
@@ -20,9 +20,9 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from e07fullscan.io import load_spng                       # noqa: E402
-from e07fullscan.tracking._finder import preprocess, _ZPJ_HALF  # noqa: E402
-from e07fullscan.diagnostics import projection             # noqa: E402
+from module.io import load_spng                       # noqa: E402
+from module.tracking._finder import preprocess, _ZPJ_HALF  # noqa: E402
+from module.diagnostics import projection             # noqa: E402
 
 # Step-5 params (config/default.yaml defaults; noise_amax_upper disabled)
 FOG_KSIZE = 51

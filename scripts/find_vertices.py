@@ -21,7 +21,7 @@ from pathlib import Path
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Vertex finder for e07fullscan")
+    ap = argparse.ArgumentParser(description="Vertex finder for module")
     ap.add_argument("--input",  type=Path, required=True)
     ap.add_argument("--output", type=Path, required=True)
     ap.add_argument("--min-tracks",     type=int,   default=3,
@@ -52,8 +52,8 @@ def main() -> None:
 
     import pandas as pd
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from e07fullscan.clustering import find_vertices
-    from e07fullscan.utils import (
+    from module.clustering import find_vertices
+    from module.utils import (
       make_run_id, build_run_meta,
       save_run_json, save_parquet_with_meta,
     )

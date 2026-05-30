@@ -8,8 +8,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from e07fullscan.tracking import find_tracks
-from e07fullscan.tracking._finder import _ZPJ_HALF
+from module.tracking import find_tracks
+from module.tracking._finder import _ZPJ_HALF
 
 # v6 production tracking config (config/default.yaml viewer block).
 TRACK_CFG = dict(

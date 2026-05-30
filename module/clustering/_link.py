@@ -1,7 +1,6 @@
 """Cross-slice track linking: connect 2D segments into 3D tracks."""
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -212,46 +211,3 @@ def best_per_track(df: "pd.DataFrame") -> "pd.DataFrame":
         .idxmax()
     )
     return df.loc[best_idx.values].reset_index(drop=True)
-
-
-def add_dip_angles(df: "pd.DataFrame") -> "pd.DataFrame":
-    """Add ``dip_angle_deg`` column to a linked DataFrame.
-
-    Dip angle = arctan(Δz / Δxy) in degrees, computed per track_id by a
-    linear fit of midpoint (px, py) vs z over all slices.  Tracks with
-    only one slice get dip_angle_deg = 0.0.
-
-    Requires ``track_id`` column (output of :func:`link_tracks`).
-    """
-    if "track_id" not in df.columns or len(df) == 0:
-        df = df.copy()
-        df["dip_angle_deg"] = 0.0
-        return df
-
-    import pandas as pd
-
-    mx = (df["px1"].to_numpy() + df["px2"].to_numpy()) / 2.0
-    my = (df["py1"].to_numpy() + df["py2"].to_numpy()) / 2.0
-    zs = df["z"].to_numpy()
-    tids = df["track_id"].to_numpy()
-
-    dip = np.zeros(len(df))
-    for tid in np.unique(tids):
-        mask = tids == tid
-        if mask.sum() < 2:
-            continue
-        zi = zs[mask]
-        xi = mx[mask]
-        yi = my[mask]
-        # linear fit: xy_dist vs z
-        dz = zi.max() - zi.min()
-        if dz == 0:
-            continue
-        dx = xi[-1] - xi[0]  # simple endpoint difference
-        dy = yi[-1] - yi[0]
-        dxy = math.hypot(float(dx), float(dy))
-        dip[mask] = math.degrees(math.atan2(abs(float(dz)), dxy))
-
-    df = df.copy()
-    df["dip_angle_deg"] = dip
-    return df

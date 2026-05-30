@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Live monitor for e07fullscan analysis. Run in a separate tmux pane.
+"""Live monitor for module analysis. Run in a separate tmux pane.
 
 Local mode (single process):
   python scripts/monitor.py --log analyze.log --output out.parquet
@@ -93,7 +93,7 @@ def _find_analyze_pid() -> int | None:
     try:
         out = subprocess.check_output(
             ["pgrep", "-u", os.environ.get("USER", ""),
-             "-f", "e07fullscan.analyze"],
+             "-f", "module.analyze"],
             text=True, stderr=subprocess.DEVNULL,
         )
         pids = [int(p) for p in out.strip().splitlines() if p]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Submit e07fullscan analysis as an LSF array job on KEKCC.
+"""Submit module analysis as an LSF array job on KEKCC.
 
 Usage:
   python scripts/submit_kekcc.py

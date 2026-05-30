@@ -7,8 +7,8 @@ import numpy as np
 
 from ._track import Track
 # Shared branch-neutral preprocessing. Re-exported so existing callers of
-# `from e07fullscan.tracking._finder import preprocess` keep working.
-from e07fullscan.preprocess import fog_remove, preprocess
+# `from module.tracking._finder import preprocess` keep working.
+from module.preprocess import fog_remove, preprocess
 
 _ZPJ_HALF    = 4
 _FOG_KSIZE   = 51

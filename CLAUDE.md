@@ -8,7 +8,8 @@
   such as "Generated with Claude Code") to commit messages or PR bodies.
 
 ## Package structure
-- Main package: e07fullscan
+- Main package: module (renamed from e07fullscan 2026-05-30; not imported
+  externally, so a generic import name is acceptable)
 - Subpackages: io, tracking, analyze, merge, clustering, server, utils,
   diagnostics
 - Shared module: preprocess (branch-neutral fog/Otsu/noise, used by tracking

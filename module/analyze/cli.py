@@ -10,8 +10,8 @@ from pathlib import Path
 
 import yaml
 
-from e07fullscan.io import load_spng
-from e07fullscan.tracking import find_tracks
+from module.io import load_spng
+from module.tracking import find_tracks
 
 _CFG_PATH = Path(__file__).parents[2] / "config" / "default.yaml"
 

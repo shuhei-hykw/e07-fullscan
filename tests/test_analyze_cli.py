@@ -6,7 +6,7 @@ from pathlib import Path
 
 def _run(*args, **kwargs):
   return subprocess.run(
-    [sys.executable, "-m", "e07fullscan.analyze", *args],
+    [sys.executable, "-m", "module.analyze", *args],
     capture_output=True, text=True, **kwargs,
   )
 

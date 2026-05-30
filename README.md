@@ -1,4 +1,4 @@
-# e07fullscan
+# module
 
 Analysis toolkit for E07 nuclear emulsion full-scan data.  
 Designed for double-hypernuclei (ΛΛ) search via track finding, vertex
@@ -24,7 +24,7 @@ Additional dependency for web viewer: flask
 ## Package Structure
 
 ```
-e07fullscan/
+module/
 ├── io/
 │   └── image_reader.py   # SPNG format reader
 ├── tracking/             # Track finding
@@ -75,7 +75,7 @@ Set `px_scale_um: 0.29` in `config/default.yaml` (current default).
 ## SPNG Image Reader
 
 ```python
-from e07fullscan.io import load_spng
+from module.io import load_spng
 
 reader = load_spng("path/to/scan.json")
 ```
@@ -109,8 +109,8 @@ for img in reader:  # Iteration supported
 Find track segments in a single Z-slice and return them in stage coordinates.
 
 ```python
-from e07fullscan.io import load_spng
-from e07fullscan.tracking import find_tracks
+from module.io import load_spng
+from module.tracking import find_tracks
 
 reader = load_spng("path/to/scan.json")
 tracks = find_tracks(reader, idx=10, view_id="path/to/scan.json",
@@ -143,15 +143,15 @@ repeated file I/O when iterating over all slices.
 
 ```bash
 # Single process
-python -m e07fullscan.analyze /data/scan_dir -o tracks.parquet -v
+python -m module.analyze /data/scan_dir -o tracks.parquet -v
 
 # Parallel chunk (KEKCC array job)
-python -m e07fullscan.analyze /data/scan_dir \
+python -m module.analyze /data/scan_dir \
   --chunk-id 0 --chunk-total 135 \
   -o results/chunk_0001.parquet -j 1 -v
 
 # Custom config
-python -m e07fullscan.analyze /data/scan_dir \
+python -m module.analyze /data/scan_dir \
   --config config/default.yaml -o tracks.parquet
 ```
 
@@ -278,7 +278,7 @@ Z-projection overlap.  `merge_vertex_slices()` merges candidates within
 
 ```python
 import pandas as pd
-from e07fullscan.clustering import find_vertices, merge_vertex_slices
+from module.clustering import find_vertices, merge_vertex_slices
 
 df   = pd.read_parquet("results/merged.parquet")
 # beam_angle_cut removes tracks with angle_deg < 15° or > 165°
@@ -453,8 +453,8 @@ vertex_pairs_xview_v1_conn_ll.parquet (v5 vertices) at rank 988/2952.
 ## Clustering API
 
 ```python
-from e07fullscan.clustering import cluster_tracks, cluster_df
-from e07fullscan.clustering import link_tracks, best_per_track, add_dip_angles
+from module.clustering import cluster_tracks, cluster_df
+from module.clustering import link_tracks, best_per_track, add_dip_angles
 
 # Merge duplicate Hough segments
 merged = cluster_tracks(tracks, dist_eps=20.0, angle_eps=5.0)
@@ -486,7 +486,7 @@ python scripts/monitor.py --log analyze.log --output out.parquet
 ## Web Viewer
 
 ```bash
-python -m e07fullscan.server.app --data /path/to/scan_dir --port 8000
+python -m module.server.app --data /path/to/scan_dir --port 8000
 # SSH tunnel for remote access:
 ssh -L 8000:localhost:8000 username@login.kekcc.jp
 ```
@@ -514,7 +514,7 @@ ssh -L 8000:localhost:8000 username@login.kekcc.jp
 
 Every output file can be traced back to the exact parameters and code
 version that produced it.  The mechanism is provided by
-`e07fullscan/utils/run_info.py`.
+`module/utils/run_info.py`.
 
 ### What is recorded
 
@@ -551,7 +551,7 @@ print(meta["params"])   # all CLI args
 ### API
 
 ```python
-from e07fullscan.utils import (
+from module.utils import (
     make_run_id,            # "20260510_165200_abc1234"
     build_run_meta,         # {run_id, script, timestamp, python, params}
     save_run_json,          # write <stem>_run.json sidecar

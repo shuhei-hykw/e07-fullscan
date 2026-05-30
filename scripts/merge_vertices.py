@@ -47,9 +47,9 @@ def main() -> None:
     import cv2
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from e07fullscan.clustering import merge_vertex_slices
-    from e07fullscan.io import SpngReader
-    from e07fullscan.utils import (
+    from module.clustering import merge_vertex_slices
+    from module.io import SpngReader
+    from module.utils import (
       make_run_id, build_run_meta,
       save_run_json, save_parquet_with_meta,
     )

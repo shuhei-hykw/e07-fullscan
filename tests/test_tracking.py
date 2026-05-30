@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from e07fullscan.tracking import Track, find_tracks, preprocess
+from module.tracking import Track, find_tracks, preprocess
 
 
 class _MockEntry:

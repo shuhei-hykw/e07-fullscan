@@ -16,10 +16,10 @@ from flask import (
   request, send_file,
 )
 
-from e07fullscan.io import load_spng
-from e07fullscan.preprocess import fog_remove, otsu_binarize, remove_noise
-from e07fullscan.tracking import Track, find_tracks
-from e07fullscan.server.results import (
+from module.io import load_spng
+from module.preprocess import fog_remove, otsu_binarize, remove_noise
+from module.tracking import Track, find_tracks
+from module.server.results import (
   ResultsStore, render_image, render_stats,
 )
 
@@ -1195,7 +1195,7 @@ def create_app(
     @app.route("/viewer3d_data/<int:view_idx>")
     def viewer3d_data(view_idx: int):
       try:
-        from e07fullscan.clustering import (
+        from module.clustering import (
           cluster_df, link_tracks, best_per_track,
         )
         view_id = _view_ids[view_idx]

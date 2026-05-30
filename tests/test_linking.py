@@ -3,7 +3,7 @@ import math
 import pandas as pd
 import pytest
 
-from e07fullscan.clustering import link_tracks
+from module.clustering import link_tracks
 
 
 def _make_df(rows):

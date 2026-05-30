@@ -1828,3 +1828,41 @@ The shared step-5 boundary is now a single implementation used by both the
 batch tracking path and the viewer, and the diagnostic scripts share one
 helper module. Next analysis work (when resumed): the T011-type targeted
 sub-vertex merge as a Hough-branch recall fix.
+
+---
+
+## 2026-05-30 — Cleanup: dead-code removal + package rename e07fullscan -> module
+
+Continued the structural cleanup. Behavior-preserving; v6 analysis behavior
+unchanged. Discussion 2026-05-29 20:32 / 2026-05-30 15:31.
+
+### Dead code
+
+- Removed `add_dip_angles` (clustering/_link.py): zero callers anywhere; also
+  dropped the now-unused `import math`. No residual references; tests green.
+
+### Package rename e07fullscan -> module
+
+- User decision (the package is never imported externally, so a generic import
+  name carries no practical collision/searchability cost).
+- `git mv e07fullscan module`; rewrote `e07fullscan` -> `module` across all
+  32 .py files (package, scripts, tests), pyproject.toml (distribution name,
+  the 3 console entry points, packages.find), and README.md.
+- CLI command names (e07view/e07analyze/e07merge) kept; only their module
+  targets changed. No top-level run.py added (out of scope).
+- Not pip-installed in this environment (runs via PYTHONPATH), so no reinstall
+  needed; if installed elsewhere, re-run `pip install -e .` to refresh entry
+  points.
+- Past discussion/ANALYSIS entries keep `e07fullscan` as historical record.
+
+### Verification
+
+- `pytest -m "not slow"`: 52 passed.
+- `lowsp_spread_radius.py` re-run reproduces the 2026-05-29 numbers (T011
+  R25=28.5/R50=34.3, T004 3.1/3.7, D013 29.2) — rename is pure.
+
+### Still to do (this cleanup thread)
+
+- Quarantine legacy ΛΛ-pair code (find_vertex_pairs + 6 pair scripts) into
+  module/clustering/_pairs.py and scripts/legacy/, done in the renamed tree.
+- crop_vertices stale options (z_target/zpj_mode): mark/document or remove.

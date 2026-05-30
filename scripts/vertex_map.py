@@ -39,7 +39,7 @@ def main() -> None:
   import matplotlib.colors as mcolors
 
   sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-  from e07fullscan.utils import (
+  from module.utils import (
     make_run_id, build_run_meta, save_run_json,
   )
 

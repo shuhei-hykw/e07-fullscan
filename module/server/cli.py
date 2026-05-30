@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 import webbrowser
 
-from e07fullscan.server.app import run
+from module.server.app import run
 
 
 def main() -> None:
@@ -43,7 +43,7 @@ def main() -> None:
 
   results = None
   if args.results:
-    from e07fullscan.server.results import ResultsStore
+    from module.server.results import ResultsStore
     results = ResultsStore(Path(args.results))
     print(f"Results loaded from {args.results!r}")
 

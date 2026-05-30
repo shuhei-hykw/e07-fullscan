@@ -2,8 +2,8 @@ import math
 
 import pytest
 
-from e07fullscan.tracking._track import Track
-from e07fullscan.clustering import cluster_tracks
+from module.tracking._track import Track
+from module.clustering import cluster_tracks
 
 
 def _make_track(px1, py1, px2, py2, angle=None):

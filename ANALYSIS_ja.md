@@ -1340,3 +1340,40 @@ Codex と合意した構造 cleanup を開始（discussion 2026-05-28 17:22 /
 共有 step-5 境界が batch tracking path と viewer の両方で使う単一実装になり、
 診断スクリプトが1ヘルパモジュールを共有。次の解析作業（再開時）: T011 型の
 targeted sub-vertex merge（Hough-branch recall fix）。
+
+---
+
+## 2026-05-30 — 整理: dead-code 削除 + パッケージ改名 e07fullscan -> module
+
+構造整理の継続。behavior-preserving；v6 解析挙動は不変。discussion
+2026-05-29 20:32 / 2026-05-30 15:31。
+
+### Dead code
+
+- `add_dip_angles`（clustering/_link.py）削除: どこからも呼ばれていない；
+  未使用化した `import math` も削除。残存参照なし；テスト green。
+
+### パッケージ改名 e07fullscan -> module
+
+- ユーザー決定（外部から import しないので、generic な import 名でも実用上の
+  衝突/検索性コストはない）。
+- `git mv e07fullscan module`；全32 .py（package, scripts, tests）、
+  pyproject.toml（distribution 名、console entry points 3つ、packages.find）、
+  README.md で `e07fullscan` -> `module`。
+- CLI コマンド名（e07view/e07analyze/e07merge）は維持、module ターゲットのみ
+  変更。top-level run.py は追加せず（スコープ外）。
+- 本環境では pip 未インストール（PYTHONPATH 実行）なので再インストール不要；
+  他所でインストール済みなら `pip install -e .` で entry points を更新。
+- 過去の discussion/ANALYSIS エントリは歴史記録として `e07fullscan` 据え置き。
+
+### 検証
+
+- `pytest -m "not slow"`: 52 passed。
+- `lowsp_spread_radius.py` 再実行で 2026-05-29 の数値再現（T011
+  R25=28.5/R50=34.3、T004 3.1/3.7、D013 29.2）― 改名は pure。
+
+### 残作業（本整理スレッド）
+
+- legacy ΛΛ-pair コード（find_vertex_pairs + pair scripts 6本）を
+  module/clustering/_pairs.py と scripts/legacy/ へ隔離、改名済みツリーで実施。
+- crop_vertices の stale オプション（z_target/zpj_mode）: マーク/文書化 or 削除。
