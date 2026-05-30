@@ -34,7 +34,7 @@ print("saved -> vertex_pairs_v6_filtered.parquet")
 EOF
 
 # Annotate (connecting track properties)
-python scripts/annotate_pairs.py \
+python scripts/legacy/annotate_pairs.py \
   --pairs   results/vertex_pairs_v6_filtered.parquet \
   --output  results/vertex_pairs_v6_ann.parquet
 

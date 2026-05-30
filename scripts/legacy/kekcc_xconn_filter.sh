@@ -17,7 +17,7 @@ exec > >(tee "$LOG") 2>&1
 echo "=== cross-view conn filter ==="
 date
 
-python scripts/filter_xview_pairs.py \
+python scripts/legacy/filter_xview_pairs.py \
   --pairs   results/vertex_pairs_xview_v6_prefiltered.parquet \
   --chunks  results/chunks_v6 \
   --output  results/vertex_pairs_xview_v6_conn.parquet

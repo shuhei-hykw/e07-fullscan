@@ -24,6 +24,8 @@ Commands:
   view             vertex review/3D viewer server    (-> python -m module.server)
 
 Monitoring stays separate: `python scripts/monitor.py [--loop N]`.
+Diagnostics are in the package: `python -m module.diagnostics.<name>`
+  (step5_compat, lowsp_diag, lowsp_spread_radius, bg_cost_spread).
 """
 from __future__ import annotations
 

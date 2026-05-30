@@ -17,14 +17,14 @@ exec > >(tee "$LOG") 2>&1
 echo "=== intra-view conn filter ==="
 date
 
-python scripts/filter_pairs_by_track.py \
+python scripts/legacy/filter_pairs_by_track.py \
   --pairs   results/vertex_pairs_v6.parquet \
   --chunks  results/chunks_v6 \
   --output  results/vertex_pairs_v6_filtered.parquet \
   --min-n-primary 10
 
 echo "--- annotate pairs ---"
-python scripts/annotate_pairs.py \
+python scripts/legacy/annotate_pairs.py \
   --pairs   results/vertex_pairs_v6_filtered.parquet \
   --chunks  results/chunks_v6 \
   --output  results/vertex_pairs_v6_ann.parquet

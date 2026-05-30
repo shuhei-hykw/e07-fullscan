@@ -36,7 +36,7 @@ exec > >(tee "$LOG") 2>&1
 echo "=== job ${LSB_JOBINDEX}/${N_JOBS} ==="
 date
 
-python "scripts/${FILTER_SCRIPT}" \
+python "scripts/legacy/${FILTER_SCRIPT}" \
   --pairs   "${INPUT_FILE}" \
   --chunks  "${CHUNKS_DIR}" \
   --output  "${SLICE_OUT}"
