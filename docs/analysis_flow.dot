@@ -1,0 +1,65 @@
+// E07 full-scan analysis flow.
+// Render: dot -Tpng docs/analysis_flow.dot -o docs/analysis_flow.png
+digraph analysis_flow {
+  rankdir=TB;
+  graph [fontname="Helvetica", fontsize=11, labelloc="t",
+         label="E07 full-scan: analysis flow (active path solid, legacy/future dashed)"];
+  node  [fontname="Helvetica", fontsize=10, shape=box, style="rounded,filled"];
+  edge  [fontname="Helvetica", fontsize=9];
+
+  // ---- palette ----
+  // active=blue, data=light, shared=green, viewer=orange, legacy=gray, future=dashed
+  node [fillcolor="#e8f0fe", color="#1a73e8"];
+
+  raw      [label="raw z-stack\n(SPNG / numbered PNG)\nmodule.io.SpngReader", fillcolor="#f1f3f4", color="#5f6368"];
+
+  // ---- shared preprocessing (steps 1-5) ----
+  subgraph cluster_pre {
+    label="shared preprocessing  (steps 1–5, branch-neutral)";
+    style="rounded,filled"; fillcolor="#e6f4ea"; color="#188038"; fontcolor="#188038";
+    fog   [label="fog removal\n(GaussianBlur − img)", fillcolor="#e6f4ea", color="#188038"];
+    otsu  [label="Otsu threshold", fillcolor="#e6f4ea", color="#188038"];
+    noise [label="noise removal\n(CC area filter)\n= step 5 boundary", fillcolor="#ceead6", color="#188038"];
+    fog -> otsu -> noise;
+  }
+  raw -> fog [label="z-projection (±zpj_half mean)"];
+
+  // ---- conventional Hough / vertex branch ----
+  subgraph cluster_hough {
+    label="conventional Hough / vertex branch  (current)";
+    style="rounded,filled"; fillcolor="#f8fbff"; color="#1a73e8"; fontcolor="#1a73e8";
+    hough  [label="find_tracks\n(HoughLinesP)\nmodule.tracking"];
+    chunk  [label="track segments\nchunk_*.parquet\n(e07analyze)", fillcolor="#f1f3f4", color="#5f6368"];
+    fv     [label="find_vertices\n(per-slice line intersections)\nmodule.clustering"];
+    mv     [label="merge_vertex_slices\n(cross-slice XY merge)\nmodule.clustering"];
+    vm     [label="vertices_merged_v6.parquet", fillcolor="#f1f3f4", color="#5f6368"];
+    qc     [label="quality cut\n(n≥8, sp≥28°, nsl≥4)"];
+    vq     [label="vertices_quality_v6.parquet", fillcolor="#f1f3f4", color="#5f6368"];
+    rank   [label="ranking\nsp  (hypernuclear-recall)\nsp×nsl  (broad reaction)"];
+    crop   [label="crop_vertices → review_crops\n(visual labelling)"];
+    hough -> chunk -> fv -> mv -> vm -> qc -> vq -> rank -> crop;
+  }
+  noise -> hough [label="binary"];
+
+  // ---- viewer / server (side client) ----
+  server [label="viewer / server\nmodule.server (e07view)\ncalls the SAME preprocess + find_tracks",
+          fillcolor="#fef7e0", color="#f9ab00"];
+  server -> fog   [style=dashed, color="#f9ab00", label="preview", constraint=false];
+  server -> hough [style=dashed, color="#f9ab00", constraint=false];
+
+  // ---- legacy ΛΛ-pair path ----
+  pairs  [label="find_vertex_pairs\nmodule.clustering._pairs\n+ scripts/legacy/*",
+          style="rounded,filled,dashed", fillcolor="#f1f3f4", color="#9aa0a6"];
+  paircat[label="ΛΛ pair catalogs\n(historical, e.g. KISO cross-view)",
+          style="dashed", fillcolor="#f1f3f4", color="#9aa0a6"];
+  vm -> pairs [style=dashed, color="#9aa0a6", label="legacy (superseded 2026-05-14)"];
+  pairs -> paircat [style=dashed, color="#9aa0a6"];
+
+  // ---- future graph / ML branch ----
+  graph_br [label="graph / topology + ML branch\n(future; e.g. T004 low-sp core)",
+          style="rounded,filled,dashed", fillcolor="#fce8e6", color="#d93025"];
+  noise -> graph_br [style=dashed, color="#d93025", label="possible split after step 5"];
+
+  { rank=same; server; hough }
+  { rank=same; pairs; qc }
+}

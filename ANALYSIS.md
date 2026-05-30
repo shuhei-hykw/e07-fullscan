@@ -1923,3 +1923,26 @@ all-slice minimum-intensity projection).
 - legacy ΛΛ-pair path isolated (clustering/_pairs.py, scripts/legacy/)
 - active vertex path and active scripts are now easy to see
 - pytest -m "not slow" green; deterministic diagnostics reproduce
+
+---
+
+## 2026-05-30 — Structure + analysis-flow diagrams
+
+Produced two explanatory diagrams (outside README, as the user asked), built
+with Graphviz, reflecting the post-cleanup structure. Codex signed off on the
+cleanup (discussion 2026-05-30 15:46) and specified the 5 things the diagrams
+should show; both are encoded.
+
+- `docs/structure.dot` / `docs/structure.png`: file/package layout. module/
+  subpackages with preprocess marked as the shared step-5 module and server as
+  the viewer; scripts/ split into active / diagnostics / infra / legacy; config
+  and tests shown as context. Colour key: active blue/green, viewer orange,
+  legacy gray-dashed.
+- `docs/analysis_flow.dot` / `docs/analysis_flow.png`: data flow. raw z-stack
+  → shared preprocessing (steps 1–5, with the step-5 boundary labelled) →
+  conventional Hough/vertex branch (find_tracks → find_vertices → merge →
+  quality cut → sp / sp×nsl ranking → crops). The viewer is drawn as a side
+  client calling the same preprocess/find_tracks; the legacy ΛΛ-pair path and a
+  future graph/ML branch are dashed.
+
+Regenerate with `dot -Tpng docs/<name>.dot -o docs/<name>.png`.

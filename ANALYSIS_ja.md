@@ -1433,3 +1433,23 @@ minimum-intensity projection を使用）。
 - legacy ΛΛ-pair パス隔離（clustering/_pairs.py, scripts/legacy/）
 - active 頂点パスと active scripts が見やすくなった
 - pytest -m "not slow" green；決定的診断が再現
+
+---
+
+## 2026-05-30 — 構造図 + 解析フロー図
+
+ユーザー要望どおり README とは別の説明図を2つ、Graphviz で作成（整理後の構造を
+反映）。Codex が整理を sign-off（discussion 2026-05-30 15:46）し、図が示すべき
+5点を指定 — 両方反映。
+
+- `docs/structure.dot` / `docs/structure.png`: ファイル/パッケージ構成。module/
+  サブパッケージ（preprocess=共有 step-5、server=viewer をマーク）；scripts/ を
+  active / diagnostics / infra / legacy に分類；config と tests を文脈表示。色:
+  active 青/緑、viewer オレンジ、legacy グレー破線。
+- `docs/analysis_flow.dot` / `docs/analysis_flow.png`: データフロー。raw z-stack
+  → 共有 preprocessing（steps 1–5、step-5 境界をラベル）→ conventional
+  Hough/vertex branch（find_tracks → find_vertices → merge → quality cut →
+  sp / sp×nsl ranking → crops）。viewer は同じ preprocess/find_tracks を呼ぶ
+  side client として描画；legacy ΛΛ-pair パスと将来の graph/ML branch は破線。
+
+再生成: `dot -Tpng docs/<name>.dot -o docs/<name>.png`。

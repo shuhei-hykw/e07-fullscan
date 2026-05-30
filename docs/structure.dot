@@ -1,0 +1,59 @@
+// E07 full-scan file structure.
+// Render: dot -Tpng docs/structure.dot -o docs/structure.png
+digraph structure {
+  rankdir=LR;
+  graph [fontname="Helvetica", fontsize=11, labelloc="t",
+         label="E07 full-scan: file structure (active = blue/green, viewer = orange, legacy = gray)"];
+  node  [fontname="Helvetica", fontsize=9, shape=box, style="rounded,filled"];
+  edge  [color="#9aa0a6", arrowsize=0.7];
+
+  // ===== importable package: module/ =====
+  subgraph cluster_pkg {
+    label="module/   (importable package; not imported externally)";
+    style="rounded,filled"; fillcolor="#f8fbff"; color="#1a73e8"; fontcolor="#1a73e8";
+    node [fillcolor="#e8f0fe", color="#1a73e8"];
+
+    io      [label="io\nSpngReader, load_spng\n(SPNG + plain PNG)"];
+    pre     [label="preprocess  ★shared step-5\nfog_remove · otsu_binarize\nremove_noise · preprocess",
+             fillcolor="#e6f4ea", color="#188038"];
+    track   [label="tracking\n_finder: find_tracks\n_track: Track"];
+    clu     [label="clustering\n_vertex: find_vertices, merge  (active)\n_cluster/_link  (viewer helpers)\n_pairs: find_vertex_pairs  (legacy)"];
+    ana     [label="analyze\ncli → e07analyze"];
+    mrg     [label="merge\ncli → e07merge"];
+    srv     [label="server\napp/cli/results → e07view (viewer)",
+             fillcolor="#fef7e0", color="#f9ab00"];
+    utl     [label="utils\nrun_info"];
+    dia     [label="diagnostics\n_common: TRACK_CFG, tracks_to_df,\nprojection, find_tracks_cfg"];
+
+    io -> track; pre -> track; track -> clu;
+    pre -> srv [style=dashed, color="#f9ab00"];
+    track -> srv [style=dashed, color="#f9ab00"];
+    track -> dia; clu -> dia;
+  }
+
+  // ===== CLI scripts: scripts/ =====
+  subgraph cluster_scr {
+    label="scripts/   (thin CLIs, run with PYTHONPATH=.)";
+    style="rounded,filled"; fillcolor="#fffdf7"; color="#5f6368"; fontcolor="#5f6368";
+
+    s_active [label="active (individual-vertex)\nfind_vertices · merge_vertices\ncrop_vertices · review_crops · status",
+              fillcolor="#e8f0fe", color="#1a73e8"];
+    s_diag   [label="diagnostics\nstep5_compat · lowsp_diag\nlowsp_spread_radius · bg_cost_spread",
+              fillcolor="#e6f4ea", color="#188038"];
+    s_infra  [label="infra / jobs\nsubmit_kekcc · submit_vertex_kekcc\nmerge_chunks · monitor · click_vertex · vertex_map",
+              fillcolor="#f1f3f4", color="#5f6368"];
+    s_legacy [label="legacy/   (ΛΛ-pair, superseded 2026-05-14)\nfind_pairs · find_crossview_pairs\nfilter_pairs_by_track · filter_xview_pairs\nannotate_pairs · crop_pairs  (+ README)",
+              style="rounded,filled,dashed", fillcolor="#f1f3f4", color="#9aa0a6"];
+  }
+
+  // dependencies scripts -> package
+  s_active -> clu [color="#1a73e8"];
+  s_diag   -> dia [color="#188038"];
+  s_legacy -> clu [style=dashed, color="#9aa0a6", label="_pairs"];
+
+  // config / tests (context)
+  cfg   [label="config/default.yaml\n(v6 params)", shape=note, fillcolor="#f1f3f4", color="#5f6368"];
+  tst   [label="tests/\ntest_preprocess (regression) + unit tests", shape=note, fillcolor="#f1f3f4", color="#5f6368"];
+  cfg -> track [style=dotted]; cfg -> dia [style=dotted];
+  tst -> pre [style=dotted, label="byte-equal"];
+}
