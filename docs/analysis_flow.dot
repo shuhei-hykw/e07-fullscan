@@ -60,6 +60,7 @@ digraph analysis_flow {
           style="rounded,filled,dashed", fillcolor="#fce8e6", color="#d93025"];
   noise -> graph_br [style=dashed, color="#d93025", label="possible split after step 5"];
 
+  // keep the main path visually linear (vm -> qc -> vq -> rank -> crop);
+  // the viewer sits beside find_tracks, legacy pairs hang off to the side.
   { rank=same; server; hough }
-  { rank=same; pairs; qc }
 }

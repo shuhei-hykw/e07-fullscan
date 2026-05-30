@@ -9,7 +9,7 @@ digraph structure {
 
   // ===== importable package: module/ =====
   subgraph cluster_pkg {
-    label="module/   (importable package; not imported externally)";
+    label="module/   (local Python package)";
     style="rounded,filled"; fillcolor="#f8fbff"; color="#1a73e8"; fontcolor="#1a73e8";
     node [fillcolor="#e8f0fe", color="#1a73e8"];
 
@@ -17,7 +17,7 @@ digraph structure {
     pre     [label="preprocess  ★shared step-5\nfog_remove · otsu_binarize\nremove_noise · preprocess",
              fillcolor="#e6f4ea", color="#188038"];
     track   [label="tracking\n_finder: find_tracks\n_track: Track"];
-    clu     [label="clustering\n_vertex: find_vertices, merge  (active)\n_cluster/_link  (viewer helpers)\n_pairs: find_vertex_pairs  (legacy)"];
+    clu     [label="clustering\n_vertex: find_vertices, merge  (active)\n_cluster/_link  (clustering helpers)\n_pairs: find_vertex_pairs  (legacy)"];
     ana     [label="analyze\ncli → e07analyze"];
     mrg     [label="merge\ncli → e07merge"];
     srv     [label="server\napp/cli/results → e07view (viewer)",
