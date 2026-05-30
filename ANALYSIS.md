@@ -1946,3 +1946,90 @@ should show; both are encoded.
   future graph/ML branch are dashed.
 
 Regenerate with `dot -Tpng docs/<name>.dot -o docs/<name>.png`.
+
+---
+
+## 2026-05-30 — Coordination: persistent watcher memory rules
+
+Updated `AGENTS.md` so stateless Codex watcher runs (`codex exec`, cron, or
+tmux loops) can safely reconstruct context from repository files instead of
+transient model memory.
+
+- Refreshed the package section to `module` (renamed from `e07fullscan`) and
+  listed the current subpackages plus shared `preprocess`.
+- Added the simplification principle: prefer Occam's razor, reduce visible
+  entry points and files, avoid new `scripts/` subdirectories, and keep
+  diagnostics/legacy code out of the everyday operation surface.
+- Added a startup memory rule: every session or watcher must read
+  `AGENTS.md`, `CLAUDE.md`, `discussion.md`, `discussion_ja.md`,
+  `ANALYSIS.md`, and `ANALYSIS_ja.md`.
+- Reaffirmed Codex as discussion-main and Markdown-only editor; Claude remains
+  responsible for implementation work.
+
+---
+
+## 2026-05-30 — Tooling: persistent Codex discussion watcher script
+
+Added `scripts/codex_discussion_watch.sh` at the user's explicit request and
+exception to allow a new shell script in `scripts/`.
+
+- Runs a persistent loop suitable for tmux.
+- Calls `codex exec` each tick with a prompt that rebuilds memory from
+  `AGENTS.md`, `CLAUDE.md`, `discussion.md`, `discussion_ja.md`,
+  `ANALYSIS.md`, and `ANALYSIS_ja.md`.
+- Keeps Codex as discussion-main and Markdown-only by prompt.
+- Uses `flock` to avoid overlapping runs and `timeout` to prevent a stuck
+  Codex execution from blocking the watcher forever.
+- Supports environment overrides: `ROOT`, `CODEX_BIN`, `INTERVAL_SEC`,
+  `TIMEOUT_SEC`, `LOCK_FILE`, `LOG_DIR`, `LOG_FILE`.
+
+Verification: `bash -n scripts/codex_discussion_watch.sh` passed and the file
+was made executable.
+
+Follow-up: the initial tmux run showed that `codex exec` does not accept
+`--ask-for-approval`. Removed that option, re-ran `bash -n`, restarted the
+detached `codex-discuss-watch` tmux session, and confirmed the watcher log
+shows a successful no-op discussion check.
+
+---
+
+## 2026-05-30 — scripts-surface cleanup: run.py + slimmed scripts/
+
+Reorganized the operation surface so scripts/ is no longer a confusing mix of
+.py and .sh. User decisions: run.py-first; no new subdirectories in scripts/
+(existing scripts/legacy/ kept). Behavior-preserving. Codex discussion
+2026-05-30 17:00–17:45.
+
+### Changes
+
+- New repo-root `run.py`: single operation surface; subcommands delegate via
+  subprocess to existing scripts / module entry points (track, view,
+  merge-tracks, vertices, merge-vertices, crops, review, map, click,
+  submit-tracking, submit-vertices). No analysis logic in run.py.
+- Diagnostics moved into the package: `module/diagnostics/{step5_compat,
+  lowsp_diag,lowsp_spread_radius,bg_cost_spread}.py`, run via
+  `python -m module.diagnostics.<name>`.
+- Legacy ΛΛ-pair KEKCC shells (kekcc_intra/xconn/filter_job) moved into
+  scripts/legacy/ with fixed references.
+- status/monitor merged into one monitor: pipeline-overview logic →
+  `module/pipeline_status.py` (run(loop)/main); `scripts/monitor.py --pipeline`
+  is the overview (default when no live-job flags), live-job flags keep the
+  old behavior; `scripts/status.py` is a deprecated wrapper.
+- Deleted redundant submit_kekcc.sh (submit_kekcc.py covers bsub). Fixed
+  leftover e07fullscan→module refs in kekcc_job.sh / analyze.sh.
+- Added scripts/README.md mapping the slimmed surface.
+
+### End state
+
+scripts/ now: README.md, the active pipeline CLIs (delegated to by run.py),
+monitor.py (single monitor), status.py (deprecated wrapper), the LSF shell
+entry points (kekcc_job.sh, kekcc_vertex.sh, analyze.sh, run_pipeline_v6.sh),
+and legacy/. Diagnostics live under module/diagnostics/.
+
+### Verification
+
+pytest -m "not slow" 52 passed at each phase; monitor.py --pipeline and the
+status.py wrapper produce the overview; lowsp_spread_radius (now python -m)
+reproduces the 2026-05-29 numbers. Commits: 7f55b9c (run.py), 502ba4d
+(diagnostics+legacy .sh), ed9377f (status/monitor), 3179e5b (submit_kekcc.sh
+delete + .sh refs + README).

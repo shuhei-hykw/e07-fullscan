@@ -1453,3 +1453,85 @@ minimum-intensity projection を使用）。
   side client として描画；legacy ΛΛ-pair パスと将来の graph/ML branch は破線。
 
 再生成: `dot -Tpng docs/<name>.dot -o docs/<name>.png`。
+
+---
+
+## 2026-05-30 — Coordination: persistent watcher memory rules
+
+stateless な Codex watcher 実行（`codex exec`, cron, tmux loop）が、一時的な
+model memoryではなくrepository filesから安全に文脈を復元できるよう、
+`AGENTS.md` を更新した。
+
+- package section を `module`（`e07fullscan` からrename済み）に更新し、現在の
+  subpackages と共有 `preprocess` を記載。
+- 単純化原則を追加: オッカムの剃刀を優先し、見えるentry pointとfilesを減らす。
+  `scripts/` に新しいsubdirectoriesを作らず、diagnostics/legacy codeを日常操作面に
+  出さない。
+- startup memory rule を追加: 各session/watcherは `AGENTS.md`, `CLAUDE.md`,
+  `discussion.md`, `discussion_ja.md`, `ANALYSIS.md`, `ANALYSIS_ja.md` を読む。
+- Codex は discussion-main かつ Markdown-only editor、Claude は実装担当である
+  ことを再確認。
+
+---
+
+## 2026-05-30 — Tooling: persistent Codex discussion watcher script
+
+ユーザーの明示依頼と、`scripts/` への新規 shell script 追加の例外許可に基づき、
+`scripts/codex_discussion_watch.sh` を追加した。
+
+- tmux向けのpersistent loopを実行する。
+- 各tickで `codex exec` を呼び、`AGENTS.md`, `CLAUDE.md`, `discussion.md`,
+  `discussion_ja.md`, `ANALYSIS.md`, `ANALYSIS_ja.md` から記憶を復元するpromptを
+  渡す。
+- prompt上で Codex を discussion-main かつ Markdown-only に保つ。
+- `flock` で多重実行を避け、`timeout` でCodex実行の詰まりを防ぐ。
+- `ROOT`, `CODEX_BIN`, `INTERVAL_SEC`, `TIMEOUT_SEC`, `LOCK_FILE`, `LOG_DIR`,
+  `LOG_FILE` を環境変数でoverride可能。
+
+検証: `bash -n scripts/codex_discussion_watch.sh` が成功し、実行権限を付与した。
+
+Follow-up: 初回tmux実行で `codex exec` は `--ask-for-approval` を受け付けない
+ことが判明。そのoptionを削除し、`bash -n` を再実行、detached
+`codex-discuss-watch` tmux session を再起動し、watcher logで正常なno-op
+discussion checkを確認した。
+
+---
+
+## 2026-05-30 — scripts-surface cleanup: run.py + scripts/ 縮小
+
+操作面を再編し、scripts/ の .py/.sh 混在を解消。ユーザー決定: run.py 中心；
+scripts/ に新規サブディレクトリを作らない（既存 scripts/legacy/ は維持）。
+behavior-preserving。Codex 討議 2026-05-30 17:00–17:45。
+
+### 変更
+
+- 新規 repo-root `run.py`: 単一操作面；サブコマンドが subprocess で既存
+  scripts / module entry に委譲（track, view, merge-tracks, vertices,
+  merge-vertices, crops, review, map, click, submit-tracking, submit-vertices）。
+  run.py に解析ロジックなし。
+- 診断を package へ: `module/diagnostics/{step5_compat,lowsp_diag,
+  lowsp_spread_radius,bg_cost_spread}.py`、`python -m module.diagnostics.<name>`
+  で実行。
+- legacy ΛΛ-pair KEKCC shell（kekcc_intra/xconn/filter_job）を scripts/legacy/
+  へ移動、参照修正。
+- status/monitor を1つに統合: pipeline-overview ロジックを
+  `module/pipeline_status.py` へ（run(loop)/main）；`scripts/monitor.py
+  --pipeline` が俯瞰（live-job フラグなしの既定）、live-job フラグは旧挙動維持；
+  `scripts/status.py` は deprecation wrapper。
+- 冗長な submit_kekcc.sh 削除（submit_kekcc.py が bsub をカバー）。
+  kekcc_job.sh / analyze.sh の e07fullscan→module 参照漏れ修正。
+- scripts/README.md 追加（縮小した surface の地図）。
+
+### end state
+
+scripts/ 現状: README.md、active pipeline CLI（run.py が委譲）、monitor.py
+（単一モニタ）、status.py（deprecation wrapper）、LSF shell entry
+（kekcc_job.sh, kekcc_vertex.sh, analyze.sh, run_pipeline_v6.sh）、legacy/。
+診断は module/diagnostics/ 配下。
+
+### 検証
+
+各 Phase で pytest -m "not slow" 52 passed；monitor.py --pipeline と status.py
+wrapper が俯瞰を表示；lowsp_spread_radius（python -m）が 2026-05-29 数値を再現。
+コミット: 7f55b9c (run.py), 502ba4d (診断+legacy .sh), ed9377f (status/monitor),
+3179e5b (submit_kekcc.sh 削除 + .sh 参照 + README)。
