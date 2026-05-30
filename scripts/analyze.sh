@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Wrapper for e07fullscan.analyze that captures verbose log for monitor.py.
+# Wrapper for module.analyze that captures verbose log for monitor.py.
 #
 # Usage:
 #   scripts/analyze.sh <data_dir> [options]
 #
-# Options are passed directly to e07fullscan.analyze.
+# Options are passed directly to module.analyze.
 # stderr (progress lines) is tee'd to analyze.log in the output directory.
 #
 # Example:
@@ -30,7 +30,7 @@ echo "Log:  $LOG_FILE" | tee -a "$LOG_FILE"
 echo "Monitor: python scripts/monitor.py --log $LOG_FILE --output <parquet>"
 echo "---" | tee -a "$LOG_FILE"
 
-python -m e07fullscan.analyze -v "$@" 2>> "$LOG_FILE"
+python -m module.analyze -v "$@" 2>> "$LOG_FILE"
 
 echo "---" | tee -a "$LOG_FILE"
 echo "Finished: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"

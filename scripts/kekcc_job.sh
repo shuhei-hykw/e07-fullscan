@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# LSF array job script for e07fullscan analysis.
+# LSF array job script for module analysis.
 # Called by submit_kekcc.sh — do not run directly.
 #
 # Args: DATA_DIR N_JOBS WORKERS OUT_DIR PROJECT_DIR
@@ -33,7 +33,7 @@ echo "Start   : $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
 echo "Output  : $OUT_FILE"           | tee -a "$LOG_FILE"
 echo "---"                            | tee -a "$LOG_FILE"
 
-python -m e07fullscan.analyze \
+python -m module.analyze \
   "$DATA_DIR" \
   -o "$OUT_FILE" \
   --chunk-id  "$CHUNK_ID" \
