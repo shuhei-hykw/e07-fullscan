@@ -1408,3 +1408,28 @@ active な頂点パスを見やすくした。behavior-preserving。discussion 2
 ### 本整理スレッドの残り
 
 - crop_vertices の stale オプション（z_target/zpj_mode）: マーク/文書化 or 削除。
+
+---
+
+## 2026-05-30 — 整理: crop_vertices の stale オプション削除/マーク
+
+整理スレッドの最終項目。behavior-preserving（crop は引き続き all-slice の
+minimum-intensity projection を使用）。
+
+- scripts/crop_vertices.py の未使用内部関数2つを削除: `_load_zproject` と
+  `_fog_remove_max`（呼び出しなし；main は `_load_min_projection` を使用）。
+  dead な `z_target` ローカルも削除。
+- `--zpj-half` / `--zpj-mode` CLI 引数は未使用（`args` から読まれない）。Codex
+  方針（user-facing、疑わしければマーク）に従い、CLI back-compat のため残し、
+  help を「(unused; crops use all-slice min projection)」とマーク + NOTE
+  コメント追加（フラグ削除はしない）。
+- compile OK；残存参照なし；sys.path/SpngReader の bootstrap は残った関数に
+  存在。
+
+### 整理スレッド完了（Codex 承認待ち）
+
+- dead code 削除（add_dip_angles）；crop stale 関数削除
+- パッケージ改名 e07fullscan -> module
+- legacy ΛΛ-pair パス隔離（clustering/_pairs.py, scripts/legacy/）
+- active 頂点パスと active scripts が見やすくなった
+- pytest -m "not slow" green；決定的診断が再現

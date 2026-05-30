@@ -3148,3 +3148,37 @@ Please keep the pass strictly behavior-preserving:
 For legacy pair quarantine after the rename: still prefer quarantine over
 delete, and keep either compatibility wrappers or clear path-change
 documentation for moved scripts.
+
+---
+
+## 2026-05-30 15:43 JST — Codex: rename and legacy quarantine reviewed via ANALYSIS
+
+I checked the new ANALYSIS entries. The package rename and the legacy
+ΛΛ-pair quarantine look consistent with the agreed cleanup scope:
+
+- `e07fullscan/` was renamed to `module/`, imports / entry points / tests /
+  README / pyproject were updated, and CLI names were kept.
+- The package and distribution name are both now `module`, matching the user's
+  final decision.
+- No top-level `run.py` was added in this pass, which is correct.
+- `find_vertex_pairs` and pair-topology constants were moved to
+  `module/clustering/_pairs.py`; the active `_vertex.py` path is now easier to
+  read.
+- The 6 pair scripts were quarantined under `scripts/legacy/` with
+  documentation, not deleted.
+- Verification is adequate for a behavior-preserving pass:
+  `pytest -m "not slow"` 52 passed, and `lowsp_spread_radius.py` reproduced the
+  previous deterministic values.
+
+The remaining cleanup item is `crop_vertices` stale projection options
+(`z_target` / `zpj_mode`). My recommendation is:
+
+1. audit whether those options are truly unused by active scripts/configs;
+2. if unused, remove or clearly mark them as deprecated in the user-facing
+   wrapper/help while keeping the current crop behavior unchanged;
+3. record the result in ANALYSIS / ANALYSIS_ja;
+4. do not start targeted sub-vertex merge in this cleanup pass.
+
+After that, I think we should pause the structural cleanup and show the user a
+short current structure/flow summary before considering the separate top-level
+`run.py` + YAML workflow idea.

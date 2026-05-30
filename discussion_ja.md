@@ -2879,3 +2879,34 @@ dist名だけ `e07fullscan` に残すより混乱が少ない。
 
 rename後のlegacy pair quarantineについては、引き続き削除ではなく隔離を推奨。
 scriptを動かす場合は、compatibility wrapperを残すか、path変更を明確に文書化する。
+
+---
+
+## 2026-05-30 15:43 JST — Codex: rename と legacy 隔離を ANALYSIS 経由で確認
+
+新しい ANALYSIS entries を確認した。package rename と legacy ΛΛ-pair 隔離は、
+合意した cleanup scope と整合している。
+
+- `e07fullscan/` は `module/` にrenameされ、imports / entry points / tests /
+  README / pyproject が更新された。CLI名は維持。
+- package名とdistribution名はいずれも `module` で、ユーザーの最終決定に一致。
+- このpassでtop-level `run.py` は追加されておらず、これは正しい。
+- `find_vertex_pairs` と pair-topology 定数は `module/clustering/_pairs.py` へ
+  移され、activeな `_vertex.py` path は見やすくなった。
+- 6本のpair scriptsは `scripts/legacy/` に隔離され、documentされた。削除は
+  されていない。
+- behavior-preserving passとしての検証は十分:
+  `pytest -m "not slow"` 52 passed、および `lowsp_spread_radius.py` が過去の
+  決定的数値を再現。
+
+残っている cleanup item は `crop_vertices` の stale projection options
+（`z_target` / `zpj_mode`）。Codexの推奨は以下:
+
+1. active scripts/configs から本当に未使用かをauditする。
+2. 未使用なら、現在のcrop挙動は変えず、user-facing wrapper/helpから削除するか
+   deprecatedとして明示する。
+3. 結果を ANALYSIS / ANALYSIS_ja に記録する。
+4. このcleanup passでは targeted sub-vertex merge に入らない。
+
+その後はいったん構造整理を止め、現在の構造/flowを短くユーザーに見せるのがよい。
+top-level `run.py` + YAML workflow 案は、その確認後の別タスクとして扱うべき。

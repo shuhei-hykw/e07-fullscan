@@ -26,36 +26,6 @@ import numpy as np
 import pandas as pd
 
 
-def _load_zproject(
-    json_path: Path, z_target: float, zpj_half: int, zpj_mode: str = "mean"
-) -> tuple[np.ndarray, int]:
-    """Load a z-projection centred on z_target.
-
-    zpj_half: half-range in slices; -1 = use all slices.
-    zpj_mode: 'mean' (average) or 'max' (maximum intensity projection).
-    Returns (projected_image, centre_slice_index).
-    """
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from module.io.image_reader import SpngReader
-    reader = SpngReader(json_path)
-    zpos = reader.z_positions()
-    centre = int(np.argmin(np.abs(zpos - z_target)))
-    if zpj_half < 0:
-        lo, hi = 0, len(reader) - 1
-    else:
-        lo = max(0, centre - zpj_half)
-        hi = min(len(reader) - 1, centre + zpj_half)
-    stack = np.stack(
-        [reader.read(i).astype(np.float32) for i in range(lo, hi + 1)],
-        axis=0,
-    )
-    if zpj_mode == "max":
-        proj = stack.max(axis=0).astype(np.uint8)
-    else:
-        proj = stack.mean(axis=0).astype(np.uint8)
-    return proj, centre
-
-
 def _fog_remove(img: np.ndarray, fog_ksize: int = 51) -> np.ndarray:
     """Return fog-removed float image (not binarised)."""
     k = fog_ksize if fog_ksize % 2 == 1 else fog_ksize + 1
@@ -128,27 +98,6 @@ def _draw_crosshair(img_bgr: np.ndarray, half: int) -> np.ndarray:
     cv2.line(out, (cx, 0),          (cx, cy - gap),   color, thick)
     cv2.line(out, (cx, cy + gap),   (cx, sz - 1),     color, thick)
     return out
-
-
-def _fog_remove_max(
-    json_path: Path, z_target: float, fog_ksize: int = 51
-) -> np.ndarray:
-    """Max projection of fog-removed images across all slices.
-
-    After fog removal tracks are bright; MIP across all slices shows every
-    track regardless of depth.
-    """
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from module.io.image_reader import SpngReader
-    reader = SpngReader(json_path)
-    acc = None
-    for i in range(len(reader)):
-        fog = _fog_remove(reader.read(i), fog_ksize=fog_ksize).astype(np.float32)
-        if acc is None:
-            acc = fog
-        else:
-            acc = np.maximum(acc, fog)
-    return acc.astype(np.uint8)
 
 
 def _load_min_projection(json_path: Path) -> np.ndarray:
@@ -227,12 +176,16 @@ def main() -> None:
                          "sp_nsl (angle_spread_best×n_slices), "
                          "or angle_spread_best")
     ap.add_argument("--fog-ksize",  type=int,   default=51)
+    # NOTE: --zpj-half / --zpj-mode are currently unused; crops use an
+    # all-slice minimum-intensity projection (see _load_min_projection).
+    # Kept for CLI back-compat; do not assume they affect the projection.
     ap.add_argument("--zpj-half",   type=int,   default=4,
-                    help="Z-projection half-range (slices); "
-                         "-1 = all slices")
+                    help="(unused) Z-projection half-range; crops use "
+                         "all-slice min projection")
     ap.add_argument("--zpj-mode",   default="mean",
                     choices=["mean", "max"],
-                    help="Projection mode: mean or max (MIP)")
+                    help="(unused) projection mode; crops use all-slice min "
+                         "projection")
     args = ap.parse_args()
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -290,7 +243,6 @@ def main() -> None:
         cy = int(round(float(row['vy_px'])))
         n_tr = int(row['n_tracks_max'])
         n_sl = int(row['n_slices'])
-        z_target = float(row['z_mean'])
 
         try:
             # min projection: dark tracks accumulate across all slices

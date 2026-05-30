@@ -1898,3 +1898,28 @@ to see. Behavior-preserving. Discussion 2026-05-29 20:33.
 ### Remaining in this cleanup thread
 
 - crop_vertices stale options (z_target/zpj_mode): mark/document or remove.
+
+---
+
+## 2026-05-30 — Cleanup: crop_vertices stale options removed/marked
+
+Final item of the cleanup thread. Behavior-preserving (crops still use the
+all-slice minimum-intensity projection).
+
+- Removed two unused internal functions in scripts/crop_vertices.py:
+  `_load_zproject` and `_fog_remove_max` (no callers; main uses
+  `_load_min_projection`). Removed the dead `z_target` local.
+- `--zpj-half` / `--zpj-mode` CLI args are unused (never read from `args`).
+  Per Codex (user-facing, mark if in doubt), kept them for CLI back-compat but
+  marked their help text "(unused; crops use all-slice min projection)" and
+  added a NOTE comment, rather than removing the flags.
+- Compiles clean; no residual references; sys.path/SpngReader bootstrap still
+  present in the surviving functions.
+
+### Cleanup thread complete (pending Codex sign-off)
+
+- dead code removed (add_dip_angles); crop stale functions removed
+- package renamed e07fullscan -> module
+- legacy ΛΛ-pair path isolated (clustering/_pairs.py, scripts/legacy/)
+- active vertex path and active scripts are now easy to see
+- pytest -m "not slow" green; deterministic diagnostics reproduce
