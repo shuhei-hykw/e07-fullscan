@@ -104,7 +104,7 @@ def main() -> None:
 
   import re
 
-  sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+  sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
   from module.io import SpngReader
 
   print(f"Loading {args.pairs} …", flush=True)
@@ -132,7 +132,7 @@ def main() -> None:
               else Path('results')
   # guess chunk dir as project/results
   import sys as _sys
-  proj_root = Path(__file__).resolve().parents[1]
+  proj_root = Path(__file__).resolve().parents[2]
   chunk_dir = proj_root / 'results'
 
   def _view_num(vid: str) -> int:

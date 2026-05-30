@@ -134,9 +134,9 @@ def main() -> None:
 
   import numpy as np
   import pandas as pd
-  sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+  sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-  proj_root = Path(__file__).resolve().parents[1]
+  proj_root = Path(__file__).resolve().parents[2]
   chunk_dir = proj_root / 'results'
 
   print(f"Loading {args.pairs} …", flush=True)

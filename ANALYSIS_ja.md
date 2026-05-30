@@ -1377,3 +1377,34 @@ targeted sub-vertex merge（Hough-branch recall fix）。
 - legacy ΛΛ-pair コード（find_vertex_pairs + pair scripts 6本）を
   module/clustering/_pairs.py と scripts/legacy/ へ隔離、改名済みツリーで実施。
 - crop_vertices の stale オプション（z_target/zpj_mode）: マーク/文書化 or 削除。
+
+---
+
+## 2026-05-30 — 整理: legacy ΛΛ-pair コードの隔離
+
+legacy ΛΛ-pair パス（2026-05-14 に個別頂点検出へ転換して旧化）を隔離し、
+active な頂点パスを見やすくした。behavior-preserving。discussion 2026-05-29
+20:33。
+
+### 変更
+
+- `find_vertex_pairs`（+ ΛΛ topology 定数）を `clustering/_vertex.py` から
+  `clustering/_pairs.py` へ移動。`clustering/__init__.py` は back-compat の
+  ため re-export（legacy マークのコメント付き）。_vertex.py は active パス
+  （find_vertices, merge_vertex_slices）のみに。
+- 6本の ΛΛ-pair scripts（find_pairs, find_crossview_pairs,
+  filter_pairs_by_track, filter_xview_pairs, annotate_pairs, crop_pairs）を
+  `scripts/legacy/` へ移動、ROOT を修正（`parents[1]` -> `parents[2]`）、
+  provenance と実行注記を記した `scripts/legacy/README.md` を追加。`scripts/`
+  には active な個別頂点 / 診断 / インフラ scripts のみ残る。
+
+### 検証
+
+- find_vertex_pairs の re-export 同一性 OK；`pytest -m "not slow"` 52 passed；
+  legacy scripts は compile し ROOT が repo root に解決。
+- Codex 方針により削除しない: pair topology は歴史的結果を生み参照されうる；
+  削除はユーザー明示承認後のみ。
+
+### 本整理スレッドの残り
+
+- crop_vertices の stale オプション（z_target/zpj_mode）: マーク/文書化 or 削除。

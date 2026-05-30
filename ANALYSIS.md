@@ -1866,3 +1866,35 @@ unchanged. Discussion 2026-05-29 20:32 / 2026-05-30 15:31.
 - Quarantine legacy ΛΛ-pair code (find_vertex_pairs + 6 pair scripts) into
   module/clustering/_pairs.py and scripts/legacy/, done in the renamed tree.
 - crop_vertices stale options (z_target/zpj_mode): mark/document or remove.
+
+---
+
+## 2026-05-30 — Cleanup: quarantine legacy ΛΛ-pair code
+
+Continued the cleanup by isolating the legacy ΛΛ-pair path (superseded
+2026-05-14 by individual vertex detection) so the active vertex path is easy
+to see. Behavior-preserving. Discussion 2026-05-29 20:33.
+
+### Changes
+
+- Moved `find_vertex_pairs` (+ its ΛΛ topology constants) out of
+  `clustering/_vertex.py` into `clustering/_pairs.py`. `clustering/__init__.py`
+  re-exports it for back-compat with a comment marking it legacy. _vertex.py
+  now contains only the active path (find_vertices, merge_vertex_slices).
+- Moved the 6 ΛΛ-pair scripts (find_pairs, find_crossview_pairs,
+  filter_pairs_by_track, filter_xview_pairs, annotate_pairs, crop_pairs) to
+  `scripts/legacy/`, fixed their ROOT (`parents[1]` -> `parents[2]`), and
+  added `scripts/legacy/README.md` documenting their provenance and run note.
+  `scripts/` now lists only active individual-vertex / diagnostic / infra
+  scripts.
+
+### Verification
+
+- find_vertex_pairs re-export identity holds; `pytest -m "not slow"` 52
+  passed; legacy scripts compile and resolve ROOT to the repo root.
+- Not deleted, per Codex: pair topology produced historical results and may be
+  cited; deletion only after explicit user approval.
+
+### Remaining in this cleanup thread
+
+- crop_vertices stale options (z_target/zpj_mode): mark/document or remove.

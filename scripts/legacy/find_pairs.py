@@ -43,7 +43,7 @@ def main() -> None:
   args = ap.parse_args()
 
   import pandas as pd
-  sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+  sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
   from module.clustering import find_vertex_pairs
   from module.utils import (
     make_run_id, build_run_meta,

@@ -112,7 +112,7 @@ def main() -> None:
 
   import pandas as pd
   import numpy as np
-  sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+  sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
   print(f"Loading {args.pairs} …", flush=True)
   pairs = pd.read_parquet(args.pairs)
