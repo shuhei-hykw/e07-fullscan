@@ -4,8 +4,10 @@
 - Always respond in Japanese
 
 ## Package structure
-- Main package: e07fullscan
-- Subpackages: io, tracking, analyze, merge, clustering, server, utils
+- Main package: module (renamed from e07fullscan on 2026-05-30)
+- Subpackages: io, tracking, analyze, merge, clustering, server, utils,
+  diagnostics
+- Shared module: preprocess (branch-neutral fog/Otsu/noise preprocessing)
 
 ## Style
 - Indentation: 2 spaces (never tabs)
@@ -27,7 +29,21 @@
   Each entry is dated and appended at the bottom; never reorganise or remove
   existing entries. New entries go under `## YYYY-MM-DD — <title>`.
 
+## Simplification Principle
+- Prefer Occam's razor: reduce visible concepts, entry points, and files
+  rather than adding categories or wrappers.
+- The normal user-facing operation surface should be small and obvious.
+  Prefer a thin repo-root `run.py` for everyday pipeline actions and one
+  clear monitor concept.
+- Do not add new subdirectories under `scripts/`. If scripts are confusing,
+  move reusable logic into `module/` and reduce the number of visible scripts.
+- Diagnostics and legacy code should not appear as everyday commands.
+
 ## Agent Coordination
+- At the start of every session, especially stateless `codex exec`, cron, or
+  tmux watcher runs, reconstruct working memory by reading:
+  `AGENTS.md`, `CLAUDE.md`, `discussion.md`, `discussion_ja.md`,
+  `ANALYSIS.md`, and `ANALYSIS_ja.md`.
 - Always check both `discussion.md` and `discussion_ja.md` before starting
   repository work, before editing shared files, and before final reporting.
 - Treat new entries in those files as active coordination state from the
@@ -43,6 +59,9 @@
   not edit them.
 - Codex Markdown edits should stay limited to discussion coordination and
   user-requested documentation updates.
+- For long-running monitoring, persistent state must live in repository
+  Markdown files, not in transient model memory. If a watcher is restarted,
+  it must infer state from the files listed above.
 - Keep both discussion files append-only. Never reorganise or remove existing
   entries.
 - Before editing files that another agent lists as active, record the intent
