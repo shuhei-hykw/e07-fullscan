@@ -33,7 +33,7 @@ digraph analysis_flow {
     fv     [label="find_vertices\n(per-slice line intersections)\nmodule.clustering"];
     mv     [label="merge_vertex_slices\n(cross-slice XY merge)\nmodule.clustering"];
     vm     [label="vertices_merged_v6.parquet", fillcolor="#f1f3f4", color="#5f6368"];
-    qc     [label="quality cut\n(n≥8, sp≥28°, nsl≥4)"];
+    qc     [label="review selection / ranking filter\n(current study: n≥8, sp≥28°, nsl≥4)"];
     vq     [label="vertices_quality_v6.parquet", fillcolor="#f1f3f4", color="#5f6368"];
     rank   [label="ranking\nsp  (hypernuclear-recall)\nsp×nsl  (broad reaction)"];
     crop   [label="crop_vertices → review_crops\n(visual labelling)"];
