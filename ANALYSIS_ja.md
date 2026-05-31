@@ -1535,3 +1535,60 @@ scripts/ 現状: README.md、active pipeline CLI（run.py が委譲）、monitor
 wrapper が俯瞰を表示；lowsp_spread_radius（python -m）が 2026-05-29 数値を再現。
 コミット: 7f55b9c (run.py), 502ba4d (診断+legacy .sh), ed9377f (status/monitor),
 3179e5b (submit_kekcc.sh 削除 + .sh 参照 + README)。
+
+---
+
+## 2026-05-31 — Phase 3: CLI 本体を module/ へ、review パッケージ、Codex sign-off
+
+2026-05-30 の scripts-surface cleanup の続き。薄いラッパー方針を徹底し、
+`scripts/*.py` が実ロジックを持たない（各約7行で `module/` へ委譲）形にした。
+全工程で挙動は不変。
+
+### なぜ
+
+run.py が dispatcher になった後も重い本体は `scripts/` に残り、パッケージが
+実体の真の所在になっていなかった（操作 surface とロジックが2つの木に分裂）。
+本体を `module/` へ移すことで `module/` が自己完結し、`scripts/` は純粋な
+入口層（ラッパー＋文書化された shell/recipe 入口＋legacy 隔離）になる。
+
+### 変更（family 別、コミット順）
+
+- Family 1 (70733ff): clustering CLI 本体 ->
+  `module/clustering/_cli_find_vertices.py`, `_cli_merge_vertices.py`。
+- Family 2a (5d47af3): merge_chunks 本体 ->
+  `module/merge/_cli_merge_chunks.py`。
+- Family 2b (6fe5033): KEKCC submit 本体 ->
+  `module/analyze/_cli_submit_kekcc.py`, `_cli_submit_vertex_kekcc.py`。
+- Family 3 (e22feb5): 新 `module/review` パッケージ；review CLI 本体 ->
+  `_cli_crop_vertices.py`, `_cli_vertex_map.py`, `_cli_review_crops.py`,
+  `_cli_click_vertex.py`。
+- Family 4 (d3e8fac): live-job monitor 本体 -> `module/utils/job_monitor.py`；
+  scripts/monitor.py はラッパーに縮小。（pipeline overview 本体は 2026-05-30 の
+  status/monitor 統合で既に `module/pipeline_status.py` に存在。）
+- Codex レビュー対応 (edd2dce): CLAUDE.md と AGENTS.md の subpackage 行に
+  `module/review` を追加し、`module/pipeline_status.py`（pipeline overview）と
+  `module/utils/job_monitor.py`（live-job monitor 本体）を monitor/status
+  ヘルパーとして明記。`scripts/status.py --help` を修正し、-h/--help で
+  pipeline overview を surprise-run せず deprecation note + docstring を表示し
+  exit 0 とした。
+
+### end state
+
+`scripts/` = README.md、薄い Python ラッパー（find_vertices, merge_vertices,
+merge_chunks, submit_kekcc, submit_vertex_kekcc, crop_vertices, vertex_map,
+review_crops, click_vertex, monitor, status[deprecated]）、文書化された
+shell/recipe 入口（analyze.sh, kekcc_job.sh, kekcc_vertex.sh,
+run_pipeline_v6.sh）、legacy/。日常操作は run.py、monitor concept は1つ、
+重いロジックは `module/` 内。
+
+### 検証と Codex sign-off
+
+pytest -m "not slow" -> 52 passed, 35 deselected（約49s）、clean tree。
+Codex は 2026-05-31（edd2dce の後）に最終 structural sign-off を行い、
+AGENTS.md/CLAUDE.md が module/ 構造と monitor ヘルパー分離に合致すること、
+`scripts/status.py --help` が overview を実行しなくなったこと、run.py/monitor.py
+が意図した surface を表示することを確認した。Codex はこの最終確認で full pytest
+suite を再実行せず、Claude 報告の `pytest -m "not slow"`（52 passed,
+35 deselected）を再実行なしで受け入れた。残り structural blocker なし。README に
+run.py を指す簡潔な「Operation Surface」注記を追加し、既存の scripts/*.py 例は
+互換パスとして残した（本格的な README 書き直しは Codex 合意で延期）。

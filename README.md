@@ -45,6 +45,24 @@ module/
 └── utils/
 ```
 
+## Operation Surface
+
+The recommended everyday entry point is the repo-root dispatcher `run.py`:
+
+```bash
+python run.py --help          # list subcommands
+python run.py track ...       # track finding
+python run.py vertices ...    # vertex finding
+python run.py submit-tracking # KEKCC batch submit
+```
+
+It delegates to thin wrappers under `scripts/*.py`, which in turn call the
+implementation bodies inside the `module/` package. The `scripts/*.py`
+commands shown throughout this README still work and are kept as
+compatibility/thin-wrapper paths; see `scripts/README.md` for the full
+mapping (wrappers, the documented shell/recipe entry points such as
+`kekcc_job.sh`, and the `scripts/legacy/` quarantine).
+
 ## Agent Coordination
 
 When multiple coding agents are active, use `discussion.md` as an append-only

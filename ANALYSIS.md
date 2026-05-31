@@ -2033,3 +2033,62 @@ status.py wrapper produce the overview; lowsp_spread_radius (now python -m)
 reproduces the 2026-05-29 numbers. Commits: 7f55b9c (run.py), 502ba4d
 (diagnostics+legacy .sh), ed9377f (status/monitor), 3179e5b (submit_kekcc.sh
 delete + .sh refs + README).
+
+---
+
+## 2026-05-31 — Phase 3: CLI bodies into module/, review package, Codex sign-off
+
+Follow-on to the 2026-05-30 scripts-surface cleanup. The thin-wrapper idea was
+extended so that `scripts/*.py` carry no real logic: each is a ~7-line wrapper
+that delegates into the `module/` package. Behaviour-preserving throughout.
+
+### Why
+
+After run.py became the dispatcher, the heavy bodies still lived in
+`scripts/`, so the package was not actually the source of truth — the operation
+surface and the logic were split across two trees. Moving the bodies into
+`module/` makes `module/` self-contained and leaves `scripts/` as a pure entry
+layer (wrappers + documented shell/recipe entries + legacy quarantine).
+
+### Changes (by family, commit order)
+
+- Family 1 (70733ff): clustering CLI bodies ->
+  `module/clustering/_cli_find_vertices.py`, `_cli_merge_vertices.py`.
+- Family 2a (5d47af3): merge_chunks body -> `module/merge/_cli_merge_chunks.py`.
+- Family 2b (6fe5033): KEKCC submit bodies ->
+  `module/analyze/_cli_submit_kekcc.py`, `_cli_submit_vertex_kekcc.py`.
+- Family 3 (e22feb5): new `module/review` package; review CLI bodies ->
+  `_cli_crop_vertices.py`, `_cli_vertex_map.py`, `_cli_review_crops.py`,
+  `_cli_click_vertex.py`.
+- Family 4 (d3e8fac): live-job monitor body -> `module/utils/job_monitor.py`;
+  scripts/monitor.py reduced to a wrapper. (Pipeline-overview body already
+  lived in `module/pipeline_status.py` from the 2026-05-30 status/monitor
+  merge.)
+- Codex review fixes (edd2dce): CLAUDE.md and AGENTS.md subpackage lists now
+  include `module/review`, and document `module/pipeline_status.py` (pipeline
+  overview) plus `module/utils/job_monitor.py` (live-job monitor body) as the
+  monitor/status helpers. Fixed `scripts/status.py --help` so `-h/--help`
+  prints the deprecation note + docstring and exits 0 instead of
+  surprise-running the pipeline overview.
+
+### End state
+
+`scripts/` = README.md, the thin Python wrappers (find_vertices,
+merge_vertices, merge_chunks, submit_kekcc, submit_vertex_kekcc, crop_vertices,
+vertex_map, review_crops, click_vertex, monitor, status[deprecated]), the
+documented shell/recipe entry points (analyze.sh, kekcc_job.sh,
+kekcc_vertex.sh, run_pipeline_v6.sh), and legacy/. Everyday operation goes
+through run.py; one monitor concept; heavy logic inside `module/`.
+
+### Verification and Codex sign-off
+
+pytest -m "not slow" -> 52 passed, 35 deselected (~49s) on a clean tree.
+Codex gave the final structural sign-off on 2026-05-31 (after edd2dce),
+confirming AGENTS.md/CLAUDE.md match the module/ structure and monitor-helper
+split, that `scripts/status.py --help` no longer runs the overview, and that
+run.py/monitor.py expose the intended surfaces. Codex did not rerun the full
+pytest suite in that final check and accepted Claude's reported
+`pytest -m "not slow"` result (52 passed, 35 deselected) without rerunning.
+No remaining structural blocker. README gained a brief "Operation Surface"
+note pointing to run.py while keeping existing scripts/*.py examples as
+compatibility paths (fuller README rewrite deferred per Codex).
