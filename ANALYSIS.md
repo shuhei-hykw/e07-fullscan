@@ -2092,3 +2092,50 @@ pytest suite in that final check and accepted Claude's reported
 No remaining structural blocker. README gained a brief "Operation Surface"
 note pointing to run.py while keeping existing scripts/*.py examples as
 compatibility paths (fuller README rewrite deferred per Codex).
+
+---
+
+## 2026-05-31 — Post-close joint review: monitor next-step, legacy docs, 2-space
+
+After the push, a fresh Codex review of the cleanup surfaced four follow-ups;
+the user asked Claude and Codex to iterate until both were satisfied. All four
+were addressed and jointly signed off (discussion 2026-05-31 15:34–18:09).
+
+### Findings and fixes
+
+1. (behaviour) `module/pipeline_status._next_step()` still pointed at the
+   quarantined ΛΛ-pair scripts (find_pairs / find_crossview_pairs /
+   filter_xview_pairs). The ΛΛ-pair path was superseded 2026-05-14 by
+   individual vertex detection, so after `vertices_merged_v6.parquet` the
+   monitor now returns "vertices ready: review with run.py crops / review /
+   click". Removed the now-unused pairs/xview/xconn locals. Confirmed live via
+   `scripts/monitor.py --pipeline`.
+2. (docs) README "Vertex Pair Search" / "Cross-View ΛΛ Pair Search" are now
+   labelled "(legacy)" with a provenance blockquote and all command paths
+   point to `scripts/legacy/`. Physics content (KISO result, v5/v7 note,
+   output columns) preserved. `scripts/run_pipeline_v6.sh` Steps 6-7 similarly
+   relabelled legacy with corrected `scripts/legacy/` paths.
+3. (docs) README crop option table marks `--zpj-half` / `--zpj-mode` as
+   "(ignored, back-compat)", matching the code NOTE in
+   `module/review/_cli_crop_vertices.py`.
+4. (style) 13 files were 4-space, violating the 2-space rule. The 8 thin
+   wrappers and the 5 remaining bodies (analyze/cli.py, clustering/_link.py,
+   diagnostics/{bg_cost_spread,step5_compat,lowsp_spread_radius}.py) are now
+   2-space. The 5 bodies were converted with a tokenize-based halve that
+   protects multiline-string interiors, followed by visual-indent realignment
+   of bracket continuations; each file was guarded by `ast.dump` equality
+   against HEAD, so the change is provably behaviour-preserving.
+
+Also refreshed README's stale "Package Structure" tree (adds preprocess.py,
+pipeline_status.py, review/, diagnostics/, the _cli_* convention, utils
+helpers; kept compact).
+
+### Verification and sign-off
+
+Whole-tree min-indent == 2 with 0 odd-indent lines (excl. scripts/legacy/);
+`py_compile` of all module+scripts OK; diagnostics import smoke OK;
+`pytest -m "not slow"` 52 passed, 35 deselected. Codex ran its own final pass
+(git diff --check, py_compile, AST-equality on the 5 files, legacy grep, the
+four help/pipeline surfaces) and, after one README wording fix (the wrapper
+sentence generalised beyond `_cli_*`), stated it is satisfied with the
+structure/cleanup. Both parties signed off.

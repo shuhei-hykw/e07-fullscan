@@ -32,8 +32,15 @@
 #     --min-slices 2 \
 #     --min-tracks 5
 #
-# Step 6: Find intra-view vertex pairs
-#   python scripts/find_pairs.py \
+# The everyday pipeline ends at Step 5. Inspect the merged vertices with the
+# review tools (run.py crops / review / click).
+#
+# Steps 6-7 below are LEGACY (ΛΛ-pair search, superseded 2026-05-14 by
+# individual vertex detection). The scripts now live under scripts/legacy/
+# and are kept for provenance/comparison only.
+#
+# Step 6 (legacy): Find intra-view vertex pairs
+#   python scripts/legacy/find_pairs.py \
 #     --input   results/vertices_merged_v6.parquet \
 #     --output  results/vertex_pairs_v8.parquet \
 #     --d-min-um   90 \
@@ -41,8 +48,8 @@
 #     --min-n-primary 5 \
 #     --max-dz-mm  0.010
 #
-# Step 7: Find cross-view vertex pairs
-#   python scripts/find_crossview_pairs.py \
+# Step 7 (legacy): Find cross-view vertex pairs
+#   python scripts/legacy/find_crossview_pairs.py \
 #     --vertices results/vertices_merged_v6.parquet \
 #     --output   results/vertex_pairs_xview_v2.parquet \
 #     --d-min-um   90 \

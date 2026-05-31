@@ -30,7 +30,7 @@ from module.io import load_spng                          # noqa: E402
 from module.clustering import find_vertices             # noqa: E402
 from module.clustering._vertex import _angle_spread_deg  # noqa: E402
 from module.diagnostics import (                        # noqa: E402
-    tracks_to_df, find_tracks_cfg,
+  tracks_to_df, find_tracks_cfg,
 )
 
 RADII = [25, 50, 75, 100, 150, 200]
@@ -39,41 +39,41 @@ GT_PATH = ROOT / "tests" / "specials_gt.json"
 
 
 def main():
-    gt = json.loads(GT_PATH.read_text())["events"]
-    print("Spread vs endpoint-association radius "
-          "(batch functions; server NOT used)\n")
-    for name in EVENTS:
-        g = gt[name]
-        gx, gy, zc = g["vx"], g["vy"], g["z_slice"]
-        reader = load_spng(str(ROOT / "specials_x20" / name / "image.json"))
-        tracks = find_tracks_cfg(reader, zc, name)
-        df = tracks_to_df(tracks, zc)
-        vdf = find_vertices(df)
-        if len(vdf):
-            d = np.hypot(vdf["vx_px"] - gx, vdf["vy_px"] - gy)
-            row = vdf.iloc[int(np.argmin(d))]
-            ax, ay = float(row["vx_px"]), float(row["vy_px"])
-            base_sp, base_n = float(row["angle_spread"]), int(row["n_tracks"])
-        else:
-            ax, ay, base_sp, base_n = gx, gy, float("nan"), 0
+  gt = json.loads(GT_PATH.read_text())["events"]
+  print("Spread vs endpoint-association radius "
+        "(batch functions; server NOT used)\n")
+  for name in EVENTS:
+    g = gt[name]
+    gx, gy, zc = g["vx"], g["vy"], g["z_slice"]
+    reader = load_spng(str(ROOT / "specials_x20" / name / "image.json"))
+    tracks = find_tracks_cfg(reader, zc, name)
+    df = tracks_to_df(tracks, zc)
+    vdf = find_vertices(df)
+    if len(vdf):
+      d = np.hypot(vdf["vx_px"] - gx, vdf["vy_px"] - gy)
+      row = vdf.iloc[int(np.argmin(d))]
+      ax, ay = float(row["vx_px"]), float(row["vy_px"])
+      base_sp, base_n = float(row["angle_spread"]), int(row["n_tracks"])
+    else:
+      ax, ay, base_sp, base_n = gx, gy, float("nan"), 0
 
-        # per-track nearest-endpoint distance to the anchor
-        ep = np.minimum(
-            np.hypot(df["px1"] - ax, df["py1"] - ay),
-            np.hypot(df["px2"] - ax, df["py2"] - ay),
-        ).values
-        ang = df["angle_deg"].values
+    # per-track nearest-endpoint distance to the anchor
+    ep = np.minimum(
+      np.hypot(df["px1"] - ax, df["py1"] - ay),
+      np.hypot(df["px2"] - ax, df["py2"] - ay),
+    ).values
+    ang = df["angle_deg"].values
 
-        print(f"=== {name}  GT=({gx},{gy}) z{zc}  anchor=({ax:.0f},{ay:.0f}) "
-              f"detected-vertex sp={base_sp:.1f} n={base_n} ===")
-        for R in RADII:
-            sel = ep <= R
-            n = int(sel.sum())
-            sp = _angle_spread_deg(ang[sel]) if n >= 2 else float("nan")
-            sp_s = f"{sp:5.1f}" if not np.isnan(sp) else "  n/a"
-            print(f"  R={R:>3}px : n_tracks={n:>3}  angle_spread={sp_s} deg")
-        print()
+    print(f"=== {name}  GT=({gx},{gy}) z{zc}  anchor=({ax:.0f},{ay:.0f}) "
+          f"detected-vertex sp={base_sp:.1f} n={base_n} ===")
+    for R in RADII:
+      sel = ep <= R
+      n = int(sel.sum())
+      sp = _angle_spread_deg(ang[sel]) if n >= 2 else float("nan")
+      sp_s = f"{sp:5.1f}" if not np.isnan(sp) else "  n/a"
+      print(f"  R={R:>3}px : n_tracks={n:>3}  angle_spread={sp_s} deg")
+    print()
 
 
 if __name__ == "__main__":
-    main()
+  main()

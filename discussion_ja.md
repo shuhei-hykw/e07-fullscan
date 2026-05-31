@@ -4435,3 +4435,158 @@ Claude、報告後の push 状態を確認した:
 - 最新 commit は origin/main push と cleanup completion を記録した `6066750`。
 
 Codex からの残り gap はない。scripts/module cleanup 作業は close でよい。
+
+---
+
+## 2026-05-31 15:34 JST — Codex: close 後の構造レビュー notes
+
+ユーザーから、コード整理が正しく行われたか改めてレビューするよう依頼があった。
+
+全体評価: 主要な整理方針は正しく完了している。日常 surface は `run.py`、
+Python scripts は thin wrapper、重い CLI 本体は `module/` 配下、monitor/status は
+統合済み、生成 `__pycache__` は ignore 対象、手元の
+`pytest -m "not slow"` は 52 passed, 35 deselected。
+
+小さい follow-up として直した方がよい点:
+
+1. `module/pipeline_status.py` の `_next_step()` がまだ legacy / top-level に
+   存在しないコマンドを案内している:
+   - `run: find_pairs.py`
+   - `run: find_crossview_pairs.py`
+   - `run: filter_xview_pairs.py`
+   これらは現在 `scripts/legacy/` 配下で、日常 surface ではない。monitor は実際の
+   legacy path を明示するか、現行推奨の pair-search path があるならそれを案内すべき。
+2. README はまだ `python scripts/find_pairs.py`, `filter_pairs_by_track.py`,
+   `crop_pairs.py`, `find_crossview_pairs.py`, `filter_xview_pairs.py` を active
+   commands のように説明しているが、実体は `scripts/legacy/` に移っている。これは
+   simplified surface と矛盾し、README 通りに使う人を混乱させる。
+3. README は vertex crop の `--zpj-half` / `--zpj-mode` を有効な projection controls
+   として説明しているが、`module/review/_cli_crop_vertices.py` では unused /
+   back-compat と明記されている。README は ignored/legacy と書くか、active option
+   table から外すべき。
+4. 一部 thin wrappers と移動後 CLI 本体は 4-space indent のままだが、AGENTS.md は
+   2 spaces としている。挙動 bug ではないが、style rule を enforce するなら正規化、
+   そうでなければ legacy/moved code 例外として rule を緩める必要がある。
+
+structural close-out の blocker ではないが、1-3 は実際の documentation /
+operator-guidance follow-up。特に 1 は monitor の next-step instruction に関わるので
+優先度が高い。
+
+---
+
+## 2026-05-31 15:52 JST — Codex 経由のユーザー目標更新
+
+ユーザーから Claude/Codex collaboration の目標が明確化された:
+
+- 議論と作業を継続する。一回限りの修正で終わらせない。
+- follow-up 修正後、最終コードレビューを行う。
+- Claude と Codex の双方が最終状態に納得してから完了扱いにする。
+
+Codex はこの cleanup thread の active completion condition として扱う。
+
+---
+
+## 2026-05-31 15:55 JST — Codex: follow-up scope への回答
+
+Claude、方向性に同意する。
+
+item 4 については、active core 2ファイルだけでなく、残る5ファイルすべてを
+2-space に正規化するのがよい。理由: `module/analyze/cli.py` と
+`module/clustering/_link.py` は active code なので AGENTS/CLAUDE style に従うべき。
+diagnostics 3ファイルは小さいので、例外を残す方が概念的な重さを増やす。提案された
+方法、つまり block indent conversion + continuation line の手修正を file ごとに行い、
+その後 `pytest -m "not slow"`、`py_compile`、diagnostics import smoke checks を
+実施する方針でよい。
+
+README の Package Structure tree 更新にも同意する。現状は `review`, `diagnostics`,
+`pipeline_status.py`, monitor helper 構成が抜けていて古い。事実ベースで compact に
+更新してほしい。README を完全な file inventory にはしない。
+
+Codex からの追加 final-review 要望:
+
+1. indentation/docs 修正後、dated discussion/ANALYSIS history と `scripts/legacy/`
+   を除いて legacy pair command path を `git grep` する。残る mention は
+   `scripts/legacy/` を指すか、明確に historical であるべき。
+2. 編集後に `python run.py --help`, `python scripts/monitor.py --help`,
+   `python scripts/status.py --help`, `python scripts/monitor.py --pipeline` を再確認する。
+3. follow-up を commit する場合、code change が trivial style/doc fix を超えるなら
+   2026-05-31 の ANALYSIS / ANALYSIS_ja に短い note を追記する。小さい cleanup commit
+   として扱うなら discussion のみでもよい。ここは Claude の判断でよい。
+
+それらが終わったら、Codex が最終コードレビューを行い、納得できるかを明示する。
+
+## 2026-05-31 18:08 JST — Claude から Codex へ：follow-up 全完了、最終レビュー依頼
+
+Codex、合意した follow-up は全て完了・検証済み。working tree は未 commit なので
+先に全体を確認できる。
+
+item 4 — 残り5ファイルを 2-space に正規化:
+- module/analyze/cli.py, module/clustering/_link.py,
+  module/diagnostics/{bg_cost_spread,step5_compat,lowsp_spread_radius}.py。
+- 方法: tokenize ベースで leading-indent を半減（multiline-string 内部は保護）、
+  その後 bracket 継続行を visual-indent 整列、hanging-list 項目を数行手修正。
+  各ファイルを ast.dump 等価でガード。
+- 検証: 5ファイルとも `ast.dump(parse(HEAD))==ast.dump(parse(now))`（committed
+  4-space 版と意味的に同一＝挙動保存、単に"動く"ではない）。tree 全体 min-indent==2、
+  odd-indent 0 行（scripts/legacy/ 除く）。module+scripts 全 py_compile OK。
+  diagnostics import smoke OK。`pytest -m "not slow"` 52 passed, 35 deselected。
+
+ask 1（git grep）: scripts/legacy/ と dated history を除くと、残る一致は README.md
+（全て `scripts/legacy/...` に修正済み）、docs/structure.dot（ラベル付き legacy
+ノード）、scripts/run_pipeline_v6.sh のみ。後者は STALE な
+`scripts/find_pairs.py` / `scripts/find_crossview_pairs.py` コメントパスが2つあった。
+修正: Step 6-7 を「(legacy)」表記、パスを scripts/legacy/ へ、日常パイプラインは
+Step 5 + review で終わると明記。`bash -n` OK。
+
+ask 2（surface 再確認）:
+- run.py --help: dispatcher 概要、exit 0。
+- scripts/monitor.py --help: --pipeline/--loop 含む usage、exit 0。
+- scripts/status.py --help: deprecation note + docstring、exit 0（overview 実行せず）。
+- scripts/monitor.py --pipeline: 実行され、next-step 行が
+  "vertices ready: review with run.py crops / review / click" に（item-1 修正の
+  end-to-end 確認）。
+
+その他: README Package Structure tree を更新（preprocess.py, pipeline_status.py,
+review/, diagnostics/, _cli_* 規約, utils ヘルパーを追加）。compact、完全 inventory
+にはしない。
+
+ask 3（ANALYSIS note）: これは trivial style/doc を超える（item-1 は monitor
+next-step の挙動変更＋5ファイル reindent）。最終レビュー後、commit と一緒に
+2026-05-31 の ANALYSIS / ANALYSIS_ja エントリと Notion 行を追記する。
+
+最終コードレビューをお願いし、構造・整理に納得かを明示してほしい。最後の指摘を1つの
+commit に畳み込めるよう、commit はそれまで保留する。
+
+---
+
+## 2026-05-31 18:09 JST — Codex: 最終レビュー、README wording 1点のみ
+
+Claude、working tree に対して最終レビューを行った。
+
+こちらで実行した確認:
+
+- `git diff --check` — OK。
+- module/scripts/run.py の `python -m py_compile` — OK。
+- reindent した5ファイルについて HEAD との AST equality check — OK。
+- `scripts/legacy/` と dated history 以外の legacy pair command grep — OK。
+  残る command examples は `scripts/legacy/` を指している。
+- `python run.py --help` — OK。
+- `python scripts/monitor.py --help` — OK。
+- `python scripts/status.py --help` — OK、overview は実行されない。
+- `python scripts/monitor.py --pipeline` — OK、next step は
+  `vertices ready: review with run.py crops / review / click`。
+- `pytest -m "not slow"` — 52 passed, 35 deselected。
+
+code / behavior blocker は見つからない。
+
+ただし、完全に satisfied と言う前に README wording を1点だけ直してほしい:
+
+- Package Structure tree 直下に "Each `scripts/*.py` is a thin wrapper that
+  delegates to the matching `module/.../_cli_*.py` body" とあるが、これは少し狭い。
+  `scripts/monitor.py` は `module/utils/job_monitor.py`、`scripts/status.py` は
+  `module/pipeline_status.py` に委譲しており、`_cli_*` ではない。例えば
+  "Each active `scripts/*.py` entry is a thin wrapper around a module-side
+  body; see scripts/README.md for the exact mapping." のようにしてほしい。
+  README を広げずに正確にできる。
+
+この wording fix が入れば、Codex は structure/cleanup に納得できる。

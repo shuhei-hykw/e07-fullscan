@@ -1592,3 +1592,47 @@ suite を再実行せず、Claude 報告の `pytest -m "not slow"`（52 passed,
 35 deselected）を再実行なしで受け入れた。残り structural blocker なし。README に
 run.py を指す簡潔な「Operation Surface」注記を追加し、既存の scripts/*.py 例は
 互換パスとして残した（本格的な README 書き直しは Codex 合意で延期）。
+
+---
+
+## 2026-05-31 — close 後の共同レビュー：monitor next-step、legacy docs、2-space
+
+push 後、Codex の再レビューで cleanup に対する follow-up が4件出た。ユーザーは
+Claude と Codex が双方納得するまで反復するよう指示。4件すべてを対応し、双方が
+sign-off した（discussion 2026-05-31 15:34–18:09）。
+
+### 指摘と修正
+
+1. (挙動) `module/pipeline_status._next_step()` が隔離済み ΛΛ-pair スクリプト
+   （find_pairs / find_crossview_pairs / filter_xview_pairs）を指していた。
+   ΛΛ-pair は 2026-05-14 に個別頂点検出へ supersede 済みなので、
+   `vertices_merged_v6.parquet` 後は "vertices ready: review with run.py
+   crops / review / click" を返すよう変更。未使用の pairs/xview/xconn ローカルを
+   削除。`scripts/monitor.py --pipeline` で実動作確認。
+2. (docs) README「Vertex Pair Search」「Cross-View ΛΛ Pair Search」を
+   「(legacy)」表記＋来歴 blockquote にし、コマンドパスを全て `scripts/legacy/`
+   へ。物理内容（KISO 結果、v5/v7 注記、出力列）は保持。
+   `scripts/run_pipeline_v6.sh` の Step 6-7 も同様に legacy 表記＋
+   `scripts/legacy/` パス修正。
+3. (docs) README の crop オプション表で `--zpj-half` / `--zpj-mode` を
+   「(ignored, back-compat)」とし、`module/review/_cli_crop_vertices.py` の
+   コード NOTE と整合。
+4. (style) 13ファイルが 4-space で 2-space 規則違反だった。薄いラッパー8個と
+   残り5本体（analyze/cli.py, clustering/_link.py,
+   diagnostics/{bg_cost_spread,step5_compat,lowsp_spread_radius}.py）を 2-space
+   化。5本体は multiline-string 内部を保護する tokenize ベースの halve ＋
+   bracket 継続行の visual-indent 整列で変換し、各ファイルを HEAD との
+   `ast.dump` 等価でガード。よって挙動保存を証明できる。
+
+加えて README の古い「Package Structure」tree を更新（preprocess.py,
+pipeline_status.py, review/, diagnostics/, _cli_* 規約, utils ヘルパーを追加。
+compact に保つ）。
+
+### 検証と sign-off
+
+tree 全体 min-indent == 2、odd-indent 0 行（scripts/legacy/ 除く）；
+module+scripts 全 `py_compile` OK；diagnostics import smoke OK；
+`pytest -m "not slow"` 52 passed, 35 deselected。Codex は独自の最終パス
+（git diff --check, py_compile, 5ファイルの AST 等価, legacy grep, 4つの
+help/pipeline surface）を実施し、README の wrapper 文を `_cli_*` を超えて
+一般化する1点の修正の後、構造・整理に納得と明言。双方 sign-off。

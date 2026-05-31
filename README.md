@@ -25,25 +25,40 @@ Additional dependency for web viewer: flask
 
 ```
 module/
+├── preprocess.py         # shared fog/Otsu/noise (tracking + server)
+├── pipeline_status.py    # pipeline overview (monitor --pipeline)
 ├── io/
 │   └── image_reader.py   # SPNG format reader
 ├── tracking/             # Track finding
 │   ├── _track.py         # Track dataclass
 │   └── _finder.py        # preprocess(), find_tracks()
-├── analyze/              # Batch analysis CLI
-│   └── cli.py            # e07analyze entry point
-├── merge/                # Result merge CLI
-│   └── cli.py            # e07merge entry point
-├── clustering/           # Post-processing
+├── analyze/              # Batch analysis + KEKCC submit CLIs
+│   ├── cli.py            # e07analyze entry point
+│   └── _cli_submit_*.py  # submit_kekcc / submit_vertex_kekcc bodies
+├── merge/                # Result merge CLIs
+│   ├── cli.py            # e07merge entry point
+│   └── _cli_merge_chunks.py
+├── clustering/           # Post-processing + vertex CLIs
 │   ├── _cluster.py       # cluster_tracks(), cluster_df()
 │   ├── _link.py          # link_tracks(), best_per_track(), add_dip_angles()
-│   └── _vertex.py        # find_vertices(), merge_vertex_slices()
+│   ├── _vertex.py        # find_vertices(), merge_vertex_slices()
+│   ├── _pairs.py         # find_vertex_pairs() (legacy ΛΛ; superseded)
+│   └── _cli_find_vertices.py / _cli_merge_vertices.py
+├── review/               # Vertex review CLI bodies
+│   └── _cli_{crop_vertices,vertex_map,review_crops,click_vertex}.py
+├── diagnostics/          # On-demand analyses (python -m module.diagnostics.X)
 ├── server/               # Web viewer (requires flask)
 │   ├── app.py
 │   ├── results.py
 │   └── __main__.py
 └── utils/
+    ├── job_monitor.py    # live-job monitor body (scripts/monitor.py)
+    └── run_info.py
 ```
+
+Each active `scripts/*.py` entry is a thin wrapper around a module-side body
+(e.g. the `_cli_*.py` CLIs above, `utils/job_monitor.py`, or
+`pipeline_status.py`); see `scripts/README.md` for the exact mapping.
 
 ## Operation Surface
 
@@ -376,18 +391,25 @@ python scripts/crop_vertices.py \
 | `--min-tracks` | 3 | Min `n_tracks_max` |
 | `--min-slices` | 1 | Min `n_slices` |
 | `--shuffle` | off | Random sample (default: top-n by n_tracks_max) |
-| `--zpj-half` | 4 | Z-projection half-range for fog/binary panels |
-| `--zpj-mode` | mean | Projection mode: `mean` or `max` |
+| `--zpj-half` | 4 | *(ignored, back-compat)* crops use an all-slice min projection |
+| `--zpj-mode` | mean | *(ignored, back-compat)* crops use an all-slice min projection |
 
-## Vertex Pair Search
+## Vertex Pair Search (legacy)
+
+> **Legacy — superseded 2026-05-14 by individual vertex detection.** These
+> ΛΛ-pair scripts now live under `scripts/legacy/` and are **not** part of the
+> everyday surface. They are kept for provenance/comparison (they produced the
+> historical ΛΛ pair catalogs and the KISO cross-view result below). The
+> current pipeline ends at `vertices_merged_v6.parquet`, followed by manual
+> vertex review (`run.py crops / review / click`).
 
 Finds primary + secondary vertex pairs for hypernuclear event pickup
-(ΛΛ, single Λ, alpha stars). Current pipeline uses **v6 vertices**
+(ΛΛ, single Λ, alpha stars), using **v6 vertices**
 (hough_ml=30, 237k vertices across 2025 views).
 
 ```bash
 # 1. Find all candidate pairs (90-500 μm)
-python scripts/find_pairs.py \
+python scripts/legacy/find_pairs.py \
   --input  results/vertices_merged_v6.parquet \
   --output results/vertex_pairs_v6.parquet \
   --d-min 310 --d-max 1724 \
@@ -395,13 +417,13 @@ python scripts/find_pairs.py \
   --max-dz-mm 0.010
 
 # 2. Require connecting track (connecting particle flight path)
-python scripts/filter_pairs_by_track.py \
+python scripts/legacy/filter_pairs_by_track.py \
   --pairs  results/vertex_pairs_v6.parquet \
   --output results/vertex_pairs_v6_filtered.parquet \
   --min-n-primary 10
 
 # 3. Generate visual crops
-python scripts/crop_pairs.py \
+python scripts/legacy/crop_pairs.py \
   --pairs  results/vertex_pairs_v6_filtered.parquet \
   --output results/pair_crops_v6/ \
   --top 200 --min-n-primary 10
@@ -411,7 +433,7 @@ python scripts/crop_pairs.py \
 (hough_ml values accidentally substituted). v7 (from v5 vertices,
 hough_ml=50) used the correct range; v6 (hough_ml=30) supersedes it.
 
-Output columns of `find_pairs.py`:
+Output columns of `legacy/find_pairs.py`:
 
 | Column | Description |
 |---|---|
@@ -429,16 +451,19 @@ Output columns of `find_pairs.py`:
 interaction vertex typically has spread > 25°; values near 20° (the
 production-cut minimum) may indicate ghost vertices.
 
-## Cross-View ΛΛ Pair Search
+## Cross-View ΛΛ Pair Search (legacy)
+
+> **Legacy** — same status as Vertex Pair Search above; scripts under
+> `scripts/legacy/`. Kept for the KISO cross-view provenance below.
 
 When the primary vertex of a ΛΛ event falls near the boundary between two
 adjacent scan views, intra-view pair finding misses it.
-`scripts/find_crossview_pairs.py` handles this case by matching vertices from
-different views using their physical (stage) coordinates.
+`scripts/legacy/find_crossview_pairs.py` handles this case by matching
+vertices from different views using their physical (stage) coordinates.
 
 ```bash
-# v6 pipeline (current)
-python scripts/find_crossview_pairs.py \
+# v6 pipeline (historical)
+python scripts/legacy/find_crossview_pairs.py \
   --vertices results/vertices_merged_v6.parquet \
   --output   results/vertex_pairs_xview_v6.parquet \
   --min-n-primary 5 --min-n-secondary 3 \
@@ -449,7 +474,7 @@ python scripts/find_crossview_pairs.py \
 #       p_n≥8, d≤400μm (KISO passes: sp=42°>35°, n=11>8, d=152μm<400μm)
 
 # Boundary-crossing track filter (Ξ⁻ exits primary view edge)
-python scripts/filter_xview_pairs.py \
+python scripts/legacy/filter_xview_pairs.py \
   --pairs  results/vertex_pairs_xview_v6_prefiltered.parquet \
   --chunks results/chunks_v6 \
   --output results/vertex_pairs_xview_v6_conn.parquet

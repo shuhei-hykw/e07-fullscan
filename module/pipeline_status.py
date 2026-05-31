@@ -224,7 +224,6 @@ def _next_step() -> str:
   merged = RESULTS / "merged_v6.parquet"
   verts  = RESULTS / "vertices_v6.parquet"
   mvert  = RESULTS / "vertices_merged_v6.parquet"
-  pairs  = RESULTS / "vertex_pairs_v6.parquet"
 
   if n_v6 < N_CHUNKS:
     return "wait: tracking"
@@ -236,16 +235,10 @@ def _next_step() -> str:
     return "run: merge_chunks.py --input results/vertex_chunks_v6"
   if not mvert.exists():
     return "run: merge_vertices.py"
-  xview  = RESULTS / "vertex_pairs_xview_v6.parquet"
-  xconn  = RESULTS / "vertex_pairs_xview_v6_conn.parquet"
-
-  if not pairs.exists():
-    return "run: find_pairs.py"
-  if not xview.exists():
-    return "run: find_crossview_pairs.py"
-  if not xconn.exists():
-    return "run: filter_xview_pairs.py (in progress)"
-  return "v6 pipeline complete"
+  # Individual-vertex pipeline ends here. The ΛΛ-pair search was
+  # superseded 2026-05-14 (individual vertex detection); its scripts now
+  # live under scripts/legacy/ and are not part of the everyday surface.
+  return "vertices ready: review with run.py crops / review / click"
 
 
 def _display() -> None:
