@@ -6,8 +6,10 @@
 ## Package structure
 - Main package: module (renamed from e07fullscan on 2026-05-30)
 - Subpackages: io, tracking, analyze, merge, clustering, server, utils,
-  diagnostics
+  diagnostics, review
 - Shared module: preprocess (branch-neutral fog/Otsu/noise preprocessing)
+- Monitor/status helpers: module/pipeline_status.py (pipeline overview);
+  module/utils/job_monitor.py (live-job monitor body)
 
 ## Style
 - Indentation: 2 spaces (never tabs)

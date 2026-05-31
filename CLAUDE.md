@@ -11,9 +11,12 @@
 - Main package: module (renamed from e07fullscan 2026-05-30; not imported
   externally, so a generic import name is acceptable)
 - Subpackages: io, tracking, analyze, merge, clustering, server, utils,
-  diagnostics
+  diagnostics, review
 - Shared module: preprocess (branch-neutral fog/Otsu/noise, used by tracking
   and server)
+- Monitor/status helpers: module/pipeline_status.py (pipeline overview, used
+  by monitor --pipeline and the deprecated scripts/status.py wrapper);
+  module/utils/job_monitor.py (live-job monitor body for scripts/monitor.py)
 
 ## Style
 - Indentation: 2 spaces (never tabs)

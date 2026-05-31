@@ -10,7 +10,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from module.pipeline_status import main  # noqa: E402
 
+DEPRECATION = "[deprecated] use: python scripts/monitor.py --pipeline"
+
 if __name__ == "__main__":
-  print("[deprecated] use: python scripts/monitor.py --pipeline",
-        file=sys.stderr)
+  print(DEPRECATION, file=sys.stderr)
+  if "-h" in sys.argv[1:] or "--help" in sys.argv[1:]:
+    print(__doc__)
+    sys.exit(0)
   main()
