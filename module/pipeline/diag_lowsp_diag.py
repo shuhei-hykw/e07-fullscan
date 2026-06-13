@@ -32,11 +32,11 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from module.io import load_spng                              # noqa: E402
-from module.tracking._finder import preprocess              # noqa: E402
-from module.clustering import find_vertices, merge_vertex_slices  # noqa: E402
-from module.clustering._vertex import _angle_spread_deg     # noqa: E402
-from module.diagnostics import (                            # noqa: E402
+from module.reader import load_spng                              # noqa: E402
+from module.pipeline.finder import preprocess              # noqa: E402
+from module.pipeline import find_vertices, merge_vertex_slices  # noqa: E402
+from module.pipeline.vertex import _angle_spread_deg     # noqa: E402
+from module.pipeline import (                            # noqa: E402
     TRACK_CFG, tracks_to_df, projection, find_tracks_cfg,
 )
 

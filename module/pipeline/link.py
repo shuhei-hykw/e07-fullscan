@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from ._cluster import _angle_diff
+from .cluster import _angle_diff
 
 if TYPE_CHECKING:
   import pandas as pd

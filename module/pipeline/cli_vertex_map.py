@@ -39,7 +39,7 @@ def main() -> None:
   import matplotlib.colors as mcolors
 
   sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-  from module.utils import (
+  from module.run_info import (
     make_run_id, build_run_meta, save_run_json,
   )
 

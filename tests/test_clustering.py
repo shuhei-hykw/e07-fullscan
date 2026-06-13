@@ -2,8 +2,8 @@ import math
 
 import pytest
 
-from module.tracking._track import Track
-from module.clustering import cluster_tracks
+from module.pipeline.track import Track
+from module.pipeline import cluster_tracks
 
 
 def _make_track(px1, py1, px2, py2, angle=None):

@@ -31,7 +31,7 @@ def _load_z_info(
     return None, None
   try:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from module.io import load_spng
+    from module.reader import load_spng
     reader = load_spng(json_path)
     stem = png_path.stem          # e.g. "0025"
     idx = int(stem)

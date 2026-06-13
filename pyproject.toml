@@ -27,8 +27,8 @@ dev = [
 
 [project.scripts]
 e07view    = "module.server.cli:main"
-e07analyze = "module.analyze.cli:main"
-e07merge   = "module.merge.cli:main"
+e07analyze = "module.pipeline.analyze_cli:main"
+e07merge   = "module.pipeline.merge_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

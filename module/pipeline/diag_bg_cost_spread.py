@@ -25,9 +25,9 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from module.io import load_spng                          # noqa: E402
-from module.clustering._vertex import _angle_spread_deg  # noqa: E402
-from module.diagnostics import find_tracks_cfg           # noqa: E402
+from module.reader import load_spng                          # noqa: E402
+from module.pipeline.vertex import _angle_spread_deg  # noqa: E402
+from module.pipeline import find_tracks_cfg           # noqa: E402
 
 R_TIGHT = 25.0
 R_WIDE = 50.0

@@ -69,9 +69,9 @@ def _run_pipeline(
   """
   import sys
   sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-  from module.io import load_spng
-  from module.tracking import find_tracks
-  from module.clustering import find_vertices
+  from module.reader import load_spng
+  from module.pipeline import find_tracks
+  from module.pipeline import find_vertices
 
   reader = load_spng(json_path)
   px_scale = reader.affine_p2s[0] * 1000.0  # mm/px -> um/px
@@ -107,7 +107,7 @@ def _run_pipeline_merged(json_path: Path) -> pd.DataFrame:
   """Run full pipeline including cross-slice merge. Returns merged vertices."""
   import sys
   sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-  from module.clustering import merge_vertex_slices
+  from module.pipeline import merge_vertex_slices
 
   vdf = _run_pipeline(json_path)
   if vdf.empty:
@@ -186,7 +186,7 @@ def test_special_reader_loads(event: str) -> None:
   if not json_path.exists():
     pytest.skip(f"specials not found: {json_path}")
 
-  from module.io import load_spng
+  from module.reader import load_spng
   reader = load_spng(json_path)
   assert len(reader) > 0
   # read first and last slice

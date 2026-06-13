@@ -3,7 +3,7 @@ import math
 import pandas as pd
 import pytest
 
-from module.clustering import link_tracks
+from module.pipeline import link_tracks
 
 
 def _make_df(rows):

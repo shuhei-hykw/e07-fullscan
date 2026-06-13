@@ -95,7 +95,7 @@ def _find_analyze_pid() -> int | None:
     try:
         out = subprocess.check_output(
             ["pgrep", "-u", os.environ.get("USER", ""),
-             "-f", "module.analyze"],
+             "-f", "module.pipeline"],
             text=True, stderr=subprocess.DEVNULL,
         )
         pids = [int(p) for p in out.strip().splitlines() if p]

@@ -44,8 +44,8 @@ def main() -> None:
 
   import pandas as pd
   sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-  from module.clustering import find_vertex_pairs
-  from module.utils import (
+  from module.pipeline import find_vertex_pairs
+  from module.run_info import (
     make_run_id, build_run_meta,
     save_run_json, save_parquet_with_meta,
   )

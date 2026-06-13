@@ -1,25 +1,31 @@
-"""Branch-neutral image preprocessing through step-5 noise removal.
+"""Preprocessing pipeline steps 1-5: z-projection through noise removal.
 
-This is the shared preprocessing boundary before the pipeline branches into
-conventional Hough track/vertex detection and any future graph/topology
-analysis. Both the batch tracking path and the diagnostic viewer call these
-functions so that what the viewer previews matches what the batch pipeline
-computes.
+Output boundary: binary np.ndarray (H×W, uint8) ready for graph analysis.
 
-Stages: fog removal -> Otsu threshold -> noise removal (connected-component
-area filter).
+  reader = SpngReader("tile.json")
+  binary = preprocess(zpj(reader))
 """
 from __future__ import annotations
 
 import cv2
 import numpy as np
 
+_ZPJ_HALF         = 4   # half-window for z-projection (9 slices total)
 # Defaults mirror config/default.yaml (viewer block).
 _FOG_KSIZE        = 51
 _NOISE_AMIN       = 2
 _NOISE_AMAX       = 100
 _NOISE_CMP        = 50
 _NOISE_AMAX_UPPER = 0   # 0 = disabled; >0 removes blobs larger than this
+
+
+def zpj(reader, zpj_half: int = _ZPJ_HALF) -> np.ndarray:
+  """Z-projection: mean of 2*zpj_half+1 slices centred on the middle slice."""
+  mid = len(reader) // 2
+  lo = max(0, mid - zpj_half)
+  hi = min(len(reader) - 1, mid + zpj_half)
+  slices = [reader.read(i) for i in range(lo, hi + 1)]
+  return np.mean(slices, axis=0).astype(np.uint8)
 
 
 def fog_remove(img: np.ndarray, fog_ksize: int = _FOG_KSIZE) -> np.ndarray:

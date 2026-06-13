@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from module.tracking import Track, find_tracks, preprocess
+from module.pipeline import Track, find_tracks
+from module.preprocess import preprocess
 
 
 class _MockEntry:

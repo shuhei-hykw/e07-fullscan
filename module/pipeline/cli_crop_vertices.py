@@ -40,7 +40,7 @@ def _fog_remove(img: np.ndarray, fog_ksize: int = 51) -> np.ndarray:
 
 def _binary(img: np.ndarray, fog_ksize: int = 51) -> np.ndarray:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from module.tracking._finder import preprocess
+    from module.pipeline.finder import preprocess
     return preprocess(img, fog_ksize=fog_ksize)
 
 
@@ -109,7 +109,7 @@ def _load_min_projection(json_path: Path) -> np.ndarray:
     the full 0-255 dynamic range is used for clear visualisation.
     """
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from module.io.image_reader import SpngReader
+    from module.reader import SpngReader
     reader = SpngReader(json_path)
     acc = None
     for i in range(len(reader)):
@@ -189,7 +189,7 @@ def main() -> None:
     args = ap.parse_args()
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from module.utils import (
+    from module.run_info import (
       make_run_id, build_run_meta, save_run_json,
     )
 

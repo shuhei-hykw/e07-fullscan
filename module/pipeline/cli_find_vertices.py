@@ -2,7 +2,7 @@
 """CLI body for vertex finding (find vertices from a track parquet).
 
 Invoked via scripts/find_vertices.py (thin wrapper) or
-python -m module.clustering._cli_find_vertices.
+python -m module.pipeline.cli_find_vertices.
 """
 from __future__ import annotations
 
@@ -43,8 +43,8 @@ def main() -> None:
   args = ap.parse_args()
 
   import pandas as pd
-  from module.clustering import find_vertices
-  from module.utils import (
+  from module.pipeline import find_vertices
+  from module.run_info import (
     make_run_id, build_run_meta,
     save_run_json, save_parquet_with_meta,
   )

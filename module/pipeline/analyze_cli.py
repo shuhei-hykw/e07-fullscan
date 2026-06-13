@@ -10,8 +10,8 @@ from pathlib import Path
 
 import yaml
 
-from module.io import load_spng
-from module.tracking import find_tracks
+from module.reader import load_spng
+from module.pipeline import find_tracks
 
 _CFG_PATH = Path(__file__).parents[2] / "config" / "default.yaml"
 

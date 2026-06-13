@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from module.io.image_reader import SpngReader
+from module.reader import SpngReader
 from module.preprocess import fog_remove, otsu_binarize, remove_noise
 
 SCAN_DIR = Path(
@@ -26,7 +26,7 @@ SCAN_DIR = Path(
   "/MOD108/PL12/tohoku-v1/AREA00/IMAGE00_AREA00"
 )
 ZPJ_HALF = 4
-DEFAULT_TILE = "V00000923_L0_VX0023_VY0020_0_058"
+DEFAULT_TILE = "V00000004_L0_VX0004_VY0000_0_058"
 
 LABELS = [
   "1. Raw scan",

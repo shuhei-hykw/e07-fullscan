@@ -5,9 +5,9 @@ import math
 import cv2
 import numpy as np
 
-from ._track import Track
+from .track import Track
 # Shared branch-neutral preprocessing. Re-exported so existing callers of
-# `from module.tracking._finder import preprocess` keep working.
+# `from module.pipeline.finder import preprocess` keep working.
 from module.preprocess import fog_remove, preprocess
 
 _ZPJ_HALF    = 4

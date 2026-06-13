@@ -105,7 +105,7 @@ def main() -> None:
   import re
 
   sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-  from module.io import SpngReader
+  from module.reader import SpngReader
 
   print(f"Loading {args.pairs} …", flush=True)
   pairs = pd.read_parquet(args.pairs)

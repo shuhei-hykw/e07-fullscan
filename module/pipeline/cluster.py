@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from ..tracking._track import Track
+from .track import Track
 
 if TYPE_CHECKING:
   import pandas as pd

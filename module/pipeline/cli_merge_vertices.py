@@ -2,7 +2,7 @@
 """CLI body for merging per-slice vertices and extracting image crops.
 
 Invoked via scripts/merge_vertices.py (thin wrapper) or
-python -m module.clustering._cli_merge_vertices.
+python -m module.pipeline.cli_merge_vertices.
 """
 from __future__ import annotations
 
@@ -40,9 +40,9 @@ def main() -> None:
   import pandas as pd
   import cv2
 
-  from module.clustering import merge_vertex_slices
-  from module.io import SpngReader
-  from module.utils import (
+  from module.pipeline import merge_vertex_slices
+  from module.reader import SpngReader
+  from module.run_info import (
     make_run_id, build_run_meta,
     save_run_json, save_parquet_with_meta,
   )
