@@ -2,7 +2,7 @@
 
 Superseded on 2026-05-14 when the analysis switched from requiring a
 primary+secondary vertex pair to detecting individual reaction vertices
-directly (see ANALYSIS.md). Kept for provenance and comparison: it produced
+directly (see analysis-note.md). Kept for provenance and comparison: it produced
 the historical ΛΛ pair catalogs and the KISO cross-view result. Not part of
 the current individual-vertex pipeline.
 

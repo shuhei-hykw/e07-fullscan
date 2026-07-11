@@ -4,13 +4,19 @@ Analysis toolkit for E07 nuclear emulsion full-scan data.
 
 ## Setup
 
+Python is managed with pyenv; dependencies with requirements.txt.
+
 ```bash
-pip install -e .          # core library
-pip install -e ".[server]"  # + web viewer (flask)
-pip install -e ".[dev]"     # + tests and lint
+pyenv install 3.14.6
+pyenv local 3.14.6
+pip install -r requirements.txt
 ```
 
-Dependencies: numpy, scipy, opencv-python, matplotlib, PyYAML, pandas, pyarrow
+Run everything from the repository root (`module` is imported from the
+working directory; no package install is needed).
+
+Dependencies: numpy, scipy, opencv-python, matplotlib, PyYAML, pandas,
+pyarrow (+ flask for the web viewer, pytest/ruff for development)
 
 ## Package Structure
 
@@ -215,9 +221,15 @@ pytest            # fast tests only
 pytest -m slow    # integration tests on confirmed events (specials_x20)
 ```
 
+The slow suite reads `specials_x20`; it defaults to the KEKCC path, so on
+other machines set `E07_SPECIALS_DIR` to a local copy, e.g.
+`E07_SPECIALS_DIR=$PWD/specials_x20 pytest -m slow`.
+
 ## Analysis Notes
 
-Physics findings and parameter decisions: [ANALYSIS.md](ANALYSIS.md)
+Physics findings and parameter decisions: [analysis-note.md](analysis-note.md)
+(development diary in Japanese, newest entry first; replaced ANALYSIS.md /
+ANALYSIS_ja.md on 2026-07-11).
 
 ## Legacy ΛΛ Pair Scripts
 

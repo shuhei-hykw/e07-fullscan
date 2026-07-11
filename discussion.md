@@ -5164,3 +5164,65 @@ ANALYSIS_ja.md, discussion.md, discussion_ja.md) as one feature commit on
 prototype `.mat` stays outside the repo. Owned files unchanged from the
 2026-06-23 entry. A Notion image-pre-processing DB row for 2026-07-11 will be
 added after the push.
+
+## 2026-07-11 13:58 JST — Claude (macOS): done — repo verified on macbook, two portability fixes
+
+Cloned repo now lives on the macbook (`~/work/e07/e07-fullscan`, iCloud-backed;
+same tree as kekcc HEAD `baa81a2`). Set up `.venv` (Python 3.14, OpenCV 5.0)
+and verified the full test suite: 52 non-slow + 35 slow (with
+`E07_SPECIALS_DIR` pointing at the local `../specials_x20` copy) — 87/87 pass.
+Two portability fixes were required, uncommitted for now:
+
+- `pyproject.toml`: `build-backend` was the non-existent
+  `setuptools.backends.legacy:build`; fixed to `setuptools.build_meta`
+  (pip editable install failed otherwise).
+- `module/pipeline/finder.py`: OpenCV 5 returns `HoughLinesP` as `(N, 4)`
+  instead of `(N, 1, 4)`; replaced `lines[:, 0]` with `lines.reshape(-1, 4)`
+  (works on both OpenCV 4 and 5).
+
+Owned files: `pyproject.toml`, `module/pipeline/finder.py`. No jobs launched,
+no data outputs. Note: `fullscan-image` symlink still points at the kekcc
+absolute path `/group/had/sks/E07/tohoku/fullscan`; an sshfs mount at
+`~/mnt/kek_e07` is prepared (FUSE-T) but not yet mounted.
+
+## 2026-07-11 14:09 JST — Claude (macOS): done — pyenv + requirements.txt migration, agent files untracked
+
+Per user request:
+
+- `AGENTS.md` / `CLAUDE.md` removed from git tracking (`git rm --cached`) and
+  added to `.gitignore` (files kept locally). `.python-version` ignored too.
+- New `requirements.txt` (core + flask + pytest/ruff). `pyproject.toml`
+  stripped to tool config only (pytest markers, ruff); the `[project]`
+  packaging metadata and `e07analyze`/`e07merge`/`e07view` console scripts
+  are gone — grep confirmed nothing outside old diary entries used them, and
+  `run.py` delegates to `python -m module.<target>`.
+- Python now managed by pyenv: 3.14.6 built and set via `pyenv local`
+  (`.python-version`, untracked). Old `.venv` removed. `module` imports from
+  the repo root, so no editable install is needed.
+- README Setup / Tests sections updated (pyenv flow, `E07_SPECIALS_DIR` note).
+- Verification: 52/52 non-slow tests pass on the pyenv interpreter; slow
+  suite running, result to be appended.
+
+Owned files: `.gitignore`, `requirements.txt`, `pyproject.toml`, `README.md`.
+
+## 2026-07-11 14:20 JST — Claude (macOS): done — diary unified into analysis-note.md, Notion retired
+
+Per user decision:
+
+- Notes are now a single file `analysis-note.md` (Japanese), replacing
+  `ANALYSIS.md` / `ANALYSIS_ja.md` (both `git rm`ed; git detected the rename
+  from ANALYSIS_ja.md, so history follows). All 43 dated entries migrated.
+- Entries are reverse-chronological (newest first) with times:
+  `## YYYY-MM-DD HH:MM JST — <title>` inserted right below the
+  `## 開発ログ（最新が上）` heading. Pre-existing date-only headers were left
+  untouched except today's three, whose times were recovered from commit
+  timestamps and work logs.
+- リファレンス and 未解決課題 sections stay at the top of the file.
+- Notion (image-pre-processing DB) is retired; the corresponding CLAUDE.md /
+  AGENTS.md rules were rewritten, and README now points to analysis-note.md.
+- Also: slow suite re-verified on the pyenv interpreter — 35/35 pass
+  (~8.5 min), completing the pyenv migration check (52 + 35 = 87/87).
+
+Owned files: `analysis-note.md`, `README.md`, `CLAUDE.md`, `AGENTS.md`.
+Note for Codex: ANALYSIS.md / ANALYSIS_ja.md no longer exist; read
+`analysis-note.md` instead when reconstructing working memory.

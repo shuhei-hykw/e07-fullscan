@@ -4708,3 +4708,65 @@ ANALYSIS_ja.md, discussion.md, discussion_ja.md）を 1 つの feature コミッ
 試作 `.mat` はリポジトリ外のまま。所有ファイルは 2026-06-23 エントリから
 変更なし。push 後に Notion image-pre-processing DB へ 2026-07-11 の行を追加
 する。
+
+## 2026-07-11 13:58 JST — Claude (macOS): 完了 — macbook 上でリポジトリ検証、移植性修正2件
+
+リポジトリを macbook（`~/work/e07/e07-fullscan`、iCloud 同期）へ移設。kekcc の
+HEAD `baa81a2` と同一ツリー。`.venv`（Python 3.14, OpenCV 5.0）を構築し、
+テストを全実行: 非 slow 52 件 + slow 35 件（`E07_SPECIALS_DIR` をローカルの
+`../specials_x20` に向けて実行）= 87/87 通過。以下の2件の修正が必要だった
+（未コミット）:
+
+- `pyproject.toml`: `build-backend` が存在しない
+  `setuptools.backends.legacy:build` になっており editable install が失敗。
+  `setuptools.build_meta` に修正。
+- `module/pipeline/finder.py`: OpenCV 5 では `HoughLinesP` の返り値が
+  `(N, 1, 4)` ではなく `(N, 4)`。`lines[:, 0]` を `lines.reshape(-1, 4)` に
+  変更（OpenCV 4/5 両対応）。
+
+所有ファイル: `pyproject.toml`, `module/pipeline/finder.py`。ジョブ起動・
+データ出力なし。補足: `fullscan-image` symlink は kekcc の絶対パス
+`/group/had/sks/E07/tohoku/fullscan` を指したまま。sshfs マウント先
+`~/mnt/kek_e07`（FUSE-T）は準備済みだが未マウント。
+
+## 2026-07-11 14:09 JST — Claude (macOS): 完了 — pyenv + requirements.txt へ移行、エージェント設定ファイルを git 管理外へ
+
+ユーザー指示による変更:
+
+- `AGENTS.md` / `CLAUDE.md` を git 管理から除外（`git rm --cached`）し
+  `.gitignore` に追加（ファイル自体はローカルに残る）。`.python-version` も
+  ignore。
+- `requirements.txt` を新規作成（core + flask + pytest/ruff）。
+  `pyproject.toml` はツール設定（pytest マーカー、ruff）のみに縮小。
+  `[project]` のパッケージ記述と `e07analyze`/`e07merge`/`e07view` の
+  console scripts は削除 — grep で過去の日誌以外に使用箇所がないことを確認
+  済み。`run.py` は `python -m module.<target>` に委譲するため影響なし。
+- Python は pyenv 管理に移行: 3.14.6 をビルドし `pyenv local` で設定
+  （`.python-version`、未追跡）。旧 `.venv` は削除。`module` はリポジトリ
+  ルートから import されるため editable install は不要。
+- README の Setup / Tests 節を更新（pyenv 手順、`E07_SPECIALS_DIR` の注記）。
+- 検証: pyenv の Python で非 slow 52/52 通過。slow スイートは実行中、結果は
+  追記予定。
+
+所有ファイル: `.gitignore`, `requirements.txt`, `pyproject.toml`, `README.md`。
+
+## 2026-07-11 14:20 JST — Claude (macOS): 完了 — メモを analysis-note.md に統一、Notion 廃止
+
+ユーザー判断による変更:
+
+- メモは単一ファイル `analysis-note.md`（日本語）に統一。
+  `ANALYSIS.md` / `ANALYSIS_ja.md` は削除（git は ANALYSIS_ja.md からの
+  リネームとして検出、履歴は追跡可能）。日付エントリ全 43 件を移行。
+- エントリは逆時系列（最新が上）で時刻入り:
+  `## YYYY-MM-DD HH:MM JST — <タイトル>` を `## 開発ログ（最新が上）`
+  見出しの直下に挿入する運用。既存の日付のみ見出しはそのまま
+  （本日の 3 件のみコミット時刻・作業ログから時刻を補完）。
+- リファレンス・未解決課題セクションはファイル上部に維持。
+- Notion（image-pre-processing DB）は廃止。CLAUDE.md / AGENTS.md の
+  該当ルールを書き換え、README の参照先も analysis-note.md に変更。
+- 併せて slow スイートを pyenv の Python で再検証 — 35/35 通過（約 8.5 分）。
+  pyenv 移行の検証完了（52 + 35 = 87/87）。
+
+所有ファイル: `analysis-note.md`, `README.md`, `CLAUDE.md`, `AGENTS.md`。
+Codex への注記: ANALYSIS.md / ANALYSIS_ja.md は存在しない。作業記憶の再構築
+時は `analysis-note.md` を読むこと。
