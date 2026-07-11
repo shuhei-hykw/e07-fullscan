@@ -5303,3 +5303,29 @@ https://claude.ai/code/artifact/8f9a90a2-7186-41e2-992c-3e80fd078241
 Fast suite re-verified (52/52). Owned files: module/matlab_export.py,
 module/server/app.py, analysis-note.md. Local viewer left running on
 :8123 for interactive follow-up.
+
+## 2026-07-11 21:03 JST — Claude (macOS): done — clarified panel 04, switched centroid overlay to real blob outlines
+
+User asked how to read panel 04 and whether MATLAB was already doing the
+clustering. Answer: it isn't -- `mabiki` is deliberately bypassed in the
+centroid-mode test path and `detectlseg_smallregion` (the actual line/
+track clustering) hasn't been run in this session; the grain-level
+reduction shown in panel 04 is entirely `module/matlab_export.py`'s
+Python-side `weighted_centroids()`, pre-MATLAB.
+
+Root cause of the visual confusion: the overlay drew a circle sized by
+sqrt(area) per blob, and near the vertex several tracks' grains merge
+into large connected components (area > 3000px), which read as
+hand-drawn cluster boundaries rather than "one point, size-annotated".
+
+Fix: `weighted_centroids()` now also returns the raw contour
+((cx, cy, area, contour) 4-tuples); `module/server/app.py`'s `cent` step
+draws the actual blob outline (red) + a cross at the weighted centroid
+(yellow) instead of a size-proxy circle. One outline <-> one cross is now
+visually unambiguous, and outlines elongated along track directions are
+now visible. Re-verified at the KISO known vertex; artifact updated in
+place (same URL):
+https://claude.ai/code/artifact/8f9a90a2-7186-41e2-992c-3e80fd078241
+
+Fast suite re-verified (52/52). Owned files: module/matlab_export.py,
+module/server/app.py, analysis-note.md.

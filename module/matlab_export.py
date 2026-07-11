@@ -118,14 +118,17 @@ def export_hits(
 
 def weighted_centroids(
   binary: np.ndarray, intensity: np.ndarray
-) -> list[tuple[float, float, float]]:
-  """Return (cx, cy, area) per connected component in ``binary``.
+) -> list[tuple[float, float, float, np.ndarray]]:
+  """Return (cx, cy, area, contour) per connected component in ``binary``.
 
   Each centroid is weighted by ``intensity`` (typically the fog-removed
   image) within the component's footprint, not just its binary shape --
   brighter, denser sub-regions of a grain cluster pull the centroid toward
   them. This is what a plain ``cv2.moments(contour)`` (geometric, shape-only
-  centroid) misses.
+  centroid) misses. ``contour`` (the raw ``cv2.findContours`` polygon) is
+  returned alongside so callers that want to visualise the actual blob
+  shape -- not just an abstract "one hit" marker -- don't need to re-run
+  ``cv2.findContours`` themselves.
   """
   contours, _ = cv2.findContours(
     binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
@@ -149,7 +152,7 @@ def weighted_centroids(
         cx, cy = Mg["m10"] / Mg["m00"], Mg["m01"] / Mg["m00"]
       else:
         cx, cy = (float(v) for v in cnt[0, 0])
-    out.append((cx, cy, max(area, 1.0)))
+    out.append((cx, cy, max(area, 1.0), cnt))
   return out
 
 
@@ -184,7 +187,7 @@ def export_hits_centroid(
     if not hits:
       continue
     block = np.empty((len(hits), len(_PL_VARNAMES)), dtype=np.float64)
-    for i, (cx, cy, area) in enumerate(hits):
+    for i, (cx, cy, area, _cnt) in enumerate(hits):
       block[i, 0] = cx + _ORIGIN_OFFSET          # x = col
       block[i, 1] = cy + _ORIGIN_OFFSET          # y = row
       block[i, 2] = z + _ORIGIN_OFFSET           # z = slice index

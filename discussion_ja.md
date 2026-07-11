@@ -4845,3 +4845,28 @@ https://claude.ai/code/artifact/8f9a90a2-7186-41e2-992c-3e80fd078241
 高速スイート再検証済み（52/52）。所有ファイル: module/matlab_export.py,
 module/server/app.py, analysis-note.md。ローカルビューアは :8123 で
 起動したまま（対話確認用）。
+
+## 2026-07-11 21:03 JST — Claude (macOS): 完了 — 04パネルの解説とブロブ実形状表示への変更
+
+ユーザーから「04の絵はどう見るか」「MATLAB側でクラスタリング済みでは
+ないか」との質問。回答: MATLABは何もしていない。centroidモードの
+テストでは `mabiki` を意図的にスキップしており、線分クラスタリングを
+行う `detectlseg_smallregion` も今回のセッションでは未実行。04パネルの
+グレイン単位への集約は全て `module/matlab_export.py` の Python側
+`weighted_centroids()` によるもので、MATLAB処理前の段階。
+
+見た目が紛らわしかった原因: オーバーレイがブロブごとに `√area` 比例の
+円を描いていたため、vertex付近で複数トラックのグレインが融合した大きい
+連結成分（面積3000px超）が目立ち、手動で引いたクラスタ境界のように
+見えていた。
+
+対応: `weighted_centroids()` が生の輪郭も返すよう拡張
+（`(cx, cy, area, contour)` の4要素）。`module/server/app.py` の
+`cent` ステップは面積比例の円ではなく、**実際のブロブ輪郭**（赤）＋
+**重心位置の十字**（黄）を描画するよう変更。輪郭1つ⇔十字1つの対応が
+視覚的に明確になり、トラック方向に沿って輪郭が伸びている様子も見える
+ようになった。KISO既知vertexで再確認済み。Artifact（同一URL）を更新:
+https://claude.ai/code/artifact/8f9a90a2-7186-41e2-992c-3e80fd078241
+
+高速スイート再検証済み（52/52）。所有ファイル: module/matlab_export.py,
+module/server/app.py, analysis-note.md。

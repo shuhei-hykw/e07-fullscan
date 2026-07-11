@@ -25,9 +25,9 @@ from module.server.results import (
 )
 
 # Grain-centroid overlay style (see _process, cent branch).
-_CENT_OUTLINE_COLOR = (60, 60, 200)   # dim red-ish, drawn in BGR
-_CENT_MARKER_COLOR  = (0, 255, 255)   # yellow
-_CENT_MIN_RADIUS_PX = 1
+_CENT_OUTLINE_COLOR   = (60, 60, 200)   # dim red-ish blob outline, BGR
+_CENT_MARKER_COLOR    = (0, 255, 255)   # yellow cross at the weighted hit
+_CENT_MARKER_SIZE_PX  = 5
 
 # --- Load pipeline defaults from config (fallback to built-in values) ---
 _CFG_PATH = Path(__file__).parents[2] / "config" / "default.yaml"
@@ -467,15 +467,17 @@ def _process(
   # the grain.
   if cent and binary is not None:
     output = cv2.cvtColor(fog_img, cv2.COLOR_GRAY2BGR)
-    for cx, cy, area in weighted_centroids(binary, fog_img):
-      cv2.circle(
-        output, (int(round(cx)), int(round(cy))), 2,
-        _CENT_OUTLINE_COLOR, thickness=-1,
-      )
-      r = max(_CENT_MIN_RADIUS_PX, int(round((area ** 0.5) / 2)))
-      cv2.circle(
-        output, (int(round(cx)), int(round(cy))), r,
-        _CENT_MARKER_COLOR, thickness=1,
+    # Outline the *actual* blob shape (not an abstract size-proxy circle,
+    # which can look like a hand-drawn cluster boundary where several
+    # grains have merged) so it's unambiguous that each dot is exactly
+    # one hit -- the outline is just showing where that hit's intensity
+    # weighting was computed from.
+    for cx, cy, _area, cnt in weighted_centroids(binary, fog_img):
+      cv2.drawContours(output, [cnt], -1, _CENT_OUTLINE_COLOR, 1)
+      cv2.drawMarker(
+        output, (int(round(cx)), int(round(cy))), _CENT_MARKER_COLOR,
+        markerType=cv2.MARKER_CROSS,
+        markerSize=_CENT_MARKER_SIZE_PX, thickness=1,
       )
     return output
 
