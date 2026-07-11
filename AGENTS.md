@@ -23,13 +23,17 @@
 - Avoid magic numbers; always assign named constants
 
 ## Documentation
-- Always update and review ANALYSIS.md and README.md in English
-- Always update ANALYSIS_ja.md in Japanese (mirrors ANALYSIS.md)
-- ANALYSIS.md / ANALYSIS_ja.md are **chronological development diaries**
-  (lab notebook style). Record not just results but also discussions,
-  hypotheses, dead ends, and the reasoning behind decisions.
-  Each entry is dated and appended at the bottom; never reorganise or remove
-  existing entries. New entries go under `## YYYY-MM-DD — <title>`.
+- Always update and review README.md in English.
+- `analysis-note.md` is the single development diary (lab notebook style,
+  in Japanese; replaced ANALYSIS.md / ANALYSIS_ja.md on 2026-07-11).
+  Record not just results but also discussions, hypotheses, dead ends, and
+  the reasoning behind decisions.
+- Entries are **reverse-chronological** (newest at the top of the log
+  section). Insert new entries directly below the
+  `## 開発ログ（最新が上）` heading, under
+  `## YYYY-MM-DD HH:MM JST — <title>`. Never reorganise or remove existing
+  entries; older date-only headers stay as they are.
+- Notion is no longer used (retired 2026-07-11).
 
 ## Simplification Principle
 - Prefer Occam's razor: reduce visible concepts, entry points, and files
@@ -44,8 +48,8 @@
 ## Agent Coordination
 - At the start of every session, especially stateless `codex exec`, cron, or
   tmux watcher runs, reconstruct working memory by reading:
-  `AGENTS.md`, `CLAUDE.md`, `discussion.md`, `discussion_ja.md`,
-  `ANALYSIS.md`, and `ANALYSIS_ja.md`.
+  `AGENTS.md`, `CLAUDE.md`, `discussion.md`, `discussion_ja.md`, and
+  `analysis-note.md`.
 - Always check both `discussion.md` and `discussion_ja.md` before starting
   repository work, before editing shared files, and before final reporting.
 - Treat new entries in those files as active coordination state from the
@@ -73,4 +77,4 @@
   intended input files, output files/directories, and owned files in the
   discussion logs first.
 - If a conclusion or result matters beyond short-term coordination, also
-  append it to `ANALYSIS.md` and `ANALYSIS_ja.md` as dated diary entries.
+  record it in `analysis-note.md` as a dated diary entry (newest first).

@@ -63,3 +63,10 @@ logs/pytest_last.log
 # Large / generated PDFs (sources kept as .md)
 *.pdf
 .codex/
+
+# Agent instruction files (local only)
+CLAUDE.md
+AGENTS.md
+
+# pyenv
+.python-version
