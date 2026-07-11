@@ -4784,3 +4784,31 @@ n≥40+mabiki3 → 約 5.7 h、n≥40+mabiki6 → 約 1.8 h だが、輝度カ�
 analysis-note.md（2026-07-11 15:29 エントリ）。次ステップ候補も同所に
 記載、ユーザーの方針待ち。所有: results/matlab/*（gitignore 済み）、
 analysis-note.md。
+
+## 2026-07-11 18:29 JST — Claude (macOS): 完了 — 重心化エクスポートで detectlseg が実用時間に（KISO 全域完走）
+
+ユーザー方針（MATLAB の .m ファイルは変更しない。前段の前処理を再考する）
+に従って対応。第1回テストの約392時間の元凶は、生ピクセル方式のエクスポート
+が二値マスクの1ピクセルごとに1ヒットを生成していたこと。1つのグレイン
+ブロブ（数十px）が数十個の重複ヒットになっており、detect_tracks.m が
+想定する「1 hit = 1 粒子」という意味とも乖離していた。
+
+`module/matlab_export.py` に `export_hits_centroid()` を追加（CLI の
+デフォルトに変更。`--mode pixel` で旧方式も比較用に選択可）: スライスごと
+の connected component の重心を1ヒットとする方式。輝度カットと違いどの
+ヒットも捨てないため、efficiency 最優先方針とも衝突しない。
+
+KISO での効果: 1,236万 → 10.1万ヒット（122倍減）、最大領域の点数
+26,962 → 838（32倍減）。全256領域の detectlseg_smallregion を初めて
+最後まで完走: 9,067.5秒（2.52時間）、検出セグメント24,799件。事前の
+N³ 外挿（2.48時間）とほぼ一致。既知 vertex 領域（region 137、
+vx=1096/vy=1028/z_slice=10、tests/specials_gt.json）から半径80px・
+z±8スライス以内に113セグメントが存在し、空でも無秩序でもない妥当な
+トラック密度を確認。ただし detectbunki（分岐点／vertex 再構成）は
+未実行で、既知の ΛΛ vertex がエンドツーエンドで再構成できるかはまだ
+確認できていない。
+
+詳細と次の一手候補は analysis-note.md（2026-07-11 18:29 エントリ）。
+matlab_export.py 変更後、高速テスト再検証済み（52/52）。所有ファイル:
+module/matlab_export.py, analysis-note.md, results/matlab/*（gitignore
+済み、未コミット）。MATLAB（.m）ファイルには一切手を入れていない。

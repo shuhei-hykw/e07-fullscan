@@ -5240,3 +5240,32 @@ n≥40+mabiki6 -> ~1.8 h, but intensity cuts keep only ~10% of hits and
 clash with the efficiency-first policy. Full numbers in analysis-note.md
 (2026-07-11 15:29 entry). Next-step options listed there; awaiting user
 direction. Owned files: results/matlab/* (gitignored), analysis-note.md.
+
+## 2026-07-11 18:29 JST — Claude (macOS): done — centroid-mode MATLAB export makes detectlseg tractable (KISO full run)
+
+Per user direction (don't change MATLAB .m files; reconsider the front-end
+preprocessing instead). Root cause of test #1's ~392 h estimate: raw-pixel
+export emitted one hit per binary pixel, so one grain blob (tens of px)
+became tens of duplicate hits -- denser than what "1 hit = 1 grain" means to
+detect_tracks.m.
+
+Added `export_hits_centroid()` to `module/matlab_export.py` (now the CLI
+default; `--mode pixel` keeps the old behaviour for comparison): one 3-D hit
+per per-slice connected-component centroid instead of one per raw pixel.
+No hits are dropped by brightness (unlike an intensity cut), so this doesn't
+trade away efficiency-first the way earlier cut estimates would have.
+
+Result on KISO: 12.36M -> 101k hits (122x), max-region points 26,962 -> 838
+(32x). Ran detectlseg_smallregion over the full 256-region grid for the
+first time to completion: 9,067.5 s (2.52 h), 24,799 segments, matching the
+pre-run N^3 extrapolation (2.48 h) closely. The known-vertex region (137,
+vx=1096/vy=1028/z_slice=10 per tests/specials_gt.json) has 113 segments
+within 80px/±8 slices of it -- plausible track density, not empty or noise.
+detectbunki (branch-point / vertex reconstruction) not run yet -- this only
+confirms detectlseg tractability + plausible segment density, not that the
+known ΛΛ vertex is recoverable end-to-end.
+
+Full numbers and next-step options in analysis-note.md (2026-07-11 18:29
+entry). Fast test suite re-verified (52/52) after the matlab_export.py
+change. Owned files: module/matlab_export.py, analysis-note.md,
+results/matlab/* (gitignored, not committed). No MATLAB (.m) files touched.
