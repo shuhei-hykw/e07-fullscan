@@ -4658,3 +4658,53 @@ Codex 側の確認:
 Codex はユーザーの目標が満たされたと判断する。follow-up 作業まで議論を継続し、
 双方が最終レビューを行い、双方が明示的に納得し、残 blocker はない。この cleanup
 thread は Codex 側からも close。
+
+---
+
+## 2026-06-23 18:36 JST — Claude: 作業意図 — MATLAB グラフ検出器向けエクスポート（試作）
+
+ユーザー依頼の新機能。グラフ理論イベント検出器は `e07/matlab/` にある
+（`detect_tracks.m` ＋ヘルパー）。stage-1 の入力は 3D ヒット画素リスト
+`pl = {x,y,z,n,sheet,id}`（x,y はピクセル、z はスライス番号）で、以降の
+stage は `dspl = mabiki(pl,3)` の x,y,z しか使わない。fullscan は相当する
+入力を生成する必要がある。
+
+ユーザー決定: `pl` を `.mat` に直接書出し；mabiki ブロック3 のダウンサンプルは
+MATLAB 側に任せる；まず1タイルで試作。
+
+予定作業（Claude 所有）:
+- 新規 `module/matlab_export.py`: 各スライスを個別二値化（`module.preprocess`
+  の fog/Otsu/noise を再利用、z射影はしない）→ 3D 前景ヒットを収集
+  （x=col+1, y=row+1, z=slice+1、MATLAB の (1,1,1) 原点に合わせ 1-based）→
+  `scipy.io.savemat` で `pl`(N×6) ＋変数名メタを書出し。
+- 薄い CLI；`run.py` に `matlab-export` サブコマンドを追加。
+- ドキュメント: README 注記、ANALYSIS.md / ANALYSIS_ja.md の日付つき日記、
+  Notion 行。
+
+入力想定: 1タイル JSON
+`/gpfs/.../IMAGE00_AREA00/V00000004_...json`（2048×2048×58）。
+出力想定: `<stem>_pl.mat`（パスは未定；試作は results/ かユーザー指定）。
+所有ファイル: `module/matlab_export.py`, `run.py`, README.md, ANALYSIS.md,
+ANALYSIS_ja.md。他エージェントの active ファイルは編集しない。
+
+## 2026-06-23 18:46 JST — Claude: 完了 — 試作エクスポータ動作（未コミット）
+
+実装・検証済み。新規 `module/matlab_export.py` ＋ `run.py matlab-export`；
+README / ANALYSIS.md / ANALYSIS_ja.md / Notion 更新。タイル V00000004 で試作実行
+→ 22,072,518 ヒット、圧縮 `.mat` ≈ 38 MB、loadmat 往復 OK（出力はセッションの
+scratchpad、リポジトリには未配置）。密度/スケーリングの注意（シミュの約1000倍、
+小領域ごとに `pdist` O(N²)）をユーザーに共有。working tree は未コミット変更あり、
+コミットはユーザー確認待ち。
+
+---
+
+## 2026-07-11 13:30 JST — Claude: 作業意図 — MATLAB エクスポート試作の commit & push
+
+ユーザーが 2026-06-23 試作のコミットを承認。作業内容：ANALYSIS.md /
+ANALYSIS_ja.md に 2026-07-11 の ToDo 整理エントリを追記した上で、一式
+（`module/matlab_export.py`, `run.py`, README.md, ANALYSIS.md,
+ANALYSIS_ja.md, discussion.md, discussion_ja.md）を 1 つの feature コミット
+として `main` に載せ、`origin/main` へ push。ジョブ起動・データ出力はなし。
+試作 `.mat` はリポジトリ外のまま。所有ファイルは 2026-06-23 エントリから
+変更なし。push 後に Notion image-pre-processing DB へ 2026-07-11 の行を追加
+する。

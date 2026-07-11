@@ -16,6 +16,7 @@ Commands:
   click            click ground-truth vertices
   submit-tracking  submit tracking LSF array (KEKCC)
   submit-vertices  submit vertex LSF array (KEKCC)
+  matlab-export    export tile as 3-D hit list (.mat) for MATLAB
   view             vertex review/3D viewer server
   monitor          live job monitor  (add --loop N for polling)
   status           pipeline overview
@@ -43,6 +44,7 @@ COMMANDS: dict[str, str] = {
   "click":           "module.pipeline.cli_click_vertex",
   "submit-tracking": "module.pipeline.cli_submit_kekcc",
   "submit-vertices": "module.pipeline.cli_submit_vertex_kekcc",
+  "matlab-export":   "module.matlab_export",
   "monitor":         "module.job_monitor",
   "status":          "module.pipeline_status",
 }

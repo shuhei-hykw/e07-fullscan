@@ -2139,3 +2139,79 @@ Whole-tree min-indent == 2 with 0 odd-indent lines (excl. scripts/legacy/);
 four help/pipeline surfaces) and, after one README wording fix (the wrapper
 sentence generalised beyond `_cli_*`), stated it is satisfied with the
 structure/cleanup. Both parties signed off.
+
+---
+
+## 2026-06-23 — MATLAB graph-detector export (prototype)
+
+The full-scan output will feed the graph-theory event detector placed in
+`e07/matlab` (`detect_tracks.m` + helpers: `detectlseg_smallregion`,
+`integrate_smallregions`, `detectbunki`, `mabiki`, ...). That detector builds
+tracks from a 3-D hit point cloud via a minimum-spanning-tree + line-segment
+fit, then groups branches — a separate approach from our Hough pipeline. We
+need to produce its stage-1 input.
+
+### Interface (decided with the user)
+
+The detector's stage-1 input is a hit pixel list `pl = {x, y, z, n, sheet,
+id}` (x, y in pixels, z = slice index); downstream stages only use
+`dspl = mabiki(pl, 3)` x,y,z. User decisions: write `pl` directly to a `.mat`;
+leave the block-3 `mabiki` down-sampling to MATLAB; prototype on one tile.
+
+Key difference from the Hough path: that path z-projects the 9-slice window
+into one 2-D image (`zpj`), discarding z. The graph detector needs the full z
+extent, so we binarize **each slice independently** (reusing
+`module.preprocess` fog removal -> Otsu -> noise removal) and emit every
+foreground pixel as a 3-D hit. The simulation `Ev_*.xlsx` Summary/per-track
+sheets are ground truth that real data lacks, so `sheet`/`id` are 0
+placeholders and `n` carries the fog-removed intensity.
+
+### Implementation
+
+`module/matlab_export.py` (`export_hits` + `save_mat`, thin CLI), wired as
+`run.py matlab-export`. Coordinates are 1-based (x = col + 1, y = row + 1,
+z = slice + 1) to match MATLAB's (1, 1, 1) origin and its `x > lb` /
+`x <= ub` small-region split (a 0-based first row/col would be dropped). Output
+is `scipy.io.savemat` of `pl` (N×6 float64) + `variablenamespl`, compressed.
+
+### Prototype result and a scaling caveat
+
+Tile V00000004 (2048×2048×58): **22,072,518 hits**, x,y ∈ [1, 2048],
+z ∈ [1, 58], n ∈ [3, 119]; compressed `.mat` ≈ 38 MB; ~27 s on `myenv`
+(cv2+scipy). Verified the round-trip with `scipy.io.loadmat`.
+
+Caveat: this is ~1000× denser than the simulation events the MATLAB was tuned
+on (which were ~10⁴ points per 2048×2048×80 volume). `mabiki(.,3)` cuts it
+~9×, but `detectlseg_smallregion` uses `pdist` (O(N²)) within each 128×128×80
+region, so MATLAB-side down-sampling — and possibly stronger noise removal on
+the Python side (`--noise-*` flags are exposed) — will matter for the graph
+stages to be tractable. Flagged to the user; not a defect of the export
+contract itself.
+
+---
+
+## 2026-07-11 — Committed the MATLAB export prototype; ToDo review
+
+The 2026-06-23 prototype (`module/matlab_export.py`, `run.py matlab-export`,
+plus README / diary / discussion updates) had been sitting uncommitted while
+awaiting user confirmation. Today the user approved: the whole set goes to
+`main` as one feature commit and is pushed to `origin/main`. No code changes
+since 2026-06-23; this entry records the commit and the open ToDo state.
+
+### ToDo (carried forward)
+
+- **Density / tractability.** Tile V00000004 exports 22,072,518 hits,
+  ~1000× the simulated events the MATLAB detector was tuned on. Decide the
+  mitigation mix: stronger Python-side noise removal (the exposed
+  `--noise-*` flags) vs. heavier MATLAB-side down-sampling beyond
+  `mabiki(pl, 3)`.
+- **Real MATLAB run.** Feed `V00000004_..._pl.mat` to
+  `e07/matlab/detect_tracks.m` and measure runtime/memory of
+  `detectlseg_smallregion` (`pdist` is O(N²) per 128×128×80 region) before
+  scaling to more tiles.
+- **Output convention.** The prototype `.mat` lives in a session scratchpad;
+  decide a repo convention (e.g. `results/matlab/`) and then add multi-tile
+  batch export.
+- **Pipeline backlog (pre-dating this thread).** Vertex-candidate review with
+  an angular-spread filter against heavy-particle false positives; the
+  `hough_ml=30` rerun.

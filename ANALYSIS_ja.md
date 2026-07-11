@@ -1636,3 +1636,76 @@ module+scripts 全 `py_compile` OK；diagnostics import smoke OK；
 （git diff --check, py_compile, 5ファイルの AST 等価, legacy grep, 4つの
 help/pipeline surface）を実施し、README の wrapper 文を `_cli_*` を超えて
 一般化する1点の修正の後、構造・整理に納得と明言。双方 sign-off。
+
+---
+
+## 2026-06-23 — MATLAB グラフ検出器向けエクスポート（試作）
+
+fullscan の出力は `e07/matlab` に置かれたグラフ理論イベント検出器
+（`detect_tracks.m` ＋ヘルパー: `detectlseg_smallregion`,
+`integrate_smallregions`, `detectbunki`, `mabiki` 他）へ繋ぐ予定。この検出器は
+3D ヒット点群から最小全域木＋線分近似で飛跡を構築し、分岐をグループ化する。
+Hough パイプラインとは別アプローチ。その stage-1 入力を生成する必要がある。
+
+### インターフェース（ユーザーと決定）
+
+検出器の stage-1 入力はヒット画素リスト `pl = {x, y, z, n, sheet, id}`
+（x,y はピクセル、z はスライス番号）。以降の stage は
+`dspl = mabiki(pl, 3)` の x,y,z しか使わない。ユーザー決定: `pl` を `.mat` に
+直接書出し；ブロック3 の `mabiki` ダウンサンプルは MATLAB 側に任せる；
+まず1タイルで試作。
+
+Hough 経路との重要な違い: Hough は 9 スライス窓を 1 枚に z 射影（`zpj`）して
+z を捨てる。グラフ検出器は z 方向全体を要するため、**各スライスを個別に
+二値化**（`module.preprocess` の fog 除去 → Otsu → ノイズ除去を再利用）し、
+前景画素をすべて 3D ヒットとして出力する。シミュレーションの `Ev_*.xlsx` の
+Summary/飛跡別シートは実データにない正解情報なので、`sheet`/`id` は 0 の
+プレースホルダ、`n` は fog 除去後の強度を持たせる。
+
+### 実装
+
+`module/matlab_export.py`（`export_hits` ＋ `save_mat`、薄い CLI）。
+`run.py matlab-export` として配線。座標は 1-based（x = col + 1, y = row + 1,
+z = slice + 1）で MATLAB の (1, 1, 1) 原点と `x > lb` / `x <= ub` の小領域
+分割に合わせる（0-based だと最初の行/列が落ちる）。出力は `scipy.io.savemat`
+で `pl`（N×6 float64）＋ `variablenamespl`、圧縮あり。
+
+### 試作結果とスケーリングの注意
+
+タイル V00000004（2048×2048×58）: **22,072,518 ヒット**、x,y ∈ [1, 2048]、
+z ∈ [1, 58]、n ∈ [3, 119]；圧縮 `.mat` ≈ 38 MB；`myenv`（cv2+scipy）で約 27 秒。
+`scipy.io.loadmat` で往復を検証。
+
+注意: これは MATLAB が調整されたシミュレーションイベント（2048×2048×80 で
+~10⁴ 点）より約 1000 倍密。`mabiki(.,3)` で ~9× 削減されるが、
+`detectlseg_smallregion` は 128×128×80 の各小領域内で `pdist`（O(N²)）を使う
+ため、MATLAB 側のダウンサンプル、場合によっては Python 側のより強い
+ノイズ除去（`--noise-*` フラグを公開済み）が、グラフ段を現実的にする上で効く。
+ユーザーに共有済み。エクスポート契約自体の欠陥ではない。
+
+---
+
+## 2026-07-11 — MATLAB エクスポート試作をコミット；ToDo 整理
+
+2026-06-23 の試作（`module/matlab_export.py`、`run.py matlab-export`、
+README / 日記 / discussion の更新）はユーザー確認待ちで未コミットのまま
+だった。本日ユーザー承認が出たので、一式を 1 つの feature コミットとして
+`main` に載せ、`origin/main` へ push する。2026-06-23 以降コードの変更は
+なし。本エントリはコミットの記録と ToDo の現状整理。
+
+### ToDo（持ち越し）
+
+- **密度／計算量。** タイル V00000004 のエクスポートは 22,072,518 ヒットで、
+  MATLAB 検出器がチューニングされたシミュレーションの約 1000 倍。対策の
+  配分を決める：Python 側ノイズ除去の強化（公開済み `--noise-*` フラグ）
+  vs. `mabiki(pl, 3)` を超える MATLAB 側ダウンサンプリング。
+- **MATLAB 実走。** `V00000004_..._pl.mat` を
+  `e07/matlab/detect_tracks.m` に入力し、`detectlseg_smallregion`
+  （128×128×80 領域ごとに `pdist` O(N²)）の実行時間・メモリを計測して
+  から複数タイルへ展開する。
+- **出力置き場の規約。** 試作 `.mat` はセッションの scratchpad にある。
+  リポジトリ側の規約（例: `results/matlab/`）を決め、その後に複数タイル
+  一括エクスポートを追加。
+- **パイプライン側の積み残し（本スレッド以前から）。** 重粒子起因の偽
+  バーテックスに対する角度広がりフィルタ込みのバーテックス候補レビュー、
+  `hough_ml=30` の再実行。

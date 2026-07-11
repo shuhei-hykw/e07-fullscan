@@ -5114,3 +5114,53 @@ Codex verified:
 Codex agrees the user's goal is met: discussion continued through follow-up
 work, both agents performed final review, both explicitly stated satisfaction,
 and there are no remaining blockers. This cleanup thread is closed from Codex.
+
+---
+
+## 2026-06-23 18:36 JST — Claude: intent — MATLAB graph-detector export (prototype)
+
+New user-requested feature. The graph-theory event detector lives in
+`e07/matlab/` (`detect_tracks.m` + helpers). Its stage-1 input is a 3-D hit
+pixel list `pl = {x,y,z,n,sheet,id}` (x,y in pixels, z = slice index);
+downstream stages only use `dspl = mabiki(pl,3)` x,y,z. fullscan must produce
+the equivalent input.
+
+User decisions: write `pl` directly to a `.mat`; leave the mabiki block-3
+downsampling to MATLAB; prototype on a single tile first.
+
+Planned work (owned by Claude):
+- New module `module/matlab_export.py`: per-slice binarize (reuse
+  `module.preprocess` fog/Otsu/noise, NO z-projection) -> collect 3-D foreground
+  hits (x=col+1, y=row+1, z=slice+1, 1-based to match MATLAB (1,1,1) origin) ->
+  `scipy.io.savemat` writing `pl` (N×6) + variable-name metadata.
+- Thin CLI; wire a `matlab-export` subcommand into `run.py`.
+- Docs: README note, dated ANALYSIS.md / ANALYSIS_ja.md diary entries, Notion
+  row.
+
+Intended input: one tile JSON under
+`/gpfs/.../IMAGE00_AREA00/V00000004_...json` (2048×2048×58).
+Intended output: `<stem>_pl.mat` (path TBD; prototype under results/ or a
+user-specified dir). Owned files: `module/matlab_export.py`, `run.py`,
+README.md, ANALYSIS.md, ANALYSIS_ja.md. No edits to other agents' active files.
+
+## 2026-06-23 18:46 JST — Claude: done — prototype exporter working (not committed)
+
+Implemented and verified. New `module/matlab_export.py` + `run.py
+matlab-export`; README / ANALYSIS.md / ANALYSIS_ja.md / Notion updated.
+Prototype run on tile V00000004 -> 22,072,518 hits, compressed `.mat` ≈ 38 MB,
+loadmat round-trip OK (output written to session scratchpad, not the repo).
+Flagged a density/scaling caveat (~1000× the sim; `pdist` O(N²) per region) to
+the user. Working tree has uncommitted changes; awaiting user before commit.
+
+---
+
+## 2026-07-11 13:30 JST — Claude: intent — commit & push MATLAB export prototype
+
+User approved committing the 2026-06-23 prototype. Action: append 2026-07-11
+ToDo-review diary entries to ANALYSIS.md / ANALYSIS_ja.md, then commit the
+whole set (`module/matlab_export.py`, `run.py`, README.md, ANALYSIS.md,
+ANALYSIS_ja.md, discussion.md, discussion_ja.md) as one feature commit on
+`main` and push to `origin/main`. No jobs launched, no data outputs; the
+prototype `.mat` stays outside the repo. Owned files unchanged from the
+2026-06-23 entry. A Notion image-pre-processing DB row for 2026-07-11 will be
+added after the push.

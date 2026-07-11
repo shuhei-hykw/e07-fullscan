@@ -99,6 +99,7 @@ python run.py monitor ...         # live job monitor
 python run.py status              # pipeline overview
 python run.py submit-tracking     # KEKCC LSF batch submit
 python run.py submit-vertices     # KEKCC vertex submit
+python run.py matlab-export ...   # export 3-D hit list (.mat) for MATLAB
 python run.py crops ...           # crop vertices for inspection
 python run.py review              # web vertex review
 python run.py map ...             # spatial vertex distribution map
@@ -157,6 +158,29 @@ mdf = merge_vertex_slices(vdf, eps_xy=50.0, min_slices=3)
 Key parameters: `min_tracks=3`, `max_impact=30 px`, `max_ep=150 px`,
 `beam_angle_cut=15°` (removes ~22% beam-parallel tracks, reduces false
 vertices by ~13%).
+
+## MATLAB Graph-Detector Export
+
+Bridge to the graph-theory event detector in `e07/matlab`
+(`detect_tracks.m`). That detector's stage-1 input is a 3-D hit pixel list
+`pl = {x, y, z, n, sheet, id}` (x, y in pixels, z = slice index); its
+downstream stages only use `dspl = mabiki(pl, 3)`.
+
+```bash
+python run.py matlab-export tile.json -o tile_pl.mat
+```
+
+Unlike the Hough pipeline (which z-projects the stack into one 2-D image),
+this binarizes each slice independently (fog removal -> Otsu -> noise removal)
+and emits every foreground pixel as one 3-D hit. Coordinates are 1-based
+(x = col + 1, y = row + 1, z = slice + 1) to match the MATLAB (1, 1, 1)
+origin. The block-3 down-sampling (`mabiki`) is left to MATLAB; only the raw
+`pl` is written, plus `variablenamespl`. `sheet`/`id` are 0 placeholders (no
+track segmentation exists for real data), and `n` is the fog-removed
+intensity.
+
+Real tiles are dense (a 2048×2048×58 tile yields ~2×10⁷ hits), so MATLAB-side
+`mabiki` down-sampling is essential before the graph stages.
 
 ## Web Viewer
 
