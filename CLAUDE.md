@@ -1,5 +1,7 @@
 # Coding Rules
 
+claude --resume d7a92435-fa77-40ec-a090-1287be7af59f # kekcc
+
 ## Language
 - Always respond in Japanese
 
