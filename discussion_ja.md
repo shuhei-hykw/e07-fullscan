@@ -4770,3 +4770,17 @@ HEAD `baa81a2` と同一ツリー。`.venv`（Python 3.14, OpenCV 5.0）を構�
 所有ファイル: `analysis-note.md`, `README.md`, `CLAUDE.md`, `AGENTS.md`。
 Codex への注記: ANALYSIS.md / ANALYSIS_ja.md は存在しない。作業記憶の再構築
 時は `analysis-note.md` を読むこと。
+
+## 2026-07-11 15:29 JST — Claude (macOS): 完了 — 実データ初の MATLAB テスト: detectlseg がスケールしない
+
+実データを初めてグラフ検出器ステージ2に投入（macbook、MATLAB R2026a、
+KISO specials タイル）。エクスポート（12.36M ヒット）と mabiki(pl,3)
+（7.7 秒 → 2.46M 点）は問題なし。ボトルネックは detectlseg_smallregion:
+領域ごと ~N²、2,991 点 → 291 秒、1 万点超の領域が 117/256、外挿で
+1 タイル**約 392 時間**。1 時間で中断（13/256 領域）。多重度カットは
+無効（実データは 3×3 ブロックが飽和、nn=9 が最大ビン）。試算では
+n≥40+mabiki3 → 約 5.7 h、n≥40+mabiki6 → 約 1.8 h だが、輝度カットは
+ヒットの ~10% しか残らず efficiency 最優先方針と衝突。詳細は
+analysis-note.md（2026-07-11 15:29 エントリ）。次ステップ候補も同所に
+記載、ユーザーの方針待ち。所有: results/matlab/*（gitignore 済み）、
+analysis-note.md。

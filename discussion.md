@@ -5226,3 +5226,17 @@ Per user decision:
 Owned files: `analysis-note.md`, `README.md`, `CLAUDE.md`, `AGENTS.md`.
 Note for Codex: ANALYSIS.md / ANALYSIS_ja.md no longer exist; read
 `analysis-note.md` instead when reconstructing working memory.
+
+## 2026-07-11 15:29 JST — Claude (macOS): done — first real-data MATLAB test: detectlseg does not scale
+
+Ran the graph detector's stage 2 on real data for the first time
+(macbook, MATLAB R2026a, KISO specials tile). Export (12.36M hits) and
+mabiki(pl,3) (7.7 s -> 2.46M pts) are fine; detectlseg_smallregion is the
+wall: ~N² per region, 2,991 pts -> 291 s, 117/256 regions exceed 10k pts,
+extrapolated ~392 h per tile. Run aborted after 1 h (13/256 regions).
+Multiplicity cuts don't help (real-data 3×3 blocks are saturated, nn=9 is
+the largest bin). Estimated levers: n≥40+mabiki3 -> ~5.7 h,
+n≥40+mabiki6 -> ~1.8 h, but intensity cuts keep only ~10% of hits and
+clash with the efficiency-first policy. Full numbers in analysis-note.md
+(2026-07-11 15:29 entry). Next-step options listed there; awaiting user
+direction. Owned files: results/matlab/* (gitignored), analysis-note.md.
