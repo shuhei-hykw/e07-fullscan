@@ -5329,3 +5329,42 @@ https://claude.ai/code/artifact/8f9a90a2-7186-41e2-992c-3e80fd078241
 
 Fast suite re-verified (52/52). Owned files: module/matlab_export.py,
 module/server/app.py, analysis-note.md.
+
+## 2026-07-11 21:19 JST — Claude (macOS): done -- connected-component mode had a critical bug (long tracks collapse to 1 point); replaced with fixed-grid binning
+
+User asked a chain of questions that led to discovering a real defect:
+"don't we need clustering", "is passing all raw pixels bad", "is passing
+the binary image (pre-clustering) as-is also bad".
+
+Found: KISO has a connected component with bbox extent 882px (area only
+4845px -- clearly one long, continuously-connected track). The previous
+`weighted_centroids()` (connected-component-based) collapsed it to ONE
+point, destroying all line/vertex information. 1,123/101,479 hits
+(~1.1%) came from blobs with extent >100px -- not a rare edge case.
+Visually confirmed via the web viewer (one long line, one cross).
+
+Re-confirmed raw-pixel mode is intractable via two independent
+extrapolations from real timing data: a robust 157-point log-log fit
+(k=2.887) gives ~15,000 days for the full tile; a self-consistent fit
+from raw-pixel-mode's own 2 real data points (k=2.11) gives ~635 days.
+Orders of magnitude apart, but both obviously catastrophic -- passing
+either raw pixels or the binary mask as-is (same thing: export_hits /
+pixel mode) is a dead end regardless of which fit is trusted.
+
+Replaced connected-component clustering with fixed-grid binning
+(`weighted_grid_hits`, `export_hits_grid` in `module/matlab_export.py`):
+no `cv2.findContours`, no shape/connectivity grouping at all -- pixels
+are assigned to a fixed 30px x 30px cell purely by position, one
+intensity-weighted hit per occupied cell. A cell-size sweep (10/15/20/25/
+30px) with detectlseg runtime estimated from a robust power-law fit
+picked 30px: 130,364 hits (vs 101,479 for the old connected-component
+mode), max region 1,111 pts, est. ~6h/tile (close to the proven 2.52h).
+Re-exported KISO and confirmed the former 882px single-point track now
+yields 468 points. Web viewer's "Grain Centroids" overlay now draws faint
+grid lines + a cross per grid hit (no more blob outlines -- there's no
+blob concept anymore).
+
+Launching a real full-256-region detectlseg run now to verify the ~6h
+estimate empirically (background). Fast suite re-verified (52/52).
+Owned files: module/matlab_export.py, module/server/app.py,
+analysis-note.md, results/matlab/* (gitignored).

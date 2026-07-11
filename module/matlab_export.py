@@ -10,12 +10,19 @@ graph detector needs the full z extent. So each slice is binarized
 independently (fog removal -> Otsu -> noise removal, reused from
 ``module.preprocess``).
 
-Default mode (``centroid``): one 3-D hit per connected-component (grain
-blob) centroid, matching what "one hit" means physically in
-``detect_tracks.m``. A raw-pixel mode (``pixel``, one hit per binary pixel)
-is kept for comparison but is ~120x denser and makes
-``detectlseg_smallregion``'s ~N^2 per-region cost impractical on real data
-(see analysis-note.md, 2026-07-11 entries).
+Default mode (``grid``): one intensity-weighted 3-D hit per occupied
+``_GRID_CELL_PX`` x ``_GRID_CELL_PX`` spatial bin (fixed grid, no
+connected-component analysis). A raw-pixel mode (``pixel``, one hit per
+binary pixel) is kept for comparison but is so dense it makes
+``detectlseg_smallregion`` take an estimated 600+ days on real data (see
+analysis-note.md, 2026-07-11 entries). An earlier connected-component
+"one hit per grain blob" mode was tried and dropped: it made
+``detectlseg_smallregion`` tractable (~2.5h/tile) but a long,
+continuously-connected track collapses into a *single* connected
+component, so its whole length -- and all its line/vertex information --
+collapsed into one hit. A fixed grid has no notion of connectivity, so a
+long track keeps getting re-sampled every ``_GRID_CELL_PX`` along its
+length, same as an isolated grain.
 
 Coordinates are 1-based (x = col + 1, y = row + 1, z = slice + 1) to match the
 MATLAB convention of a (1, 1, 1) origin and its ``x > lb`` small-region split.
@@ -30,7 +37,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import cv2
 import numpy as np
 from scipy.io import savemat
 
@@ -54,8 +60,13 @@ _ID_PLACEHOLDER = 0
 # 1-based origin to match MATLAB's (1, 1, 1) start.
 _ORIGIN_OFFSET = 1
 _MODE_PIXEL = "pixel"
-_MODE_CENTROID = "centroid"
-_DEFAULT_MODE = _MODE_CENTROID
+_MODE_GRID = "grid"
+_DEFAULT_MODE = _MODE_GRID
+# Spatial bin size for grid mode (px). Chosen from a density/runtime sweep
+# on KISO (analysis-note.md, 2026-07-11 entry): keeps detectlseg_smallregion
+# near its proven ~2.5h/tile (connected-component mode) run time while
+# guaranteeing >=1 sample per ~_GRID_CELL_PX along any track, however long.
+_GRID_CELL_PX = 30
 
 
 def _binarize_slice(
@@ -89,8 +100,8 @@ def export_hits(
 
   Each slice is binarized independently; every foreground pixel becomes one
   3-D hit, with intensity ``n`` taken from the fog-removed image. This is
-  the raw-pixel mode: dense (one hit per binary pixel), ~100x denser than
-  ``export_hits_centroid``. Kept for comparison; not the default CLI mode.
+  the raw-pixel mode: dense (one hit per binary pixel), ~95x denser than
+  ``export_hits_grid``. Kept for comparison; not the default CLI mode.
   """
   reader = load_spng(json_path)
   cols = []
@@ -116,65 +127,67 @@ def export_hits(
   return np.concatenate(cols, axis=0)
 
 
-def weighted_centroids(
-  binary: np.ndarray, intensity: np.ndarray
-) -> list[tuple[float, float, float, np.ndarray]]:
-  """Return (cx, cy, area, contour) per connected component in ``binary``.
+def weighted_grid_hits(
+  binary: np.ndarray, intensity: np.ndarray, cell: int = _GRID_CELL_PX,
+) -> np.ndarray:
+  """Return (cx, cy, n) per occupied ``cell`` x ``cell`` spatial bin.
 
-  Each centroid is weighted by ``intensity`` (typically the fog-removed
-  image) within the component's footprint, not just its binary shape --
-  brighter, denser sub-regions of a grain cluster pull the centroid toward
-  them. This is what a plain ``cv2.moments(contour)`` (geometric, shape-only
-  centroid) misses. ``contour`` (the raw ``cv2.findContours`` polygon) is
-  returned alongside so callers that want to visualise the actual blob
-  shape -- not just an abstract "one hit" marker -- don't need to re-run
-  ``cv2.findContours`` themselves.
+  Deliberately NOT connected-component based (no ``cv2.findContours``, no
+  grouping by shape/adjacency): every foreground pixel is assigned to a
+  fixed grid cell by position alone, and each occupied cell yields one hit
+  at the intensity-weighted centroid of its pixels. ``n`` is the occupied
+  pixel count in that cell (matches ``mabiki.m``'s own hit-count
+  convention).
+
+  This intentionally re-samples every ``cell`` px along a track, however
+  long or densely connected it is -- unlike a connected-component
+  centroid, which would collapse an entire long track into a single
+  point (see module docstring).
   """
-  contours, _ = cv2.findContours(
-    binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+  ys, xs = np.nonzero(binary)
+  if xs.size == 0:
+    return np.empty((0, 3), dtype=np.float64)
+  w = intensity[ys, xs].astype(np.float64)
+  bin_x = (xs // cell).astype(np.int64)
+  bin_y = (ys // cell).astype(np.int64)
+  ncols = binary.shape[1] // cell + 1
+  key = bin_y * ncols + bin_x
+
+  n_bins = int(key.max()) + 1
+  sum_w  = np.bincount(key, weights=w, minlength=n_bins)
+  sum_wx = np.bincount(key, weights=w * xs, minlength=n_bins)
+  sum_wy = np.bincount(key, weights=w * ys, minlength=n_bins)
+  count  = np.bincount(key, minlength=n_bins)
+
+  occupied = count > 0
+  cx = np.where(sum_w[occupied] > 0, sum_wx[occupied] / np.maximum(
+    sum_w[occupied], 1e-12), 0.0)
+  cy = np.where(sum_w[occupied] > 0, sum_wy[occupied] / np.maximum(
+    sum_w[occupied], 1e-12), 0.0)
+  return np.stack(
+    [cx, cy, count[occupied].astype(np.float64)], axis=1
   )
-  out = []
-  for cnt in contours:
-    area = cv2.contourArea(cnt)
-    x, y, w, h = cv2.boundingRect(cnt)
-    mask = np.zeros((h, w), dtype=np.uint8)
-    cv2.drawContours(mask, [cnt], -1, 1, -1, offset=(-x, -y))
-    weighted = intensity[y:y + h, x:x + w].astype(np.float64) * mask
-    M = cv2.moments(weighted, binaryImage=False)
-    if M["m00"] > 0:
-      cx = M["m10"] / M["m00"] + x
-      cy = M["m01"] / M["m00"] + y
-    else:
-      # Zero-intensity blob (shouldn't normally happen post fog+Otsu):
-      # fall back to the geometric (shape-only) centroid.
-      Mg = cv2.moments(cnt)
-      if Mg["m00"] > 0:
-        cx, cy = Mg["m10"] / Mg["m00"], Mg["m01"] / Mg["m00"]
-      else:
-        cx, cy = (float(v) for v in cnt[0, 0])
-    out.append((cx, cy, max(area, 1.0), cnt))
-  return out
 
 
-def export_hits_centroid(
+def export_hits_grid(
   json_path: Path | str,
   fog_ksize: int = _FOG_KSIZE,
   noise_amin: int = _NOISE_AMIN,
   noise_amax: int = _NOISE_AMAX,
   noise_cmp: int = _NOISE_CMP,
   noise_amax_upper: int = _NOISE_AMAX_UPPER,
+  cell: int = _GRID_CELL_PX,
 ) -> np.ndarray:
-  """Build the MATLAB hit pixel list ``pl`` (N x 6), one hit per grain blob.
+  """Build the MATLAB hit pixel list ``pl`` (N x 6) via fixed-grid binning.
 
-  Each slice is binarized independently, then reduced to one 3-D hit per
-  connected component (grain / grain-cluster centroid, intensity-weighted
-  via ``weighted_centroids``), instead of one hit per raw binary pixel.
-  This matches the physical meaning of a "hit" in ``detect_tracks.m`` (one
-  grain, not one pixel of its silhouette) and cuts the KISO tile's point
-  count ~120x (12.36M px -> ~101k centroids), which brings
-  ``detectlseg_smallregion``'s per-region cost from an estimated ~392 h
-  down to a real-run ~2.5 h. ``n`` is the blob area in pixels (a grain-size
-  / cluster-multiplicity proxy).
+  Each slice is binarized independently, then reduced to one
+  intensity-weighted hit per occupied ``cell``-px spatial bin (see
+  ``weighted_grid_hits``). Cuts the KISO tile's point count from 12.36M
+  raw pixels to ~130k (~95x), keeping ``detectlseg_smallregion`` near its
+  proven ~2.5h/tile run time while re-sampling every ``cell`` px along any
+  track -- long tracks are not collapsed to a single point the way a
+  connected-component reduction would (see module docstring). ``n`` is the
+  occupied pixel count per bin.
   """
   reader = load_spng(json_path)
   cols = []
@@ -183,15 +196,14 @@ def export_hits_centroid(
       reader, z, fog_ksize, noise_amin, noise_amax, noise_cmp,
       noise_amax_upper,
     )
-    hits = weighted_centroids(binary, fog)
-    if not hits:
+    hits = weighted_grid_hits(binary, fog, cell)
+    if hits.shape[0] == 0:
       continue
     block = np.empty((len(hits), len(_PL_VARNAMES)), dtype=np.float64)
-    for i, (cx, cy, area, _cnt) in enumerate(hits):
-      block[i, 0] = cx + _ORIGIN_OFFSET          # x = col
-      block[i, 1] = cy + _ORIGIN_OFFSET          # y = row
-      block[i, 2] = z + _ORIGIN_OFFSET           # z = slice index
-      block[i, 3] = area                         # blob-size proxy
+    block[:, 0] = hits[:, 0] + _ORIGIN_OFFSET    # x = col
+    block[:, 1] = hits[:, 1] + _ORIGIN_OFFSET    # y = row
+    block[:, 2] = z + _ORIGIN_OFFSET             # z = slice index
+    block[:, 3] = hits[:, 2]                     # occupied px count
     block[:, 4] = _SHEET_PLACEHOLDER
     block[:, 5] = _ID_PLACEHOLDER
     cols.append(block)
@@ -225,9 +237,14 @@ def main(argv: list[str] | None = None) -> int:
     help="output .mat path (default: <stem>_pl.mat next to input)",
   )
   p.add_argument(
-    "--mode", choices=[_MODE_CENTROID, _MODE_PIXEL], default=_DEFAULT_MODE,
-    help="centroid: one hit per grain blob (default, ~120x sparser); "
+    "--mode", choices=[_MODE_GRID, _MODE_PIXEL], default=_DEFAULT_MODE,
+    help="grid: one intensity-weighted hit per occupied cell (default, "
+         "~95x sparser, safe for long/connected tracks); "
          "pixel: one hit per raw binary pixel (dense, for comparison)",
+  )
+  p.add_argument(
+    "--cell-px", type=int, default=_GRID_CELL_PX,
+    help="grid mode: spatial bin size in px (default: %(default)s)",
   )
   p.add_argument("--fog-ksize", type=int, default=_FOG_KSIZE)
   p.add_argument("--noise-amin", type=int, default=_NOISE_AMIN)
@@ -237,17 +254,17 @@ def main(argv: list[str] | None = None) -> int:
   args = p.parse_args(argv)
 
   out = args.output or _default_out(args.input)
-  export_fn = (
-    export_hits_centroid if args.mode == _MODE_CENTROID else export_hits
-  )
-  pl = export_fn(
-    args.input,
+  common = dict(
     fog_ksize=args.fog_ksize,
     noise_amin=args.noise_amin,
     noise_amax=args.noise_amax,
     noise_cmp=args.noise_cmp,
     noise_amax_upper=args.noise_amax_upper,
   )
+  if args.mode == _MODE_GRID:
+    pl = export_hits_grid(args.input, cell=args.cell_px, **common)
+  else:
+    pl = export_hits(args.input, **common)
   save_mat(pl, out)
   print(f"wrote {len(pl)} hits -> {out}")
   return 0

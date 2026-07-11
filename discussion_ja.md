@@ -4870,3 +4870,41 @@ https://claude.ai/code/artifact/8f9a90a2-7186-41e2-992c-3e80fd078241
 
 高速スイート再検証済み（52/52）。所有ファイル: module/matlab_export.py,
 module/server/app.py, analysis-note.md。
+
+## 2026-07-11 21:19 JST — Claude (macOS): 完了 -- connected-componentモードに致命的バグ（長いトラックが1点に潰れる）、固定グリッド方式へ全面置換
+
+ユーザーからの一連の質問（「クラスタリングは不要では」「全ピクセル
+そのまま渡すのは危険では」「二値化までで渡すのもダメか」）を受けて
+実際の欠陥を発見。
+
+発見: KISOに bounding-box 延長882px（面積わずか4845px、明らかに
+1本の連続トラック）の connected component が存在。従来の
+`weighted_centroids()`（connected-componentベース）はこれを1点に
+集約しており、線・vertex 情報が完全に失われていた。延長100px超の
+ブロブは1,123/101,479（約1.1%）で、稀なエッジケースではない。
+Webビューアで実際に可視化して確認（1本の連続線に十字1つだけ）。
+
+生ピクセルモードの非現実性を実測データによる2通りの独立な外挿で
+再確認: 157点の頑健な対数回帰フィット（k=2.887）では全タイルで
+約1.5万日、生ピクセルモード自身の実測2点による自己無矛盾フィット
+（k=2.11）では約635日。フィット方法で桁が2つ違うが、どちらにしても
+破滅的という結論は変わらない——生ピクセルでも二値マスクそのまま
+（同じ `export_hits`/pixelモード）でも行き詰まる。
+
+connected-componentクラスタリングを固定グリッドビニング
+（`module/matlab_export.py` の `weighted_grid_hits`,
+`export_hits_grid`）に置換: `cv2.findContours` 等の形状・連結性判定を
+一切使わず、ピクセルを位置だけで30×30pxの固定セルに割り当て、
+セルごとに輝度加重重心を1点出力。セルサイズは 10/15/20/25/30px の
+スイープと detectlseg 時間の頑健なべき乗則フィットから30pxを選定:
+130,364ヒット（旧connected-component方式の101,479よりやや多い）、
+最大領域1,111点、検出時間見積 約6h（実測済み2.52hに近い）。KISOを
+再エクスポートし、以前1点に潰れていた882px長のトラックが468点に
+分割されていることを確認。Webビューアの「Grain Centroids」表示も
+うっすらとしたグリッド線+十字（ブロブ輪郭は廃止、概念自体が
+なくなったため）に変更。
+
+実測での約6h見積もりを検証するため、全256領域の detectlseg 実行を
+バックグラウンドで開始する。高速スイート再検証済み（52/52）。
+所有ファイル: module/matlab_export.py, module/server/app.py,
+analysis-note.md, results/matlab/*（gitignore済み）。

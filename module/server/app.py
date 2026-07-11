@@ -16,7 +16,7 @@ from flask import (
   request, send_file,
 )
 
-from module.matlab_export import weighted_centroids
+from module.matlab_export import _GRID_CELL_PX, weighted_grid_hits
 from module.reader import load_spng
 from module.preprocess import fog_remove, otsu_binarize, remove_noise
 from module.pipeline import Track, find_tracks
@@ -24,10 +24,10 @@ from module.server.results import (
   ResultsStore, render_image, render_stats,
 )
 
-# Grain-centroid overlay style (see _process, cent branch).
-_CENT_OUTLINE_COLOR   = (60, 60, 200)   # dim red-ish blob outline, BGR
-_CENT_MARKER_COLOR    = (0, 255, 255)   # yellow cross at the weighted hit
+# MATLAB grid-hit overlay style (see _process, cent branch).
+_CENT_MARKER_COLOR    = (0, 255, 255)   # yellow cross at each grid hit
 _CENT_MARKER_SIZE_PX  = 5
+_CENT_CELL_LINE_COLOR = (70, 50, 40)    # faint grid lines, BGR
 
 # --- Load pipeline defaults from config (fallback to built-in values) ---
 _CFG_PATH = Path(__file__).parents[2] / "config" / "default.yaml"
@@ -462,18 +462,20 @@ def _process(
 
   # cent requires a binary image (like den); skip silently if thr is off.
   # This is the MATLAB export's actual hit representation: one
-  # intensity-weighted centroid per grain blob, shown over the fog-removed
-  # grayscale so it's visible whether the dot lands on the bright part of
-  # the grain.
+  # intensity-weighted hit per occupied fixed-size grid cell (NOT one per
+  # grain blob -- a connected-component reduction was tried and dropped
+  # because a long, continuously-connected track collapses into a single
+  # point; see module.matlab_export's docstring). Faint grid lines are
+  # drawn so the fixed cell size is visible, distinguishing "one hit per
+  # cell" from any notion of shape-based clustering.
   if cent and binary is not None:
     output = cv2.cvtColor(fog_img, cv2.COLOR_GRAY2BGR)
-    # Outline the *actual* blob shape (not an abstract size-proxy circle,
-    # which can look like a hand-drawn cluster boundary where several
-    # grains have merged) so it's unambiguous that each dot is exactly
-    # one hit -- the outline is just showing where that hit's intensity
-    # weighting was computed from.
-    for cx, cy, _area, cnt in weighted_centroids(binary, fog_img):
-      cv2.drawContours(output, [cnt], -1, _CENT_OUTLINE_COLOR, 1)
+    h, w = binary.shape
+    for gx in range(0, w, _GRID_CELL_PX):
+      cv2.line(output, (gx, 0), (gx, h), _CENT_CELL_LINE_COLOR, 1)
+    for gy in range(0, h, _GRID_CELL_PX):
+      cv2.line(output, (0, gy), (w, gy), _CENT_CELL_LINE_COLOR, 1)
+    for cx, cy, _n in weighted_grid_hits(binary, fog_img, _GRID_CELL_PX):
       cv2.drawMarker(
         output, (int(round(cx)), int(round(cy))), _CENT_MARKER_COLOR,
         markerType=cv2.MARKER_CROSS,
