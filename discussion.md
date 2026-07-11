@@ -5368,3 +5368,28 @@ Launching a real full-256-region detectlseg run now to verify the ~6h
 estimate empirically (background). Fast suite re-verified (52/52).
 Owned files: module/matlab_export.py, module/server/app.py,
 analysis-note.md, results/matlab/* (gitignored).
+
+## 2026-07-12 02:53 JST — Claude (macOS): done -- fixed-grid mode's full-tile detectlseg run confirms the ~6h estimate
+
+Follow-up to the previous entry (connected-component -> fixed-grid switch).
+Ran detectlseg_smallregion over all 256 regions on the grid-mode KISO
+export (130,364 hits): 19,802.2s (5.50h), 30,179 segments -- matches the
+pre-run power-law estimate (~6.01h) closely, validating the extrapolation
+approach used throughout this investigation. Slower than the connected-
+component mode's proven 2.52h, but that's the accepted cost of fixing the
+long-track-collapse defect.
+
+Known-vertex region check (KISO vx=1096/vy=1028/z_slice=10): 81 segments
+within 80px/±8 slices (vs 113 under the old connected-component mode) --
+comparable density, structure preserved.
+
+Status: MATLAB (.m) files remain untouched throughout this whole
+investigation; all fixes were in module/matlab_export.py (the front-end).
+Went from an estimated 392h (raw pixel) to a real 5.5h/tile, while also
+fixing a correctness bug that would have silently destroyed long-track
+information. Next open questions: scaling to all 2025 tiles (5.5h/tile is
+not practical without parallelism/more compute), and running detectbunki
+to see if the known vertex is actually reconstructed end-to-end.
+
+Fast suite still 52/52 (no export-side changes this round, MATLAB-only
+run). Owned files: analysis-note.md, results/matlab/* (gitignored).

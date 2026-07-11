@@ -4908,3 +4908,28 @@ connected-componentクラスタリングを固定グリッドビニング
 バックグラウンドで開始する。高速スイート再検証済み（52/52）。
 所有ファイル: module/matlab_export.py, module/server/app.py,
 analysis-note.md, results/matlab/*（gitignore済み）。
+
+## 2026-07-12 02:53 JST — Claude (macOS): 完了 -- 固定グリッド方式のフルタイル実測が完了、約6h見積もりと一致
+
+前エントリ（connected-component→固定グリッド切替）のフォローアップ。
+グリッドモードのKISOエクスポート（130,364ヒット）で全256領域の
+detectlseg_smallregion を実行: 19,802.2秒（5.50時間）、検出セグメント
+30,179件——事前のべき乗則見積もり（約6.01h）とほぼ一致し、これまでの
+外挿アプローチの妥当性が裏付けられた。connected-componentモードの
+実測2.52hより遅いが、長いトラックの collapse バグ修正の代償として
+受け入れられる範囲。
+
+既知vertex（KISO vx=1096/vy=1028/z_slice=10）周辺チェック: 80px・
+z±8スライス以内に81セグメント（旧connected-componentモードでは113件）
+——同程度の密度で構造が保持されている。
+
+現状: 今回の一連の調査を通じてMATLAB（.m）ファイルには一切手を入れて
+おらず、修正は全て module/matlab_export.py（前段処理）側。推定392時間
+（生ピクセル）から実測5.5時間/タイルまで改善し、同時に長いトラックの
+情報を静かに破壊する正当性バグも修正した。次の課題: 全2025タイルへの
+スケール（5.5h/タイルでは並列化・計算資源確保なしに非現実的）、
+detectbunki を実行して既知vertexが実際にエンドツーエンドで再構成
+できるかの確認。
+
+高速スイート引き続き52/52（今回はエクスポート側変更なし、MATLABのみ
+実行）。所有ファイル: analysis-note.md, results/matlab/*（gitignore済み）。
