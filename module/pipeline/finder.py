@@ -169,7 +169,8 @@ def find_tracks(
   if lines is None:
     return []
 
-  line_arr = lines[:, 0]
+  # OpenCV 4 returns (N, 1, 4); OpenCV 5 returns (N, 4)
+  line_arr = lines.reshape(-1, 4)
   measurements = _measure_tracks(fog_img, binary, line_arr, grain_radius)
 
   entry = reader.entries[idx]
