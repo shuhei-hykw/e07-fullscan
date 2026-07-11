@@ -5269,3 +5269,37 @@ Full numbers and next-step options in analysis-note.md (2026-07-11 18:29
 entry). Fast test suite re-verified (52/52) after the matlab_export.py
 change. Owned files: module/matlab_export.py, analysis-note.md,
 results/matlab/* (gitignored, not committed). No MATLAB (.m) files touched.
+
+## 2026-07-11 20:14 JST — Claude (macOS): done — intensity-weighted centroids + web-viewer visualization of the raw-to-MATLAB-hits pipeline
+
+Two follow-ups to the centroid-mode export (commit 9239c11):
+
+1. `module/matlab_export.py`: added `weighted_centroids(binary, intensity)`,
+   replacing the shape-only `cv2.moments(cnt)` with an intensity-weighted
+   centroid (masks each blob's bounding box against the fog-removed image
+   before `cv2.moments`). Verified on KISO slice 10: mean shift from the
+   geometric centroid 0.49px, max 14.98px (area-3075 blob) -- larger/
+   irregular grain clusters shift the most, as expected.
+   `export_hits_centroid()` now uses this; hit count and export time
+   unchanged (101,479 hits, ~5s).
+2. `module/server/app.py`: added a "Grain Centroids (MATLAB)" step to the
+   `/view/` pipeline sidebar (between Noise Removal and Hough Lines).
+   Restructured `_process()` to keep the fog-removed grayscale around after
+   thresholding (previously overwritten), so centroids render as an
+   overlay (yellow ring = blob radius, red dot = weighted centroid) on top
+   of the actual grayscale rather than the binary silhouette.
+
+Visual check on the KISO known vertex (vx=1096, vy=1028, z_slice=10, per
+tests/specials_gt.json): fetched the four pipeline stages (raw / fog /
+binary / centroid overlay) from the running local viewer
+(`python -m module.server specials_x20 --port 8123`), cropped to a
+400x400px window around the vertex. Several track-like lines visibly
+converge near the crop centre in the fog-removed image, matching the known
+vertex; centroids in the overlay track along those same lines rather than
+scattering randomly -- density reduction preserved real structure. 4-panel
+comparison published as an artifact:
+https://claude.ai/code/artifact/8f9a90a2-7186-41e2-992c-3e80fd078241
+
+Fast suite re-verified (52/52). Owned files: module/matlab_export.py,
+module/server/app.py, analysis-note.md. Local viewer left running on
+:8123 for interactive follow-up.

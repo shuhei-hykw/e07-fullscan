@@ -4812,3 +4812,36 @@ z±8スライス以内に113セグメントが存在し、空でも無秩序で�
 matlab_export.py 変更後、高速テスト再検証済み（52/52）。所有ファイル:
 module/matlab_export.py, analysis-note.md, results/matlab/*（gitignore
 済み、未コミット）。MATLAB（.m）ファイルには一切手を入れていない。
+
+## 2026-07-11 20:14 JST — Claude (macOS): 完了 — 重心の輝度加重化 + Web ビューアでの生画像→MATLAB点群パイプライン可視化
+
+前回コミット（9239c11）への2件のフォローアップ:
+
+1. `module/matlab_export.py`: `weighted_centroids(binary, intensity)` を
+   追加。形状のみの `cv2.moments(cnt)` をやめ、各ブロブの bounding box を
+   fog除去後画像でマスク・重み付けしてから `cv2.moments` を適用する
+   輝度加重重心に変更。KISO slice10 で検証: 幾何重心からの平均シフト
+   0.49px、最大シフト14.98px（面積3075のブロブ）——大きい/歪んだ
+   グレインクラスタほどシフトが大きい、想定通りの結果。
+   `export_hits_centroid()` をこれに切替。ヒット数・所要時間は不変
+   （101,479ヒット、約5秒）。
+2. `module/server/app.py`: `/view/` の Processing Pipeline に
+   「Grain Centroids (MATLAB)」ステップを追加（Noise Removal と
+   Hough Lines の間）。`_process()` を再構成し、閾値処理後も
+   fog除去後のグレースケール画像を保持するようにした（従来は
+   `current` を上書きしていたため背景として使えなかった）。重心を
+   黄色い円（ブロブ半径）+ 赤い点（輝度加重重心）でオーバーレイ表示。
+
+KISO 既知vertex（vx=1096, vy=1028, z_slice=10、tests/specials_gt.json）
+での目視確認: ローカルビューア（`python -m module.server specials_x20
+--port 8123`）から4段階（raw/fog/binary/centroidオーバーレイ）を取得し
+400×400pxでクロップ。fog除去後の画像でトラック様の複数の線がクロップ
+中心付近でほぼ収束しており、既知vertex座標と一致。centroidオーバーレイ
+でもその収束線に沿って重心が並んでおり、density削減がランダムな間引き
+ではなく実際のトラック構造を保持していることを確認。4パネル比較を
+Artifact として公開:
+https://claude.ai/code/artifact/8f9a90a2-7186-41e2-992c-3e80fd078241
+
+高速スイート再検証済み（52/52）。所有ファイル: module/matlab_export.py,
+module/server/app.py, analysis-note.md。ローカルビューアは :8123 で
+起動したまま（対話確認用）。

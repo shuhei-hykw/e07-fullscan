@@ -16,12 +16,18 @@ from flask import (
   request, send_file,
 )
 
+from module.matlab_export import weighted_centroids
 from module.reader import load_spng
 from module.preprocess import fog_remove, otsu_binarize, remove_noise
 from module.pipeline import Track, find_tracks
 from module.server.results import (
   ResultsStore, render_image, render_stats,
 )
+
+# Grain-centroid overlay style (see _process, cent branch).
+_CENT_OUTLINE_COLOR = (60, 60, 200)   # dim red-ish, drawn in BGR
+_CENT_MARKER_COLOR  = (0, 255, 255)   # yellow
+_CENT_MIN_RADIUS_PX = 1
 
 # --- Load pipeline defaults from config (fallback to built-in values) ---
 _CFG_PATH = Path(__file__).parents[2] / "config" / "default.yaml"
@@ -151,14 +157,20 @@ _TEMPLATE = """
          onchange="updateStep('step-den','cb-den'); updateAll()">
     <span class="step-label">Noise Removal</span>
     </label>
-    <label class="step" id="step-hough">
+    <label class="step" id="step-cent">
     <span class="step-num">5</span>
+    <input type="checkbox" id="cb-cent"
+         onchange="updateStep('step-cent','cb-cent'); updateAll()">
+    <span class="step-label">Grain Centroids (MATLAB)</span>
+    </label>
+    <label class="step" id="step-hough">
+    <span class="step-num">6</span>
     <input type="checkbox" id="cb-hough"
          onchange="updateStep('step-hough','cb-hough'); updateAll()">
     <span class="step-label">Hough Lines</span>
     </label>
     <label class="step" id="step-trk">
-    <span class="step-num">6</span>
+    <span class="step-num">7</span>
     <input type="checkbox" id="cb-trk"
          onchange="updateStep('step-trk','cb-trk'); updateAll()">
     <span class="step-label">Tracks Only</span>
@@ -300,6 +312,7 @@ _TEMPLATE = """
   function flagQuery() {
     return `zpj=${flag('cb-zpj')}&fog=${flag('cb-fog')}` +
        `&thr=${flag('cb-thr')}&den=${flag('cb-den')}` +
+       `&cent=${flag('cb-cent')}` +
        `&hough=${flag('cb-hough')}&trk=${flag('cb-trk')}`;
   }
   function paramQuery() {
@@ -411,7 +424,7 @@ _TEMPLATE = """
 
 def _process(
   img: np.ndarray,
-  fog: bool, thr: bool, den: bool, hough: bool, trk: bool,
+  fog: bool, thr: bool, den: bool, hough: bool, trk: bool, cent: bool,
   tracks: list[Track] | None = None,
   fog_k: int      = FOG_KSIZE,
   noise_amin: int = NOISE_AREA_MIN,
@@ -419,17 +432,19 @@ def _process(
   noise_cmp: int  = NOISE_COMPACT,
 ) -> np.ndarray:
   """Apply the selected pipeline steps in order."""
-  current = img
-
-  if fog:
-    current = fog_remove(current, fog_k)
+  # Keep the fog-removed grayscale around even after thresholding, so the
+  # "cent" step can show intensity-weighted centroids on top of it (the
+  # binary silhouette alone can't show *why* a centroid sits where it does).
+  fog_img = fog_remove(img, fog_k) if fog else img
+  current = fog_img
+  binary = None
 
   if thr:
-    _, current = otsu_binarize(current)
-
-  # den requires a binary image; skip silently if thr was not applied
-  if den and thr:
-    current = remove_noise(current, noise_amin, noise_amax, noise_cmp)
+    _, binary = otsu_binarize(fog_img)
+    # den requires a binary image; skip silently if thr was not applied
+    if den:
+      binary = remove_noise(binary, noise_amin, noise_amax, noise_cmp)
+    current = binary
 
   if hough or trk:
     output = (
@@ -443,6 +458,25 @@ def _process(
           (t.px1, t.py1), (t.px2, t.py2),
           (0, 255, 0), 1,
         )
+    return output
+
+  # cent requires a binary image (like den); skip silently if thr is off.
+  # This is the MATLAB export's actual hit representation: one
+  # intensity-weighted centroid per grain blob, shown over the fog-removed
+  # grayscale so it's visible whether the dot lands on the bright part of
+  # the grain.
+  if cent and binary is not None:
+    output = cv2.cvtColor(fog_img, cv2.COLOR_GRAY2BGR)
+    for cx, cy, area in weighted_centroids(binary, fog_img):
+      cv2.circle(
+        output, (int(round(cx)), int(round(cy))), 2,
+        _CENT_OUTLINE_COLOR, thickness=-1,
+      )
+      r = max(_CENT_MIN_RADIUS_PX, int(round((area ** 0.5) / 2)))
+      cv2.circle(
+        output, (int(round(cx)), int(round(cy))), r,
+        _CENT_MARKER_COLOR, thickness=1,
+      )
     return output
 
   return current
@@ -944,6 +978,7 @@ def create_app(
       fog   = g("fog",   "0") == "1",
       thr   = g("thr",   "0") == "1",
       den   = g("den",   "0") == "1",
+      cent  = g("cent",  "0") == "1",
       hough = g("hough", "0") == "1",
       trk   = g("trk",   "0") == "1",
     )
@@ -1070,6 +1105,7 @@ def create_app(
         img,
         fog=flags["fog"], thr=flags["thr"],
         den=flags["den"], hough=flags["hough"], trk=flags["trk"],
+        cent=flags["cent"],
         tracks=tracks,
         **{k: params[k] for k in (
           "fog_k", "noise_amin", "noise_amax", "noise_cmp",

@@ -84,6 +84,45 @@ specials_x20 はすべてダブル超核イベントであり、ほかにも多�
 
 ## 開発ログ（最新が上）
 
+## 2026-07-11 20:14 JST — 重心を輝度加重に変更 + Web ビューアに可視化ステップ追加
+
+ユーザー指摘2点への対応: (1) 二値形状だけの重心は不十分で輝度も使うべき、
+(2) 生画像 → MATLAB 入力点群までの過程を既存 Web ビューア（`/view/`）で
+確認したい。
+
+**輝度加重重心（`module/matlab_export.py`）**
+
+`weighted_centroids(binary, intensity)` を追加。従来の
+`cv2.moments(cnt)`（輪郭点だけを見る形状重心）をやめ、各ブロブの
+bounding box を fog 除去後強度画像でマスク・重み付けして
+`cv2.moments(weighted, binaryImage=False)` で加重重心を計算。
+KISO slice10 で幾何重心との差を検証: 平均シフト 0.49px（中央値面積49px
+のブロブ）、最大シフトは面積3075のブロブで **14.98px**——大きい/歪んだ
+グレインクラスタほど効果が大きいことを確認。`export_hits_centroid()`
+をこのヘルパー使用に切替。ヒット数・所要時間は変化なし（KISO:
+101,479ヒット、約5秒）。
+
+**Web ビューア可視化（`module/server/app.py`）**
+
+`/view/` の Processing Pipeline に新ステップ「Grain Centroids (MATLAB)」
+（5番目、Hough/Tracks の前）を追加。fog 除去後のグレースケール画像を
+背景に、二値化後の各ブロブへ黄色い円（半径=√面積/2）と輝度加重重心の
+赤い点をオーバーレイ表示。`_process()` を再構成し、`thr` 適用後も
+fog 除去画像を保持（従来は `current` を上書きしていたため背景として
+使えなかった）。
+
+**確認結果**: KISO 既知vertex（vx=1096, vy=1028, z_slice=10）周辺
+400×400px をサーバから直接取得し確認。fog除去後の画像で複数のトラック
+様の線がほぼ同一点に収束しているのが目視できる（既知vertex座標と一致）。
+centroid オーバーレイでもその収束線に沿って重心が並んでおり、density
+削減がランダムな間引きではなく実際のトラック構造を保持していることを
+視覚的に確認できた。4段階（raw / fog / binary / centroid）比較を
+Artifact として残した:
+https://claude.ai/code/artifact/8f9a90a2-7186-41e2-992c-3e80fd078241
+
+テスト: 高速スイート再検証済み（52/52）。ローカルサーバ
+（`python -m module.server specials_x20 --port 8123`）で対話的にも確認可。
+
 ## 2026-07-11 18:29 JST — MATLAB 入力テスト第2回: 重心化エクスポートで検出が実用時間に
 
 方針: MATLAB 側（detectlseg_smallregion / mabiki 等）は変更せず、Python 側

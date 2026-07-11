@@ -116,6 +116,43 @@ def export_hits(
   return np.concatenate(cols, axis=0)
 
 
+def weighted_centroids(
+  binary: np.ndarray, intensity: np.ndarray
+) -> list[tuple[float, float, float]]:
+  """Return (cx, cy, area) per connected component in ``binary``.
+
+  Each centroid is weighted by ``intensity`` (typically the fog-removed
+  image) within the component's footprint, not just its binary shape --
+  brighter, denser sub-regions of a grain cluster pull the centroid toward
+  them. This is what a plain ``cv2.moments(contour)`` (geometric, shape-only
+  centroid) misses.
+  """
+  contours, _ = cv2.findContours(
+    binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+  )
+  out = []
+  for cnt in contours:
+    area = cv2.contourArea(cnt)
+    x, y, w, h = cv2.boundingRect(cnt)
+    mask = np.zeros((h, w), dtype=np.uint8)
+    cv2.drawContours(mask, [cnt], -1, 1, -1, offset=(-x, -y))
+    weighted = intensity[y:y + h, x:x + w].astype(np.float64) * mask
+    M = cv2.moments(weighted, binaryImage=False)
+    if M["m00"] > 0:
+      cx = M["m10"] / M["m00"] + x
+      cy = M["m01"] / M["m00"] + y
+    else:
+      # Zero-intensity blob (shouldn't normally happen post fog+Otsu):
+      # fall back to the geometric (shape-only) centroid.
+      Mg = cv2.moments(cnt)
+      if Mg["m00"] > 0:
+        cx, cy = Mg["m10"] / Mg["m00"], Mg["m01"] / Mg["m00"]
+      else:
+        cx, cy = (float(v) for v in cnt[0, 0])
+    out.append((cx, cy, max(area, 1.0)))
+  return out
+
+
 def export_hits_centroid(
   json_path: Path | str,
   fog_ksize: int = _FOG_KSIZE,
@@ -127,13 +164,14 @@ def export_hits_centroid(
   """Build the MATLAB hit pixel list ``pl`` (N x 6), one hit per grain blob.
 
   Each slice is binarized independently, then reduced to one 3-D hit per
-  connected component (grain / grain-cluster centroid), instead of one hit
-  per raw binary pixel. This matches the physical meaning of a "hit" in
-  ``detect_tracks.m`` (one grain, not one pixel of its silhouette) and cuts
-  the KISO tile's point count ~120x (12.36M px -> ~101k centroids), which
-  brings ``detectlseg_smallregion``'s per-region cost (~N^2) from an
-  estimated ~392 h down to real-run ~tens of minutes. ``n`` is the blob
-  area in pixels (a grain-size / cluster-multiplicity proxy).
+  connected component (grain / grain-cluster centroid, intensity-weighted
+  via ``weighted_centroids``), instead of one hit per raw binary pixel.
+  This matches the physical meaning of a "hit" in ``detect_tracks.m`` (one
+  grain, not one pixel of its silhouette) and cuts the KISO tile's point
+  count ~120x (12.36M px -> ~101k centroids), which brings
+  ``detectlseg_smallregion``'s per-region cost from an estimated ~392 h
+  down to a real-run ~2.5 h. ``n`` is the blob area in pixels (a grain-size
+  / cluster-multiplicity proxy).
   """
   reader = load_spng(json_path)
   cols = []
@@ -142,28 +180,18 @@ def export_hits_centroid(
       reader, z, fog_ksize, noise_amin, noise_amax, noise_cmp,
       noise_amax_upper,
     )
-    contours, _ = cv2.findContours(
-      binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-    )
-    if not contours:
+    hits = weighted_centroids(binary, fog)
+    if not hits:
       continue
-    block = np.empty((len(contours), len(_PL_VARNAMES)), dtype=np.float64)
-    n_hits = 0
-    for cnt in contours:
-      area = cv2.contourArea(cnt)
-      M = cv2.moments(cnt)
-      if M["m00"] > 0:
-        cx, cy = M["m10"] / M["m00"], M["m01"] / M["m00"]
-      else:
-        cx, cy = cnt[0, 0]
-      block[n_hits, 0] = cx + _ORIGIN_OFFSET     # x = col
-      block[n_hits, 1] = cy + _ORIGIN_OFFSET     # y = row
-      block[n_hits, 2] = z + _ORIGIN_OFFSET      # z = slice index
-      block[n_hits, 3] = max(area, 1.0)          # blob-size proxy
-      n_hits += 1
+    block = np.empty((len(hits), len(_PL_VARNAMES)), dtype=np.float64)
+    for i, (cx, cy, area) in enumerate(hits):
+      block[i, 0] = cx + _ORIGIN_OFFSET          # x = col
+      block[i, 1] = cy + _ORIGIN_OFFSET          # y = row
+      block[i, 2] = z + _ORIGIN_OFFSET           # z = slice index
+      block[i, 3] = area                         # blob-size proxy
     block[:, 4] = _SHEET_PLACEHOLDER
     block[:, 5] = _ID_PLACEHOLDER
-    cols.append(block[:n_hits])
+    cols.append(block)
   if not cols:
     return np.empty((0, len(_PL_VARNAMES)), dtype=np.float64)
   return np.concatenate(cols, axis=0)
