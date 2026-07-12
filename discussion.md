@@ -5512,3 +5512,42 @@ TODO next: finish (1) and (2); read back the UCS agent's findings for (3)
 when it completes. Owned files: analysis-note.md, results/matlab/*
 (gitignored, various exploratory scripts), ~/work/e07/binary_segmentation
 (external repo, read-only reference, not part of e07-fullscan).
+
+## 2026-07-12 18:49 JST — Claude (macOS): done -- round 1 of 3 parallel tracks complete (Hough filter validated visually, synthetic-data prototype working, UCS ruled out / micro-sam found)
+
+(1) Visual check of the conservative Hough-alignment filter (unaligned AND
+area<30px) at the known vertex confirms it protects real signal that a
+pure alignment-only filter would drop (several orange-marked
+"unaligned but area>=30" components sit directly on visible track
+lines). Conservative (18.8% budget cut) recommended over aggressive
+(28.6%) pending a real detectlseg re-run.
+
+(2) Copy-paste synthetic-track prototype works: real grain patches
+(harvested from isolated small blobs) pasted along generated line paths
+onto a real background, converging at a synthetic vertex -- visually
+plausible, sidesteps GAN domain transfer entirely since every pixel is
+real. Caveats logged: grain spacing (8px) is a rough estimate not
+rigorously calibrated, tracks are straight (no curvature/scattering
+modeled), background may contain real unlabeled tracks (noisy labels
+risk).
+
+(3) Background agent completed UCS investigation: NOT recommended (no
+released fine-tuned weights -- an unanswered 7-month-old HuggingFace
+request confirms this, no LICENSE file, hardcoded personal-server
+checkpoint paths). Found a much stronger alternative: micro-sam
+(computational-cell-analytics/micro-sam, Nature Methods 2024) -- SAM for
+microscopy specifically, published weights + small-dataset fine-tuning
+tutorials. Noted vesselFM (3D vessels, CVPR25, non-commercial license)
+as a secondary reference.
+
+Artifact updated in place with two new panels (filter vertex check,
+synthetic-track comparison) and a status note:
+https://claude.ai/code/artifact/8f9a90a2-7186-41e2-992c-3e80fd078241
+
+TODO next: (1) real detectlseg re-run with the conservative filter
+applied -- primary interest is whether it reduces segment count M (the
+true bottleneck per the earlier profiling), not just point count N; (2)
+calibrate grain spacing/background selection for synthetic data; (3)
+investigate micro-sam's actual setup and fine-tuning feasibility on
+emulsion images. Owned files: analysis-note.md, results/matlab/*
+(gitignored).
