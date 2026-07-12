@@ -5071,3 +5071,42 @@ https://claude.ai/code/artifact/8f9a90a2-7186-41e2-992c-3e80fd078241
 (3) micro-samの実際のセットアップとエマルジョン画像でのfine-tuning
 実現性の調査。所有ファイル: analysis-note.md, results/matlab/*
 （gitignore済み）。
+
+## 2026-07-12 19:06 JST — Claude (macOS): 進行中 -- Houghノイズフィルタをmodule実装、実測MATLAB検証実行中、合成データ較正完了、micro-sam却下
+
+`module/matlab_export.py`: `remove_unaligned_noise()` を実装し
+`export_hits_grid()` に組み込み（denoise=Trueがデフォルト、
+`--no-denoise` CLIフラグ追加）。KISO再エクスポート: 108,671ヒット
+（旧133,183、-18.4%、事前試算と一致）。高速スイート52/52。
+
+前回クラッシュした5×5局所テスト（`test_detectbunki_local.m`）を
+denoise版データで再実行開始（バックグラウンド、約86分見込み）。
+序盤2/25領域で、点数削減率を大きく上回る処理時間削減を確認:
+row7/col7が930点/232セグメント/165.9秒→732点/175セグメント/68.1秒
+（点数-21%、セグメント-25%、時間**-59%**）。プロファイルで判明した
+「コストはセグメント数Mに比例」という知見と整合——ノイズ除去が
+不釣り合いにMを減らしている可能性。`integrate_smallregions` の
+クラッシュ解消有無は全完了後に判明。
+
+合成トラックprototype: 参照トラック（882px）の輝度プロファイルに
+ピーク検出を適用しグレイン間隔を実測——中央値9.00px、平均9.49px
+（110ピーク）、以前の仮値8.0pxとほぼ一致。9.0pxを正式採用し、
+各トラックに軽微な角度ドリフト（curvature=1.5°/グレイン、緩い
+多重散乱を模した湾曲）を追加。
+
+バックグラウンドエージェントによるmicro-sam調査完了: **こちらも
+非推奨**、ただしUCSとは異なる理由——重み自体は公開済み（Zenodo、
+MITライセンス、Apple Silicon MPS対応確認済み）だが、**タスク設計が
+根本的にミスマッチ**。離散オブジェクト（細胞・核・オルガネラ）の
+インスタンス分割用訓練であり、連結した線状構造の密な二値分割とは
+性質が異なる。AISデコーダのforegroundチャンネル流用は技術的には
+可能だが線状構造での実績なし、SAMの計算コストに見合わない。
+UCS・micro-sam両調査から収束した推奨: 大型基盤モデルを探すより、
+Kasagi氏も使っていた `segmentation_models_pytorch`（公式ライブラリ）
+でImageNet事前学習エンコーダから軽量U-Netを自前データで学習する
+方が現実的——系統(2)の合成データ生成と自然に合流。
+
+次のTODO: denoise版局所テストの完走待ち、合成データセットの
+規模拡大（数百〜数千枚）、`segmentation_models_pytorch` U-Netの
+学習試作。所有ファイル: module/matlab_export.py, analysis-note.md,
+results/matlab/*（gitignore済み）。

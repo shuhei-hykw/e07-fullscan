@@ -87,6 +87,15 @@ _DEFAULT_MODE = _MODE_GRID
 # near its proven ~2.5h/tile (connected-component mode) run time while
 # guaranteeing >=1 sample per ~_GRID_CELL_PX along any track, however long.
 _GRID_CELL_PX = 30
+# Noise-filter parameters (see remove_unaligned_noise). Chosen from a
+# sweep on KISO (analysis-note.md, 2026-07-12): removes ~19% of the point
+# budget while a vertex-region visual check confirmed real track-aligned
+# blobs survive.
+_HOUGH_THR = 8
+_HOUGH_MIN_LINE = 10
+_HOUGH_MAX_GAP = 3
+_ALIGN_TOL_PX = 3.0
+_NOISE_AREA_FLOOR = 30.0
 
 
 def _binarize_slice(
@@ -158,6 +167,89 @@ def _weighted_centroid(
     return M["m10"] / M["m00"] + ox, M["m01"] / M["m00"] + oy
   ys, xs = np.nonzero(mask_block)
   return float(xs.mean()) + ox, float(ys.mean()) + oy
+
+
+def _line_alignment_dist(pts: np.ndarray, lines: np.ndarray) -> np.ndarray:
+  """Min perpendicular distance from each point to any Hough line segment
+  (each segment extended 30% past its own endpoints, to bridge small
+  binarisation gaps along a real track)."""
+  if len(lines) == 0 or len(pts) == 0:
+    return np.full(len(pts), np.inf)
+  x1, y1, x2, y2 = lines[:, 0], lines[:, 1], lines[:, 2], lines[:, 3]
+  dx, dy = x2 - x1, y2 - y1
+  seg_len2 = np.maximum(dx * dx + dy * dy, 1e-9)
+  px, py = pts[:, 0:1], pts[:, 1:2]
+  best = np.full(len(pts), np.inf)
+  batch = 500  # bound the (n_pts x n_lines) intermediate array
+  for i in range(0, len(lines), batch):
+    bx1, by1 = x1[i:i + batch], y1[i:i + batch]
+    bdx, bdy = dx[i:i + batch], dy[i:i + batch]
+    bl2 = seg_len2[i:i + batch]
+    t = np.clip(((px - bx1) * bdx + (py - by1) * bdy) / bl2, -0.3, 1.3)
+    cx, cy = bx1 + t * bdx, by1 + t * bdy
+    d = np.hypot(px - cx, py - cy)
+    best = np.minimum(best, d.min(axis=1))
+  return best
+
+
+def remove_unaligned_noise(
+  binary: np.ndarray,
+  cell: int = _GRID_CELL_PX,
+  hough_thr: int = _HOUGH_THR,
+  hough_min_line: int = _HOUGH_MIN_LINE,
+  hough_max_gap: int = _HOUGH_MAX_GAP,
+  align_tol: float = _ALIGN_TOL_PX,
+  area_floor: float = _NOISE_AREA_FLOOR,
+) -> np.ndarray:
+  """Drop small, isolated connected components that don't lie near any
+  per-slice Hough-detected line -- likely noise, not real grain-cluster
+  fragments of a track.
+
+  Two other classical discriminators were tried and failed (analysis-note.
+  md, 2026-07-12): elongation (no correlation with area, r ~= -0.09) and
+  isolation distance to the nearest other structure (median 21px
+  regardless of real/noise -- the image is simply dense everywhere).
+  Hough-line alignment succeeds: components >= align_tol px from every
+  detected line have median area ~20px vs ~114px for aligned ones.
+
+  Only small (<= cell px extent) components are considered -- these are
+  the ones NOT already skeletonized/decimated by weighted_grid_hits, and
+  the ones responsible for ~66% of KISO's point budget. A component is
+  removed only if BOTH unaligned AND area < area_floor: alignment alone
+  would also drop some substantial (up to ~170px area) blobs sitting
+  directly on real track lines near the known KISO vertex (visually
+  confirmed) -- the area floor keeps this conservative, favouring recall
+  (the project's efficiency-first policy) over a bigger point-count cut.
+  """
+  n_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+    binary, connectivity=8
+  )
+  small_idx = np.array([
+    lbl for lbl in range(1, n_labels)
+    if stats[lbl][4] > 0 and max(stats[lbl][2], stats[lbl][3]) <= cell
+  ])
+  if small_idx.size == 0:
+    return binary
+
+  lines = cv2.HoughLinesP(
+    binary, 1, np.pi / 180, threshold=hough_thr,
+    minLineLength=hough_min_line, maxLineGap=hough_max_gap,
+  )
+  lines = (
+    lines.reshape(-1, 4).astype(np.float64)
+    if lines is not None else np.empty((0, 4))
+  )
+
+  pts = centroids[small_idx]
+  areas = stats[small_idx, 4]
+  dist = _line_alignment_dist(pts, lines)
+  remove = small_idx[(dist >= align_tol) & (areas < area_floor)]
+  if remove.size == 0:
+    return binary
+
+  out = binary.copy()
+  out[np.isin(labels, remove)] = 0
+  return out
 
 
 def weighted_grid_hits(
@@ -238,6 +330,7 @@ def export_hits_grid(
   noise_cmp: int = _NOISE_CMP,
   noise_amax_upper: int = _NOISE_AMAX_UPPER,
   cell: int = _GRID_CELL_PX,
+  denoise: bool = True,
 ) -> np.ndarray:
   """Build the MATLAB hit pixel list ``pl`` (N x 6) via component-grouped
   grid binning (see ``weighted_grid_hits``).
@@ -248,6 +341,10 @@ def export_hits_grid(
   pixels to ~130k (~95x): a full 256-region ``detectlseg_smallregion`` run
   completed in 5.5h (see analysis-note.md, 2026-07-12). ``n`` is the
   occupied pixel count per hit.
+
+  If ``denoise`` (default), each slice's binary mask is also passed
+  through ``remove_unaligned_noise`` before hit extraction, dropping
+  ~19% of the point budget (see that function's docstring).
   """
   reader = load_spng(json_path)
   cols = []
@@ -256,6 +353,8 @@ def export_hits_grid(
       reader, z, fog_ksize, noise_amin, noise_amax, noise_cmp,
       noise_amax_upper,
     )
+    if denoise:
+      binary = remove_unaligned_noise(binary, cell=cell)
     hits = weighted_grid_hits(binary, fog, cell)
     if hits.shape[0] == 0:
       continue
@@ -306,6 +405,11 @@ def main(argv: list[str] | None = None) -> int:
     "--cell-px", type=int, default=_GRID_CELL_PX,
     help="grid mode: spatial bin size in px (default: %(default)s)",
   )
+  p.add_argument(
+    "--no-denoise", action="store_true",
+    help="grid mode: skip remove_unaligned_noise (keep all small "
+         "components, ~19%% more hits)",
+  )
   p.add_argument("--fog-ksize", type=int, default=_FOG_KSIZE)
   p.add_argument("--noise-amin", type=int, default=_NOISE_AMIN)
   p.add_argument("--noise-amax", type=int, default=_NOISE_AMAX)
@@ -322,7 +426,9 @@ def main(argv: list[str] | None = None) -> int:
     noise_amax_upper=args.noise_amax_upper,
   )
   if args.mode == _MODE_GRID:
-    pl = export_hits_grid(args.input, cell=args.cell_px, **common)
+    pl = export_hits_grid(
+      args.input, cell=args.cell_px, denoise=not args.no_denoise, **common
+    )
   else:
     pl = export_hits(args.input, **common)
   save_mat(pl, out)

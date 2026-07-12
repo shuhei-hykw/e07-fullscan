@@ -5551,3 +5551,48 @@ calibrate grain spacing/background selection for synthetic data; (3)
 investigate micro-sam's actual setup and fine-tuning feasibility on
 emulsion images. Owned files: analysis-note.md, results/matlab/*
 (gitignored).
+
+## 2026-07-12 19:06 JST — Claude (macOS): in-progress -- Hough noise filter shipped to module code, real MATLAB validation running, synthetic data calibrated, micro-sam ruled out
+
+module/matlab_export.py: remove_unaligned_noise() implemented and wired
+into export_hits_grid() (denoise=True default, --no-denoise CLI flag).
+KISO re-exported: 108,671 hits (was 133,183, -18.4%, matches the earlier
+sweep). Fast suite 52/52.
+
+Re-launched the previously-crashed 5x5 local region test
+(test_detectbunki_local.m) against the denoised export, running in
+background (~86min est., same as the prior run). First 2/25 regions
+show a MUCH bigger runtime win than the point-count reduction predicts:
+row7/col7 went 930pts/232segs/165.9s -> 732pts/175segs/68.1s (-21% pts,
+-25% segs, -59% time). Consistent with the profiling finding that cost
+scales with segment count M, not point count N -- suggests noise removal
+disproportionately cuts M. Awaiting full completion to see if
+integrate_smallregions still crashes.
+
+Synthetic-track prototype: measured real grain spacing via intensity-peak
+detection along the reference 882px track (find_peaks on the fog-removed
+intensity profile) -- median 9.00px, mean 9.49px over 110 peaks, closely
+matching the earlier placeholder (8.0px). Adopted 9.0px and added slight
+per-grain angular drift (curvature=1.5deg, simulating gentle multiple
+scattering) for a less mechanically-straight look.
+
+Background agent completed micro-sam investigation: also NOT
+recommended, but for a different reason than UCS -- weights ARE publicly
+available (Zenodo, MIT license, confirmed MPS support for Apple Silicon)
+but the task design is a fundamental mismatch: trained for discrete
+object instance segmentation (cells/nuclei/organelles: LIVECell,
+TissueNet, DeepBacs), not dense binary segmentation of connected
+curvilinear structures. Its AIS decoder could technically be repurposed
+for a dense foreground mask but has no track record for line-like
+structures and isn't worth SAM's compute cost for that. Agent's
+converged recommendation across both UCS and micro-sam investigations:
+skip large foundation models, train a small U-Net (via
+segmentation-models-pytorch, the genuine public library Kasagi's fork
+was built on, not RIKEN's private fork) from an ImageNet-pretrained
+encoder on our own data -- this merges naturally with track (2)'s
+synthetic-data work.
+
+TODO next: finish the denoised local MATLAB test; scale up synthetic
+data generation (hundreds-thousands of images); prototype a
+segmentation-models-pytorch U-Net training run. Owned files:
+module/matlab_export.py, analysis-note.md, results/matlab/* (gitignored).
