@@ -5393,3 +5393,42 @@ to see if the known vertex is actually reconstructed end-to-end.
 
 Fast suite still 52/52 (no export-side changes this round, MATLAB-only
 run). Owned files: analysis-note.md, results/matlab/* (gitignored).
+
+## 2026-07-12 15:25 JST — Claude (macOS): done -- hybrid (connected-component + local grid) point reduction, visually confirmed fix
+
+Context clarified by user: Python preprocessing -> MATLAB candidate
+vertex selection -> scanner (human) review -> results fed back as
+teacher/ground-truth data. MATLAB stays unmodified; only the front-end
+preprocessing is in scope.
+
+Read detectlseg_smallregion.m in full to explain its cost to the user:
+stage 1 builds a full pairwise-distance matrix (pdist) then a min-spanning
+tree, cutting edges until each component is line-like; stage 2 grows/
+merges/refines segments via SVD-fit + nearest-point search, iterated to
+convergence. The pdist call is O(N^2) pairs -- dominant cost, consistent
+with the ~N^2.9 empirical fit (plus the iterative loops adding more O(N^2)
+passes).
+
+User proposed Hough-based resampling (detect track direction first, keep
+points along it). Prototyped per-slice cv2.HoughLinesP: default (z-
+projection-tuned) params only cover 24-30% of foreground pixels per
+slice; relaxed params reach 77-83% but produce 5000+ overlapping segments
+per slice needing dedup/merge logic similar to the existing
+cluster_tracks/link_tracks -- too much added complexity for now.
+
+Went with a simpler fix instead: weighted_grid_hits() now groups by
+connected component first (basic connectivity, not shape/line
+clustering) via cv2.connectedComponentsWithStats, then applies the fixed
+cell grid *within* each component only when it exceeds cell size. Cost is
+nearly identical to the plain grid (KISO: 133,183 hits vs 130,364; max
+region 1,201 vs 1,111). Visually confirmed the fix: found 671 close-but-
+disconnected component pairs in one slice; a 6-7x zoomed comparison shows
+the old plain-grid mode placing points in empty space between two
+distinct track structures, while the hybrid mode's points land on real
+structure every time.
+
+Fast suite 52/52. KISO re-exported (133,183 hits, 4.3s). Full-tile
+detectlseg re-validation (~5.5-6h) NOT yet re-run given near-identical
+density to the already-validated plain grid -- deferred pending user
+decision on whether to spend the compute. Owned files:
+module/matlab_export.py, analysis-note.md, results/matlab/* (gitignored).

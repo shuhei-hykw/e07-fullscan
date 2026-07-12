@@ -10,19 +10,29 @@ graph detector needs the full z extent. So each slice is binarized
 independently (fog removal -> Otsu -> noise removal, reused from
 ``module.preprocess``).
 
-Default mode (``grid``): one intensity-weighted 3-D hit per occupied
-``_GRID_CELL_PX`` x ``_GRID_CELL_PX`` spatial bin (fixed grid, no
-connected-component analysis). A raw-pixel mode (``pixel``, one hit per
-binary pixel) is kept for comparison but is so dense it makes
-``detectlseg_smallregion`` take an estimated 600+ days on real data (see
-analysis-note.md, 2026-07-11 entries). An earlier connected-component
-"one hit per grain blob" mode was tried and dropped: it made
-``detectlseg_smallregion`` tractable (~2.5h/tile) but a long,
-continuously-connected track collapses into a *single* connected
-component, so its whole length -- and all its line/vertex information --
-collapsed into one hit. A fixed grid has no notion of connectivity, so a
-long track keeps getting re-sampled every ``_GRID_CELL_PX`` along its
-length, same as an isolated grain.
+Default mode (``grid``): connected components for grouping (a basic
+connectivity primitive, not shape/line clustering), then one
+intensity-weighted 3-D hit per occupied ``_GRID_CELL_PX`` x
+``_GRID_CELL_PX`` cell *within* each component. Two earlier, simpler
+schemes were tried and dropped:
+
+- One hit per connected component (whole-blob centroid): tractable
+  (~2.5h/tile) but a long, continuously-connected track is a *single*
+  component, so its whole length -- and all its line/vertex information
+  -- collapsed into one hit.
+- A plain global grid (position only, ignoring connectivity): fixes the
+  long-track collapse, but a cell can average pixels from two distinct,
+  disconnected tracks that happen to pass close together (most visible
+  right at a real vertex, where several tracks converge) into one
+  spurious blended hit -- exactly where fidelity matters most.
+
+Grouping by connected component first, then re-sampling on a fixed grid
+*within* each component, gets both properties at roughly the plain grid's
+cost: a cell's hit is always drawn from one physical grain/track, and no
+single component -- however long -- collapses to one point. A raw-pixel
+mode (``pixel``, one hit per binary pixel) is kept for comparison but is
+so dense it makes ``detectlseg_smallregion`` take an estimated 600+ days
+on real data (see analysis-note.md, 2026-07-11 to 07-12 entries).
 
 Coordinates are 1-based (x = col + 1, y = row + 1, z = slice + 1) to match the
 MATLAB convention of a (1, 1, 1) origin and its ``x > lb`` small-region split.
@@ -37,6 +47,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import cv2
 import numpy as np
 from scipy.io import savemat
 
@@ -127,46 +138,65 @@ def export_hits(
   return np.concatenate(cols, axis=0)
 
 
+def _weighted_centroid(
+  weighted_block: np.ndarray, mask_block: np.ndarray, ox: int, oy: int,
+) -> tuple[float, float]:
+  """Intensity-weighted centroid of one block; falls back to the
+  geometric mean if the block's intensity happens to sum to zero
+  (shouldn't normally happen post fog+Otsu)."""
+  M = cv2.moments(weighted_block, binaryImage=False)
+  if M["m00"] > 0:
+    return M["m10"] / M["m00"] + ox, M["m01"] / M["m00"] + oy
+  ys, xs = np.nonzero(mask_block)
+  return float(xs.mean()) + ox, float(ys.mean()) + oy
+
+
 def weighted_grid_hits(
   binary: np.ndarray, intensity: np.ndarray, cell: int = _GRID_CELL_PX,
 ) -> np.ndarray:
-  """Return (cx, cy, n) per occupied ``cell`` x ``cell`` spatial bin.
+  """Return (cx, cy, n) hits: connected components for grouping, then one
+  intensity-weighted hit per occupied ``cell`` x ``cell`` cell *within*
+  each component.
 
-  Deliberately NOT connected-component based (no ``cv2.findContours``, no
-  grouping by shape/adjacency): every foreground pixel is assigned to a
-  fixed grid cell by position alone, and each occupied cell yields one hit
-  at the intensity-weighted centroid of its pixels. ``n`` is the occupied
-  pixel count in that cell (matches ``mabiki.m``'s own hit-count
+  Connected-component labelling (``cv2.connectedComponentsWithStats``) is
+  a basic connectivity primitive -- not shape/line clustering -- used only
+  to make sure a cell's pixels all come from one physical grain/track, not
+  two disconnected ones that happen to sit close together (this matters
+  most right at a real vertex, where several tracks converge). Within each
+  component, cells cap how much of it can collapse into one hit, so a
+  long, continuously-connected track still gets re-sampled every ``cell``
+  px along its length instead of becoming a single point. ``n`` is the
+  occupied pixel count per hit (matches ``mabiki.m``'s own hit-count
   convention).
-
-  This intentionally re-samples every ``cell`` px along a track, however
-  long or densely connected it is -- unlike a connected-component
-  centroid, which would collapse an entire long track into a single
-  point (see module docstring).
   """
-  ys, xs = np.nonzero(binary)
-  if xs.size == 0:
-    return np.empty((0, 3), dtype=np.float64)
-  w = intensity[ys, xs].astype(np.float64)
-  bin_x = (xs // cell).astype(np.int64)
-  bin_y = (ys // cell).astype(np.int64)
-  ncols = binary.shape[1] // cell + 1
-  key = bin_y * ncols + bin_x
-
-  n_bins = int(key.max()) + 1
-  sum_w  = np.bincount(key, weights=w, minlength=n_bins)
-  sum_wx = np.bincount(key, weights=w * xs, minlength=n_bins)
-  sum_wy = np.bincount(key, weights=w * ys, minlength=n_bins)
-  count  = np.bincount(key, minlength=n_bins)
-
-  occupied = count > 0
-  cx = np.where(sum_w[occupied] > 0, sum_wx[occupied] / np.maximum(
-    sum_w[occupied], 1e-12), 0.0)
-  cy = np.where(sum_w[occupied] > 0, sum_wy[occupied] / np.maximum(
-    sum_w[occupied], 1e-12), 0.0)
-  return np.stack(
-    [cx, cy, count[occupied].astype(np.float64)], axis=1
+  n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+    binary, connectivity=8
   )
+  out = []
+  for lbl in range(1, n_labels):
+    x, y, w, h, area = stats[lbl]
+    if area <= 0:
+      continue
+    sub_mask = labels[y:y + h, x:x + w] == lbl
+    sub_intensity = (
+      intensity[y:y + h, x:x + w].astype(np.float64) * sub_mask
+    )
+    if max(w, h) <= cell:
+      cx, cy = _weighted_centroid(sub_intensity, sub_mask, x, y)
+      out.append((cx, cy, float(area)))
+      continue
+    for gy in range(0, h, cell):
+      for gx in range(0, w, cell):
+        blk_mask = sub_mask[gy:gy + cell, gx:gx + cell]
+        n_px = int(blk_mask.sum())
+        if n_px == 0:
+          continue
+        blk_int = sub_intensity[gy:gy + cell, gx:gx + cell]
+        cx, cy = _weighted_centroid(blk_int, blk_mask, x + gx, y + gy)
+        out.append((cx, cy, float(n_px)))
+  if not out:
+    return np.empty((0, 3), dtype=np.float64)
+  return np.array(out, dtype=np.float64)
 
 
 def export_hits_grid(
@@ -178,16 +208,15 @@ def export_hits_grid(
   noise_amax_upper: int = _NOISE_AMAX_UPPER,
   cell: int = _GRID_CELL_PX,
 ) -> np.ndarray:
-  """Build the MATLAB hit pixel list ``pl`` (N x 6) via fixed-grid binning.
+  """Build the MATLAB hit pixel list ``pl`` (N x 6) via component-grouped
+  grid binning (see ``weighted_grid_hits``).
 
   Each slice is binarized independently, then reduced to one
-  intensity-weighted hit per occupied ``cell``-px spatial bin (see
-  ``weighted_grid_hits``). Cuts the KISO tile's point count from 12.36M
-  raw pixels to ~130k (~95x), keeping ``detectlseg_smallregion`` near its
-  proven ~2.5h/tile run time while re-sampling every ``cell`` px along any
-  track -- long tracks are not collapsed to a single point the way a
-  connected-component reduction would (see module docstring). ``n`` is the
-  occupied pixel count per bin.
+  intensity-weighted hit per occupied ``cell``-px cell within each
+  connected component. Cuts the KISO tile's point count from 12.36M raw
+  pixels to ~130k (~95x): a full 256-region ``detectlseg_smallregion`` run
+  completed in 5.5h (see analysis-note.md, 2026-07-12). ``n`` is the
+  occupied pixel count per hit.
   """
   reader = load_spng(json_path)
   cols = []
