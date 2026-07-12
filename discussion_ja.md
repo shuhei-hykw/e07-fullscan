@@ -5137,3 +5137,37 @@ detectlseg_smallregion: 3240.6秒/4840セグメント（旧skeleton-only版:
 成果物とする設計に変更、(c) その他——ユーザーの判断待ち。
 
 所有ファイル: analysis-note.md, results/matlab/*（gitignore済み）。
+
+## 2026-07-12 20:57 JST — Claude (macOS): 進行中 -- MATLAB側に最小限の修正を適用（ユーザー承認）、実測検証を再実行中
+
+ユーザーが前回の分岐点で選択肢1（最小限の防御的ガード）を選択。実装中
+の調査で、当初提案した修正箇所では不十分と判明し、変更した:
+
+- `pixellist2poly()` の呼び出し元は1箇所のみ（grep確認済み）:
+  `integrate_smallregions.m` 内の `resamplingpoly`。
+- 最初の試み（`pixellist2poly` 内で空データなら
+  `zeros(0,Dim)` を早期return）は不十分と判明: 呼び出し元
+  `integrate_smallregions.m` 107-110行目に、長さ0チェックより**前**の
+  無条件インデックスアクセス `lseg(:,:,i) = polylines{i}([1 end],:)`
+  があり、`polylines{i}` が空だとそこでクラッシュが単に移動するだけ
+  だった。この試みは破棄（`pixellist2poly.m` を編集前のバックアップと
+  バイト単位で完全一致するよう復元、diff確認済み）。
+- 実際の修正: `resamplingpoly` 内、`pixellist2poly` 呼び出し直前に
+  ガードを追加。`x1`（近傍の実点群）が空なら呼び出しをスキップし、
+  `polylines{i}` の座標データはそのまま残し（下流の無条件
+  インデックスアクセスに対して安全）、`lpoly2(i) = 0` だけ設定。
+  これは新しい規約ではなく、`integrate_smallregions.m` 118行目に
+  既にある「長さ0の線分は飛ばす」処理が元々想定していた挙動を、
+  `pixellist2poly` 側が正しく返せていなかっただけ。
+
+編集した両ファイル（`~/work/e07/matlab` はgit管理外）は編集前に
+`.orig-20260712` サフィックスでバックアップ済み。MATLAB `checkcode`
+で検証済み（既存のスタイル警告のみ、パースエラーなし）。
+
+同じ5×5局所テストをバックグラウンドで再実行中（約50-90分、
+detectlsegからやり直しが必要）。今後の再テスト高速化のため、
+`lseg` の中間チェックポイント保存もテストスクリプトに追加。
+
+所有ファイル: analysis-note.md, results/matlab/test_detectbunki_local.m,
+~/work/e07/matlab/{pixellist2poly.m,integrate_smallregions.m}（外部、
+e07-fullscanのgitリポジトリ外）。

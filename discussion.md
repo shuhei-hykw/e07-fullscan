@@ -5626,3 +5626,40 @@ output as the deliverable for scanner review, (c) something else --
 awaiting user direction.
 
 Owned files: analysis-note.md, results/matlab/* (gitignored).
+
+## 2026-07-12 20:57 JST — Claude (macOS): in-progress -- applied a minimal MATLAB fix (user-approved), re-running validation
+
+User chose option 1 (minimal defensive guard) from the previous
+decision point. Investigation while implementing revealed the fix
+location needed to be different from what I originally proposed:
+
+- pixellist2poly() has exactly one caller (grep-confirmed): resamplingpoly
+  inside integrate_smallregions.m.
+- My first attempt (early-return zeros(0,Dim) inside pixellist2poly for
+  empty input) was insufficient: the caller unconditionally does
+  `lseg(:,:,i) = polylines{i}([1 end],:)` at integrate_smallregions.m
+  lines 107-110, BEFORE any length==0 check -- an empty polylines{i}
+  would just move the crash there. Reverted this attempt (pixellist2poly.m
+  restored byte-identical to the pre-edit backup, diff-verified).
+- Actual fix: guard in resamplingpoly itself, right before the
+  pixellist2poly call -- if x1 (matching hit points) is empty, skip the
+  call, keep polylines{i}'s existing coordinate data untouched (safe for
+  the unconditional downstream indexing), and just set lpoly2(i)=0. This
+  is not a new convention: integrate_smallregions.m already has
+  "if lpoly(i)==0 % skip zero-length lines, continue" at line 118 --
+  the original code already anticipated this outcome, pixellist2poly just
+  never produced it gracefully for the empty-input case.
+
+Both edited files (~/work/e07/matlab, not under git) backed up with
+.orig-20260712 suffix before editing. Verified with MATLAB checkcode
+(pre-existing style warnings only, no parse errors).
+
+Re-running the same 5x5 local region test in the background (~50-90min,
+detectlseg has to redo since MATLAB has no persistent state across
+-batch invocations). Added a checkpoint save (lseg + x_local to .mat)
+partway through the test script so future re-tests of just the
+downstream steps won't need to redo detectlseg.
+
+Owned files: analysis-note.md, results/matlab/test_detectbunki_local.m,
+~/work/e07/matlab/{pixellist2poly.m,integrate_smallregions.m} (external,
+not part of e07-fullscan git repo).
