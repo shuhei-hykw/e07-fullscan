@@ -5663,3 +5663,30 @@ downstream steps won't need to redo detectlseg.
 Owned files: analysis-note.md, results/matlab/test_detectbunki_local.m,
 ~/work/e07/matlab/{pixellist2poly.m,integrate_smallregions.m} (external,
 not part of e07-fullscan git repo).
+
+## 2026-07-12 21:52 JST — Claude (macOS): done -- MATLAB fix worked. First-ever full pipeline completion (detectlseg -> integrate_smallregions -> detectbunki), promising branch candidates found near the known vertex
+
+Re-ran the same local 5x5 region test with the resamplingpoly guard
+applied. integrate_smallregions completed WITHOUT crashing (8.0s, 2381
+polylines) -- first time this whole investigation has gotten past this
+step on real data. detectbunki also completed (2.0s, 1815 branch
+groups, 107 with >=3 converging polylines).
+
+Branch groups within 80px of the known KISO vertex (vx=1096/vy=1028/
+z_slice=10): group 1 (21 polylines, 34.8px), group 5 (10 polylines,
+14.5px), group 12 (7 polylines, 29.6px), group 31 (5 polylines, 20.8px),
+group 41 (4 polylines, 44.0px), group 98 (3 polylines, 14.5px). Group 1
+and 5 are well within specials_gt.json's own click tolerance
+(+-50-100px) and the test suite's matching tolerance (+-200px).
+
+Caveats logged (avoiding overclaiming): single local region test only,
+tile-wide reproducibility unverified; haven't visually confirmed group
+1/5's actual polylines correspond to KISO's real 3 known tracks; the
+">=3 polylines" display filter is my own choice, not full visibility
+into all 1815 groups.
+
+TODO next: visualize group 1/5's actual polyline geometry against the
+known tracks; if it checks out, scale up to a larger/full-tile
+reproducibility test. Owned files: analysis-note.md,
+results/matlab/test_detectbunki_local.m (checkpoint save added),
+~/work/e07/matlab/{pixellist2poly.m,integrate_smallregions.m} (external).

@@ -5171,3 +5171,30 @@ detectlsegからやり直しが必要）。今後の再テスト高速化のた�
 所有ファイル: analysis-note.md, results/matlab/test_detectbunki_local.m,
 ~/work/e07/matlab/{pixellist2poly.m,integrate_smallregions.m}（外部、
 e07-fullscanのgitリポジトリ外）。
+
+## 2026-07-12 21:52 JST — Claude (macOS): 完了 -- MATLAB修正が成功。初のフルパイプライン完走、既知vertex近傍で有望な分岐候補を検出
+
+`resamplingpoly` へのガード適用後、同じ5×5局所テストを再実行。
+`integrate_smallregions` がクラッシュせず完走（8.0秒、2,381折れ線）
+——今回の調査で初めてこのステップを実データで突破。`detectbunki`
+も完走（2.0秒、1,815分岐グループ、うち3本以上の折れ線を持つもの
+107件）。
+
+既知KISO vertex（vx=1096/vy=1028/z_slice=10）から80px以内の分岐
+グループ: group 1（21本、34.8px）、group 5（10本、14.5px）、
+group 12（7本、29.6px）、group 31（5本、20.8px）、group 41（4本、
+44.0px）、group 98（3本、14.5px）。group 1・5は
+`specials_gt.json` のクリック精度（±50-100px）・テスト許容誤差
+（±200px）の範囲内に十分収まる。
+
+過大評価を避けるための注意点: 1つの局所領域のみのテストでタイル
+全体での再現性は未検証、group 1/5の実際の折れ線がKISOの本物の
+3トラックに対応するかは未確認（目視確認が必要）、「3本以上」の
+表示条件は自分で設定した閾値であり全1,815グループを見たわけでは
+ない。
+
+次のTODO: group 1/5の実際の折れ線ジオメトリを可視化し既知トラック
+と照合、問題なければより広い/全タイル規模の再現性確認へ。所有
+ファイル: analysis-note.md,
+results/matlab/test_detectbunki_local.m（チェックポイント保存追加）、
+~/work/e07/matlab/{pixellist2poly.m,integrate_smallregions.m}（外部）。
