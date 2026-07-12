@@ -5110,3 +5110,30 @@ Kasagi氏も使っていた `segmentation_models_pytorch`（公式ライブラ�
 規模拡大（数百〜数千枚）、`segmentation_models_pytorch` U-Netの
 学習試作。所有ファイル: module/matlab_export.py, analysis-note.md,
 results/matlab/*（gitignore済み）。
+
+## 2026-07-12 19:57 JST — Claude (macOS): 完了 -- denoise版局所テスト完走: detectlsegは大幅高速化、integrate_smallregionsは同一クラッシュ
+
+denoise版エクスポートでの25領域局所テストが完走。
+detectlseg_smallregion: 3240.6秒/4840セグメント（旧skeleton-only版:
+5153.3秒/5768セグメント）——時間-37.1%、セグメント-16.1%。プロファイル
+由来の仮説（コストは点数Nよりセグメント数Mに強く効く）を方向性として
+裏付け：ノイズ除去は点数・セグメント数の削減率以上に処理時間を
+削減した。
+
+**しかし `integrate_smallregions` は前回と全く同一のエラーで
+再クラッシュ**（`pixellist2poly>subfunc2` 行136、空の点群への
+インデックスアクセス）——スタックトレース・根本原因とも同一。前段
+（Python側）の密度・品質改善だけでこのクラッシュが間接的に解消される
+という仮説は**誤りだった**。`resamplingpoly`/`pixellist2poly` 側の、
+断片化した線分から実体のない折れ線候補が生成されうる、再現性のある
+ロジック上の欠陥である可能性が高く、断片化がある限り入力の質に
+関わらず再現すると考えられる。
+
+判断が必要な分岐点: 前段（Python）側の改善はここでほぼ限界。
+選択肢: (a) `pixellist2poly` に最小限の防御的ガード（空の点群なら
+早期return等）をMATLAB側に1箇所だけ加える、(b)
+`integrate_smallregions`/`detectbunki` を今は使わず
+`detectlseg_smallregion` の出力（線分候補）をスキャナー選別向けの
+成果物とする設計に変更、(c) その他——ユーザーの判断待ち。
+
+所有ファイル: analysis-note.md, results/matlab/*（gitignore済み）。

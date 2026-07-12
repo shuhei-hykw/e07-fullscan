@@ -5596,3 +5596,33 @@ TODO next: finish the denoised local MATLAB test; scale up synthetic
 data generation (hundreds-thousands of images); prototype a
 segmentation-models-pytorch U-Net training run. Owned files:
 module/matlab_export.py, analysis-note.md, results/matlab/* (gitignored).
+
+## 2026-07-12 19:57 JST — Claude (macOS): done -- denoised local test complete: detectlseg much faster, integrate_smallregions still crashes identically
+
+Full 25-region local test with the denoised export completed.
+detectlseg_smallregion: 3240.6s / 4840 segments, vs the earlier
+skeleton-only run's 5153.3s / 5768 segments -- time -37.1%, segments
+-16.1%. Confirms the profiling-derived hypothesis (cost driven by
+segment count M more than point count N) directionally: noise removal
+cut runtime disproportionately more than it cut point/segment count.
+
+BUT integrate_smallregions crashed with the exact same error as before
+(pixellist2poly>subfunc2 line 136, indexing into an empty point list) --
+identical stack trace, identical root cause. Our hypothesis that
+front-end density/quality improvements would indirectly fix this crash
+was WRONG: it's very likely a genuine, reproducible logic bug in
+resamplingpoly/pixellist2poly (can construct a polyline candidate with
+no matching real hit points) that recurs regardless of how clean the
+input is, as long as fragmentation of any kind exists -- which any real
+dense track structure will always produce to some degree.
+
+This is a decision point: front-end (Python-only) fixes have hit their
+practical ceiling for this specific crash. Options to bring to the user:
+(a) a minimal defensive guard in pixellist2poly itself (MATLAB-side,
+narrowly scoped to the empty-input edge case, not touching the
+algorithm's normal-case behavior), (b) skip integrate_smallregions/
+detectbunki for now and treat detectlseg_smallregion's line-segment
+output as the deliverable for scanner review, (c) something else --
+awaiting user direction.
+
+Owned files: analysis-note.md, results/matlab/* (gitignored).
