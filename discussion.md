@@ -5469,3 +5469,46 @@ from crashing (would need to re-run the 5x5-region local test, ~86 min).
 Fast suite 52/52. KISO re-exported (133,183 hits, 5.3s). Owned files:
 module/matlab_export.py, requirements.txt, analysis-note.md,
 results/matlab/* (gitignored).
+
+## 2026-07-12 18:44 JST — Claude (macOS): in-progress -- noise-reduction investigation (3 parallel tracks), analysis-note.md caught up
+
+Caught up analysis-note.md with everything since the last commit (skeleton
+implementation): confirmed skipping along-track decimation is not viable
+(505 days est. for full-skeleton, no-chunking mode), retracted the pdist
+MATLAB speedup (profiling showed subfunc1/pdist is only 0.4% of runtime;
+no MATLAB files were ever modified), confirmed integrate_smallregions
+crashes on real fragmented data (root cause: track width 3-4x over
+detectlseg's TH tolerance), and logged the skeleton fix's quantified
+improvement (~2.6-3x width reduction).
+
+New this session: tested 3 classical noise-discrimination signals for the
+"66% of points are small isolated components" question --
+elongation (failed, no area correlation) and isolation-distance (failed,
+median 21px to nearest structure regardless of real/noise) both gave no
+separation. Hough-line-alignment succeeded: components >=3px from any
+detected Hough line have median area 20 vs 114 for aligned ones. Raw
+threshold removes 28.6% of the point budget, but a vertex-region spot
+check found it would also drop non-trivial blobs (area 114-173) near the
+one region we care most about -- combining with an area<30 floor is safer
+(18.8% reduction) and a visual check confirms it protects real
+track-aligned blobs the pure alignment filter would have dropped.
+
+Found RIKEN researcher Kasagi's (independent, not shareable) code
+`binary_segmentation` locally -- a segmentation_models_pytorch U-Net
+binary segmentation model (grayscale in, track mask out) trained via
+MC+GAN-generated data, i.e., a learned replacement for our classical
+fog/Otsu/noise-removal step. No weights available (independent research).
+
+User wants 3 tracks pursued in parallel: (1) validate/finalize the
+conservative Hough-alignment noise filter, (2) prototype synthetic
+training data (real background crops + simplified procedural track
+geometry calibrated from specials_x20 statistics + measured grain
+texture, skipping full Geant4+GAN), (3) investigate the public "UCS"
+(SAM-based universal curvilinear structure segmentation) model for
+transfer-learning feasibility -- delegated to a background agent
+(GitHub: kylechuuuuu/UCS), awaiting its report.
+
+TODO next: finish (1) and (2); read back the UCS agent's findings for (3)
+when it completes. Owned files: analysis-note.md, results/matlab/*
+(gitignored, various exploratory scripts), ~/work/e07/binary_segmentation
+(external repo, read-only reference, not part of e07-fullscan).
