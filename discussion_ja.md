@@ -4966,3 +4966,37 @@ vs 1,111）。視覚的に修正を確認: 1スライスで671組の近接する
 全域detectlseg再検証（約5.5-6h）は密度がほぼ変わらないため未実行——
 ユーザー判断待ち。所有ファイル: module/matlab_export.py,
 analysis-note.md, results/matlab/*（gitignore済み）。
+
+## 2026-07-12 17:25 JST — Claude (macOS): 完了 -- スケルトンベースの中心線抽出を実装、視覚的・定量的に検証
+
+`integrate_smallregions` クラッシュとトラック幅の発見へのフォローアップ。
+「MATLAB側のトラック検出を肩代わりしているのでは」という懸念は、これを
+画像レベルの形状クリーンアップ（fog除去/Otsu/ノイズ除去と同カテゴリ）
+と位置づけることで整理——トラック/vertexの物理的識別はMATLAB側に残す。
+
+`requirements.txt` に `scikit-image`（`skimage.morphology.skeletonize`）
+を追加。`weighted_grid_hits()` はセルサイズを超える connected component
+を、セル分割前に1px幅の中心線（メディアル軸スケルトン）に細線化する
+ように変更——ヒットの**位置**はスケルトンの輝度加重重心から、
+**`n`**（密度指標）は元のブロブのセル内ピクセル数のまま維持。ヒット
+総数は不変（133,183件、位置のみ変更）。
+
+既知の882px長トラック（1つのconnected componentだけを正しく単離して
+測定——バウンディングボックスでのフィルタは無関係な点を巻き込み
+意味のない数字になる、と2度学んだ教訓）で定量検証: 局所（40px窓）
+垂直半幅が、局所最大値平均8.12px/中央値6.63px/局所平均値平均2.24pxから、
+それぞれ2.70/2.51/1.56に改善——約2.6-3倍の削減。
+`detectlseg_smallregion` のTH=1.5-2pxには近づいたが完全には収まって
+いない（グリッドセル分割自体が残差を生むため）。
+
+2枚組の可視化（全長概観+6倍拡大詳細）を作成: 元のブロブ輪郭（青）、
+スケルトン（シアン）、最終エクスポート点（黄十字）を重ね描き、幅の
+collapse を直接視認可能に。既存Artifactに追記（同一URL）:
+https://claude.ai/code/artifact/8f9a90a2-7186-41e2-992c-3e80fd078241
+
+未検証: `integrate_smallregions` のクラッシュが実際に解消するかは
+まだ未確認（5×5領域の局所テスト再実行が必要、約86分）。
+
+高速スイート52/52。KISO再エクスポート済み（133,183ヒット、5.3秒）。
+所有ファイル: module/matlab_export.py, requirements.txt,
+analysis-note.md, results/matlab/*（gitignore済み）。

@@ -5432,3 +5432,40 @@ detectlseg re-validation (~5.5-6h) NOT yet re-run given near-identical
 density to the already-validated plain grid -- deferred pending user
 decision on whether to spend the compute. Owned files:
 module/matlab_export.py, analysis-note.md, results/matlab/* (gitignored).
+
+## 2026-07-12 17:25 JST — Claude (macOS): done -- skeleton-based centerline extraction implemented, visually and quantitatively verified
+
+Follow-up to the integrate_smallregions crash and track-width findings.
+Resolved the "isn't this duplicating MATLAB's track detection" concern by
+scoping this as image-level shape cleanup (same category as fog-removal/
+Otsu/noise-removal), not track/vertex identification -- MATLAB keeps that
+job.
+
+Added scikit-image (skimage.morphology.skeletonize) to requirements.txt.
+weighted_grid_hits() now thins any connected component larger than the
+cell size to a 1-px medial-axis skeleton before cell sampling -- hit
+*position* comes from the skeleton's weighted centroid, hit *n* (density
+proxy) still comes from the original blob's per-cell pixel count. Total
+hit count is unchanged (133,183 -- same cells, only position moved).
+
+Quantified on the known 882px long track (properly isolated to just that
+one connected component -- a bounding-box filter pulls in unrelated
+points and gives nonsense numbers, learned that the hard way twice now):
+local (40px window) perpendicular half-width dropped from mean-of-max
+8.12px / median-of-max 6.63px / mean-of-mean 2.24px to 2.70 / 2.51 / 1.56
+respectively -- a ~2.6-3x reduction, closer to but not fully under
+detectlseg_smallregion's TH=1.5-2px tolerance (grid-cell chunking itself
+still contributes some residual scatter).
+
+Built a two-panel visualization (full-length overview + 6x zoomed detail)
+showing the original wide blob outline (blue), skeleton (cyan), and final
+exported hit points (yellow) all overlaid -- makes the width collapse
+directly visible. Appended to the existing artifact (same URL):
+https://claude.ai/code/artifact/8f9a90a2-7186-41e2-992c-3e80fd078241
+
+NOT yet re-tested: whether this actually stops integrate_smallregions
+from crashing (would need to re-run the 5x5-region local test, ~86 min).
+
+Fast suite 52/52. KISO re-exported (133,183 hits, 5.3s). Owned files:
+module/matlab_export.py, requirements.txt, analysis-note.md,
+results/matlab/* (gitignored).

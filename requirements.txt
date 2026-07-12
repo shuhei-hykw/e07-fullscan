@@ -6,6 +6,7 @@ matplotlib>=3.7
 PyYAML>=6.0
 pandas>=2.0
 pyarrow>=14.0
+scikit-image>=0.22
 
 # Web viewer
 flask>=3.0

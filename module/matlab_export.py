@@ -34,6 +34,14 @@ mode (``pixel``, one hit per binary pixel) is kept for comparison but is
 so dense it makes ``detectlseg_smallregion`` take an estimated 600+ days
 on real data (see analysis-note.md, 2026-07-11 to 07-12 entries).
 
+Large components are additionally thinned to a 1-px skeleton
+(centreline) before cell sampling: real track width after binarisation
+(~13-16 px locally) is 4-8x wider than ``detectlseg_smallregion``'s own
+straightness tolerance (TH=1.5-2 px), which otherwise fragments tracks
+into many short segments -- confirmed to even crash a downstream MATLAB
+merge step (``integrate_smallregions``) on real KISO data (analysis-note.
+md, 2026-07-12). See ``weighted_grid_hits`` for the skeleton step.
+
 Coordinates are 1-based (x = col + 1, y = row + 1, z = slice + 1) to match the
 MATLAB convention of a (1, 1, 1) origin and its ``x > lb`` small-region split.
 
@@ -50,6 +58,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from scipy.io import savemat
+from skimage.morphology import skeletonize
 
 from module.preprocess import (
   _FOG_KSIZE,
@@ -165,9 +174,21 @@ def weighted_grid_hits(
   most right at a real vertex, where several tracks converge). Within each
   component, cells cap how much of it can collapse into one hit, so a
   long, continuously-connected track still gets re-sampled every ``cell``
-  px along its length instead of becoming a single point. ``n`` is the
-  occupied pixel count per hit (matches ``mabiki.m``'s own hit-count
-  convention).
+  px along its length instead of becoming a single point.
+
+  For components larger than ``cell`` (i.e. real tracks, not single
+  grains), the binary blob is first thinned to a 1-px medial-axis
+  skeleton (``skimage.morphology.skeletonize``) before cell sampling, so
+  each hit's *position* is drawn from the track's centreline rather than
+  its full width. This matters because ``detectlseg_smallregion``'s own
+  straightness tolerance is tight (TH=1.5-2 px) -- real track width after
+  fog/Otsu binarisation measured ~13-16 px locally (analysis-note.md,
+  2026-07-12), 4-8x wider than that tolerance, which fragments tracks
+  into many short segments and can even crash downstream MATLAB code
+  (``integrate_smallregions``) on degenerate polylines. ``n`` (the
+  occupied *original-mask* pixel count per cell, not skeleton-pixel
+  count) still reflects local grain density, matching ``mabiki.m``'s own
+  hit-count convention.
   """
   n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
     binary, connectivity=8
@@ -185,14 +206,24 @@ def weighted_grid_hits(
       cx, cy = _weighted_centroid(sub_intensity, sub_mask, x, y)
       out.append((cx, cy, float(area)))
       continue
+    skel = skeletonize(sub_mask)
+    skel_intensity = (
+      intensity[y:y + h, x:x + w].astype(np.float64) * skel
+    )
     for gy in range(0, h, cell):
       for gx in range(0, w, cell):
-        blk_mask = sub_mask[gy:gy + cell, gx:gx + cell]
-        n_px = int(blk_mask.sum())
+        n_px = int(sub_mask[gy:gy + cell, gx:gx + cell].sum())
         if n_px == 0:
           continue
-        blk_int = sub_intensity[gy:gy + cell, gx:gx + cell]
-        cx, cy = _weighted_centroid(blk_int, blk_mask, x + gx, y + gy)
+        skel_blk_mask = skel[gy:gy + cell, gx:gx + cell]
+        if not skel_blk_mask.any():
+          # cell has real-blob pixels but no skeleton pixel (can happen
+          # right at a skeleton branch gap); fall back to the blob mean.
+          skel_blk_mask = sub_mask[gy:gy + cell, gx:gx + cell]
+          skel_blk_int = sub_intensity[gy:gy + cell, gx:gx + cell]
+        else:
+          skel_blk_int = skel_intensity[gy:gy + cell, gx:gx + cell]
+        cx, cy = _weighted_centroid(skel_blk_int, skel_blk_mask, x + gx, y + gy)
         out.append((cx, cy, float(n_px)))
   if not out:
     return np.empty((0, 3), dtype=np.float64)
