@@ -5198,3 +5198,22 @@ group 12（7本、29.6px）、group 31（5本、20.8px）、group 41（4本、
 ファイル: analysis-note.md,
 results/matlab/test_detectbunki_local.m（チェックポイント保存追加）、
 ~/work/e07/matlab/{pixellist2poly.m,integrate_smallregions.m}（外部）。
+
+## 2026-07-12 21:58 JST — Claude (macOS): 完了 -- Group1/5のポリラインを可視化: きれいな収束ではなく密集した塊、スキャナー選別候補として妥当
+
+チェックポイントから高速再実行（`export_vertex_groups.m`、
+detectlsegスキップ、10秒未満）でGroup1/5の実座標を取得し、既知
+vertex周辺画像に重ねて可視化。正直な所見: 教科書的な3本収束では
+なく、Group1（橙）は多数の短い折れ線が交差する密集塊、Group5
+（黄）はvertexから複数方向に線が伸び緩やかに整合するが単純では
+ない。
+
+ユーザー自身の設計（MATLAB出力→スキャナー選別向け候補、完全
+自動解決ではない）に照らして適切に位置づけ: この「乱雑だが収束
+している」構造は失敗ではなく、人間選別に回すべき妥当な候補。
+Artifactに追加（同一URL）。
+
+現状: 1局所領域・1イベントでの単発成功。タイル全体・他イベントでの
+再現は未検証。次の自然なステップは他の既知イベント（IBUKI,
+IRRAWADY, NAGARA、いずれもn_clicks≥2）やより広い領域での再実行で
+一般性を確認すること。

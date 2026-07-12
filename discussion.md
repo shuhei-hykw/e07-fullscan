@@ -5690,3 +5690,25 @@ known tracks; if it checks out, scale up to a larger/full-tile
 reproducibility test. Owned files: analysis-note.md,
 results/matlab/test_detectbunki_local.m (checkpoint save added),
 ~/work/e07/matlab/{pixellist2poly.m,integrate_smallregions.m} (external).
+
+## 2026-07-12 21:58 JST — Claude (macOS): done -- visualized group 1/5 polylines: a busy tangle, not a clean convergence, appropriate as a scanner-review candidate
+
+Fast re-run from checkpoint (export_vertex_groups.m, skips detectlseg,
+<10s) extracted group 1/5's actual polyline coordinates and overlaid
+them on the fog-removed image around the known vertex. Honest read:
+not a textbook clean 3-track convergence -- group 1 (orange) is a busy
+tangle of many short crossing polylines; group 5 (yellow) radiates from
+near the vertex in multiple directions, loosely consistent with real
+tracks but not simple either.
+
+Framed this appropriately given the user's own stated design (MATLAB
+output -> candidates for scanner review, not full automatic
+resolution): this messy-but-converging structure is a reasonable
+candidate for that human-review step, not a failure. Added to the
+artifact (same URL).
+
+Current status: single local-region, single-event success; not yet
+reproduced tile-wide or on other specials_x20 events. Natural next step:
+re-run on other known events (IBUKI, IRRAWADY, NAGARA -- all n_clicks>=2)
+or a wider region, to check generality before trusting this as a
+repeatable result.
