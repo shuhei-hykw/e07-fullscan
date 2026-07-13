@@ -5712,3 +5712,35 @@ reproduced tile-wide or on other specials_x20 events. Natural next step:
 re-run on other known events (IBUKI, IRRAWADY, NAGARA -- all n_clicks>=2)
 or a wider region, to check generality before trusting this as a
 repeatable result.
+
+## 2026-07-14 01:05 JST — Claude (macOS): done -- fixed stale/low-quality
+images in both published summary artifacts (panel 04 + 2 others)
+
+User feedback: panel 04 (grid-hits visualization) looked "completely
+no good" while the skeleton (cyan) images looked best. Root cause was
+twofold: (1) `kiso_cent_vertex_crop.datauri` was generated 2026-07-12
+14:37, before both the skeletonize commit (`cca63da`, ~17:25) and the
+Hough-alignment denoise commit (`da3d5a8`, ~19:06) -- the artifact had
+been showing an already-superseded plain-grid render this whole time;
+(2) the existing cv2.drawMarker-based rendering lacks anti-aliasing
+vs. the matplotlib-based skeleton figures the user praised.
+
+Fix: wrote `results/matlab/regen_panels.py` (gitignored, under
+results/) to regenerate 3 images from the CURRENT pipeline
+(`weighted_grid_hits` + `remove_unaligned_noise`, cell=30px) using
+matplotlib with the same cyan (`#5fd0c4`) accent as the skeleton
+figures: panel 04 (`kiso_cent_vertex_crop`), the noise-filter check
+(`filter_vertex_vis`), and the detectbunki branch-group overlay
+(`vertex_groups_overlay`, from `vertex_groups_export.mat`). Republished
+both artifacts (`kiso_vertex_pipeline_qa`, `e07_summary.html`) at their
+existing URLs -- no pipeline code changed, only stale/low-quality
+visualization assets.
+
+Lesson: reused intermediate datauri images across artifact updates
+without checking timestamps against the commits that changed the
+underlying pipeline -- going forward, any time a visualization is
+replaced, audit every artifact panel that reuses the same asset name
+for staleness. Owned files this session: analysis-note.md,
+results/matlab/regen_panels.py (new, gitignored),
+scratchpad build_gallery.py / build_summary.py (regenerated HTML only,
+no logic changes).

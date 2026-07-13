@@ -5217,3 +5217,34 @@ Artifactに追加（同一URL）。
 再現は未検証。次の自然なステップは他の既知イベント（IBUKI,
 IRRAWADY, NAGARA、いずれもn_clicks≥2）やより広い領域での再実行で
 一般性を確認すること。
+
+## 2026-07-14 01:05 JST — Claude (macOS): 完了 -- 公開済みサマリー
+Artifact 2件の古い/低品質な画像を修正（パネル04+他2枚）
+
+ユーザーから「パネル04（グリッド化後の点群）は全くだめ、スケルトン
+（シアン）画像が一番綺麗」との指摘。原因は2つ: (1)
+`kiso_cent_vertex_crop.datauri`の生成時刻が2026-07-12 14:37で、
+スケルトン化コミット（`cca63da`、17:25頃）にもHough整合ノイズ除去
+コミット（`da3d5a8`、19:06頃）にも先行しており、Artifactは既に
+置き換え済みの素グリッド画像を表示し続けていた。(2)
+既存の`cv2.drawMarker`描画はアンチエイリアスが無く、ユーザーが
+高評価したmatplotlib製のスケルトン画像と見た目の差があった。
+
+対応: `results/matlab/regen_panels.py`（新規、results/配下で
+gitignore対象）を作成し、現行パイプライン（`weighted_grid_hits`+
+`remove_unaligned_noise`、cell=30px）の実データから3枚を
+matplotlibで再生成: パネル04（`kiso_cent_vertex_crop`）、ノイズ
+フィルタ確認図（`filter_vertex_vis`）、detectbunki分岐グループ図
+（`vertex_groups_overlay`、`vertex_groups_export.mat`由来）。いずれも
+スケルトン画像と同じシアン`#5fd0c4`系配色に統一。両Artifact
+（`kiso_vertex_pipeline_qa`、`e07_summary.html`）を同一URLで再公開。
+パイプラインのコード自体に変更は無く、古い/低品質な可視化資産のみ
+差し替え。
+
+教訓: Artifactを更新する際、使い回しているdatauri画像の生成時刻を
+パイプライン変更コミットと突き合わせていなかった。今後、可視化を
+差し替えたら、同じ資産名を参照している全Artifactパネルの鮮度を
+棚卸しする。今回の所有ファイル: analysis-note.md,
+results/matlab/regen_panels.py（新規、gitignore対象）、
+scratchpad側 build_gallery.py / build_summary.py（HTML再生成のみ、
+ロジック変更なし）。

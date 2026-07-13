@@ -84,6 +84,52 @@ specials_x20 はすべてダブル超核イベントであり、ほかにも多�
 
 ## 開発ログ（最新が上）
 
+## 2026-07-14 01:05 JST — サマリーArtifactの画像品質問題を修正（パネル04が古い画像だった件+cv2描画のジャギー）
+
+ユーザーから「04のグリッド化後の黄色の点群は全くだめ、スケルトン化後の
+シアンが一番綺麗」との指摘。原因を2つ特定した。
+
+**原因1（本質的）**: `kiso_cent_vertex_crop.datauri` の生成時刻が
+2026-07-12 14:37で、スケルトン化コミット（`cca63da`、17:25頃）にも
+Hough整合ノイズ除去コミット（`da3d5a8`、19:06頃）にも先行していた。
+つまりArtifactのパネル04は、素のグリッド分割（連結成分もスケルトンも
+デノイズも無し）という、既に置き換え済みの最も古い段階の画像を
+ずっと表示し続けていた。
+
+**原因2（表現手法）**: 既存の可視化は`cv2.drawMarker`等によるraster
+描画で、アンチエイリアスが無くジャギーが目立つ。ユーザーが「一番
+綺麗」と評したスケルトン画像は元々matplotlibで描いていたため、
+見た目の差が生まれていた。
+
+**対応**: `results/matlab/regen_panels.py`（新規、gitignore対象の
+results/配下）を作成し、以下3枚を現行パイプライン
+（`weighted_grid_hits` + `remove_unaligned_noise`、cell=30px）の
+実データからmatplotlibで再生成:
+- パネル04 (`kiso_cent_vertex_crop`): シアン`#5fd0c4`のリング+中心点、
+  スケルトン画像と同一配色に統一。KISO vertex crop内173点。
+- フィルタ確認図 (`filter_vertex_vis`): green=aligned kept, red=
+  removed(conservative), orange=area floorで保護、をcv2マーカーから
+  matplotlib散布図に置き換え。
+- detectbunki分岐グループ図 (`vertex_groups_overlay`): Group1（橙）
+  Group5（黄）の実ポリライン座標を`vertex_groups_export.mat`から
+  matplotlibで描画、既知vertexを白十字で重畳。
+
+Artifact 2件を同一URLで再公開（`kiso_vertex_pipeline_qa` /
+`e07_summary.html`）。画像は生成し直したがコードには変更なし——
+根本原因は「画像の作り直し漏れ」であり、`weighted_grid_hits`等の
+ロジック自体は健全。
+
+**教訓**: 中間生成物（datauri画像）の鮮度をコミットタイムスタンプと
+突き合わせずにArtifactへ使い回すと、パイプラインを改善しても古い
+画像が残り続ける。今後は可視化を差し替えた際、参照している全
+Artifactのパネルを棚卸しして再生成漏れがないか確認する。
+
+TODO: 直接のスケルトン点群（間引き無し）をMATLAB入力にする案は
+計算コスト面で不可（既出の見積り、~150万点/タイル・detectlsegで
+505日相当）のため見送り、現行のgrid+skeleton+denoise（cell=30px）
+路線を継続。次は他の既知イベント（IBUKI, IRRAWADY, NAGARA）での
+再現性確認。
+
 ## 2026-07-12 21:58 JST — Group1/5の折れ線を可視化——きれいな収束ではなく「密集した塊」、スキャナー選別向け候補として妥当
 
 前エントリのGroup1（21本）・Group5（10本、既知vertexから14.5px）の
