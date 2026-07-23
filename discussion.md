@@ -5744,3 +5744,83 @@ for staleness. Owned files this session: analysis-note.md,
 results/matlab/regen_panels.py (new, gitignored),
 scratchpad build_gallery.py / build_summary.py (regenerated HTML only,
 no logic changes).
+
+## 2026-07-15 13:40 JST — Claude (macOS): started a new sibling repo
+`~/work/e07/e07-binary-segmentation` (same level as e07-fullscan)
+
+Learned track/fog binary segmentation model -- the next lever after
+all 5 classical noise filters plateaued (see analysis-note.md,
+2026-07-15 entry). Reuses `module.reader`/`module.preprocess` from
+this repo via a path reference (not duplicated). Side effect:
+installed torch/segmentation-models-pytorch/torchvision etc. into
+this Mac's shared pyenv 3.14.6 install, so they are importable from
+e07-fullscan too. No changes to files in this repo besides the
+analysis-note.md entry. Not yet committed to git in the new repo
+(pending user confirmation).
+
+## 2026-07-15 14:30 JST — Claude (macOS): repointed `fullscan-image`
+symlink and mounted real E07 fullscan data read-only
+
+User corrected the assumption that continuing with KISO (E373) was
+fine: the project's actual optimization target is E07, and KISO's
+background density measurably differs (~1.8-2x lower foreground
+fraction than E07 at matching slices, see analysis-note.md). Mounted
+KEK's E07 fullscan share via
+`sshfs ... ~/mnt/e07-fullscan -o ro` (creating a mount point under
+`/group` required sudo, which auto-mode blocked as scope escalation
+-- switched to a home-directory mount point per user's choice).
+`e07-fullscan/fullscan-image` now points there (the old
+`/group/...` target didn't exist).
+
+No code changes in this repo, only the symlink target and the
+analysis-note.md entry. Any other agent writing code against
+`fullscan-image/` should note both `E07/` and `E373/` exist
+side by side under the mount.
+
+## 2026-07-19 08:00 JST — Claude (macOS): recorded `specials_x20`
+validation result
+
+Re-ran `tests/test_specials.py` (known 9-event ΛΛ hypernuclei vertex
+validation, `-m slow`): all 35 tests now pass. Updated the stale
+docstring ("fails for most events") with a note hypothesizing the
+2026-07-11 OpenCV5 HoughLinesP shape fix as the likely cause. Full
+detail in analysis-note.md 2026-07-18 (14).
+Files touched: tests/test_specials.py (docstring only),
+analysis-note.md. No other files changed.
+
+## 2026-07-19 10:30 JST — Claude (macOS): changed `fullscan-image`
+symlink structure (adapting to a fuse-t NFS remount)
+
+The previous sshfs mount (`~/mnt/e07-fullscan`) had disconnected;
+user remounted via fuse-t NFS at `~/mnt/kek_e07` instead. This new
+mount's root sits one level deeper than before (directly `MOD108/`,
+equivalent to the old `fullscan-image/E07/`, no E373 sibling)
+vs. the old `fullscan-image -> ~/mnt/e07-fullscan` (root had E07/
+and E373/ side by side). Fix: `fullscan-image` is now a plain
+directory containing a symlink `E07 -> ~/mnt/kek_e07`, so existing
+code references to `fullscan-image/E07/...` keep working unchanged.
+E373 is not wired up under the new mount (unused currently). Detail
+in analysis-note.md 2026-07-19 10:30. Files touched:
+fullscan-image/ (symlink structure only), analysis-note.md.
+
+## 2026-07-22 JST — Claude (macOS): changed production Hough
+`max_gap` 5 -> 40 (`config/default.yaml`, `diag_common.py`)
+
+Changed `config/default.yaml`'s `viewer.hough_mg` (consumed by
+`analyze_cli.py`'s KEKCC v6 batch pipeline and `app.py`'s viewer
+defaults) from 5 to 40, and mirrored the same change in
+`module/pipeline/diag_common.py`'s `TRACK_CFG`. Reason: built a
+pixel-level ground-truth mask from the 512 existing manual segment
+labels (223 confirmed "true" tracks, rasterized) and measured that
+the old value (mg=5) missed ~54% of confirmed real track pixels
+(recall 45.8%). mg=40 reaches 92.7% recall while a false-bridging
+diagnostic (length>300px AND grain-density<0.02) stays at the same
+low level as mg=20/30. Full detail in analysis-note.md 2026-07-22
+(2). `module/pipeline/finder.py`'s `_HOUGH_MG` fallback default was
+also changed 4->40 earlier the same day (still on a different
+thr=20/ml=25 baseline than the yaml's thr=35/ml=30 -- that
+inconsistency is unresolved).
+Fast test suite (52 tests) passes after both changes;
+`specials_x20` (-m slow) re-validation is running.
+Files touched: config/default.yaml, module/pipeline/diag_common.py,
+module/pipeline/finder.py, analysis-note.md.

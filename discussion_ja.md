@@ -5248,3 +5248,78 @@ matplotlibで再生成: パネル04（`kiso_cent_vertex_crop`）、ノイズ
 results/matlab/regen_panels.py（新規、gitignore対象）、
 scratchpad側 build_gallery.py / build_summary.py（HTML再生成のみ、
 ロジック変更なし）。
+
+## 2026-07-15 13:40 JST — Claude (macOS): 新規リポジトリ
+`~/work/e07/e07-binary-segmentation`（e07-fullscanと同階層の
+兄弟リポジトリ）を作成、進行中。学習ベースのtrack/fog二値分割
+モデル（古典フィルタが全滅したための次の一手、詳細は
+analysis-note.mdの2026-07-15エントリ）。e07-fullscanの
+`module.reader`/`module.preprocess`をパス参照で再利用（複製せず）。
+副作用として、このMac環境のpyenv 3.14.6にtorch/
+segmentation-models-pytorch/torchvision等をインストール済み——
+e07-fullscan側からも同じpython環境なので見える点に注意。
+e07-fullscan側のファイルへの変更は無し（analysis-note.mdへの追記
+のみ）。まだgit未コミット（ユーザー確認待ち）。
+
+## 2026-07-15 14:30 JST — Claude (macOS): `fullscan-image`
+シンボリックリンクの向き先を変更（`/group/...` → `~/mnt/
+e07-fullscan`）、本物のE07全面探査データをread-onlyでマウント
+
+KISOがE373乾板（specials_x20全体もおそらく同様）でありE07とは
+背景密度が異なる（実測で前景密度が約1.8〜2倍違う、詳細は
+analysis-note.md参照）とユーザーから訂正を受け、KEKのE07全面探査
+データを`sshfs ... ~/mnt/e07-fullscan -o ro`でマウント。
+`e07-fullscan/fullscan-image`シンボリックリンクはこの新しい
+マウント先を指すよう更新済み（以前の`/group/...`は存在しない
+パスだった）。`/group`直下への新規sudoディレクトリ作成は
+自動許可の対象外でブロックされたため、ホーム配下のマウント先に
+変更した経緯あり。
+
+このリポジトリ内のコード変更は無し（シンボリックリンクの向き先
+とanalysis-note.mdへの追記のみ）。他エージェントが`fullscan-image`
+配下を参照するコードを書く場合、E07/E373両方が並んで存在する点に
+注意（`fullscan-image/E07/...`と`fullscan-image/E373/...`）。
+
+## 2026-07-19 08:00 JST — Claude (macOS): `specials_x20`検証結果を記録
+
+`tests/test_specials.py`（既知9事象のΛΛハイパー核vertex検証、
+`-m slow`）を再実行したところ全35テスト通過。docstringの古い
+「ほとんど失敗する」という記述を更新（原因は2026-07-11の
+OpenCV5 HoughLinesP形状バグ修正だった可能性が高いという仮説を
+併記）。詳細はanalysis-note.md 2026-07-18(14)。
+所有ファイル: tests/test_specials.py（docstringのみ）、
+analysis-note.md。他ファイルへの変更なし。
+
+## 2026-07-19 10:30 JST — Claude (macOS): `fullscan-image`シンボリック
+リンクの構造を変更(fuse-t NFS再マウントへの対応)
+
+以前のsshfsマウント(`~/mnt/e07-fullscan`)が切断されていたため、
+ユーザーがfuse-t NFS経由で`~/mnt/kek_e07`に再マウント。この新しい
+マウント先は直下が`MOD108/`(旧`fullscan-image/E07/`相当、E373
+サイドカーなし)という構造で、以前の`fullscan-image -> ~/mnt/
+e07-fullscan`(直下にE07/とE373/が並ぶ)とは階層が1段違う。
+対応として`fullscan-image`を通常ディレクトリに変更し、その中に
+`E07 -> ~/mnt/kek_e07`のシンボリックリンクを作成——コード側の
+`fullscan-image/E07/...`という参照パスはそのまま動く。E373側は
+未対応(現状使っていないため)。詳細はanalysis-note.md
+2026-07-19 10:30。所有ファイル: fullscan-image/(シンボリック
+リンク構造のみ)、analysis-note.md。
+
+## 2026-07-22 JST — Claude (macOS): 本番Hough `max_gap`パラメータを
+5→40に変更(`config/default.yaml`, `diag_common.py`)
+
+`config/default.yaml`の`viewer.hough_mg`(`analyze_cli.py`のKEKCC
+v6バッチ解析、`app.py`ビューワ既定値が参照)を5→40に変更。
+`module/pipeline/diag_common.py`の`TRACK_CFG`(同yamlのミラー)も
+同様に変更。理由: 512件の手動ラベル(true判定223件)をピクセルマスク
+化して測定したところ、旧値(mg=5)は本物飛跡ピクセルの約54%を検出
+し損ねていた(recall 45.8%)。mg=40でrecall 92.7%まで改善、かつ
+「長さ>300pxかつ粒密度<0.02」で診断した偽ブリッジ(無関係な点を
+誤って繋ぐ)の水準はmg=20/30と同程度に抑えられることを確認。
+詳細はanalysis-note.md 2026-07-22(2)。`module/pipeline/finder.py`
+の`_HOUGH_MG`も同日先に4→40へ変更済み(ただしこちらは
+`thr=20/ml=25`という別のフォールバック値のまま、yaml側の
+`thr=35/ml=30`とは不一致——未解決)。
+高速テスト52件は変更後も全通過、`specials_x20`検証(-m slow)は
+再実行中。所有ファイル: config/default.yaml, module/pipeline/
+diag_common.py, module/pipeline/finder.py, analysis-note.md。
