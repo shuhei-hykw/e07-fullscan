@@ -20,9 +20,15 @@ from module.matlab_export import _GRID_CELL_PX, weighted_grid_hits
 from module.reader import load_spng
 from module.preprocess import fog_remove, otsu_binarize, remove_noise
 from module.pipeline import Track, find_tracks
+from module.server.labeling import register_labeling_routes
 from module.server.results import (
   ResultsStore, render_image, render_stats,
 )
+
+# Manual click-labels (real ground truth for e07-ml-binary-segmentation)
+# are saved outside version control, alongside the other gitignored
+# results/ output.
+_LABELS_DIR = Path(__file__).parents[2] / "results" / "manual_labels"
 
 # MATLAB grid-hit overlay style (see _process, cent branch).
 _CENT_MARKER_COLOR    = (0, 255, 255)   # yellow cross at each grid hit
@@ -128,6 +134,10 @@ _TEMPLATE = """
   <button class="btn" id="btn-orig"  onclick="toggleOrig()">ORIGINAL</button>
   <button class="btn" id="btn-stats" onclick="toggleStats()">STATS</button>
   <button class="btn" onclick="resetParams()">RESET PARAMS</button>
+  {% if selected_json %}
+  <button class="btn" style="background:#252;" onclick="openLabeler()">
+    LABEL TRACKS (manual)</button>
+  {% endif %}
   </div>
 
   <div class="sidebar-section">
@@ -374,6 +384,10 @@ _TEMPLATE = """
     [targetImg, origImg].forEach(
     img => img.classList.toggle('actual')
     );
+  }
+  function openLabeler() {
+    const z = document.getElementById('z-range').value;
+    window.open(`/label/${relPath}/${z}`, '_blank');
   }
   function toggleOrig() {
     const on = origImg.classList.toggle('show');
@@ -974,6 +988,8 @@ def create_app(
     if not str(full).startswith(str(root)):
       abort(403)
     return full
+
+  register_labeling_routes(app, _safe_resolve, _LABELS_DIR)
 
   def _parse_flags() -> dict:
     g = request.args.get

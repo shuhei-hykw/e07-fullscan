@@ -7,6 +7,7 @@ PyYAML>=6.0
 pandas>=2.0
 pyarrow>=14.0
 scikit-image>=0.22
+scikit-learn>=1.4
 
 # Web viewer
 flask>=3.0
