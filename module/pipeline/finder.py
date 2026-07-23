@@ -18,8 +18,14 @@ _NOISE_CMP   = 50
 _NOISE_AMAX_UPPER = 0  # 0 = disabled; >0 removes blobs larger than this
 _HOUGH_THR   = 20
 _HOUGH_ML    = 25
-_HOUGH_MG    = 4
+_HOUGH_MG    = 40  # was 4: measured to miss 56% of confirmed real
+                    # track pixels (recall 44%); mg=40 reaches 92.2%
+                    # recall while keeping false-bridging (long,
+                    # grain-sparse lines) at the same low level as
+                    # mg=20 -- see analysis-note.md 2026-07-22
 _GRAIN_RADIUS = 10.0  # search radius for grain counting (px)
+_FOOTPRINT_MAX_SEARCH_PX = 15  # max perpendicular search for
+                                # _footprint_width
 
 
 def _measure_tracks(
@@ -94,6 +100,42 @@ def _measure_tracks(
     results.append((n_grains, width_px, mean_intens))
 
   return results
+
+
+def _footprint_width(t, binary: np.ndarray) -> float:
+  """Median cross-sectional thickness of the RAW (non-dilated) binary
+  mask, sampled perpendicular to the segment at each ~1px step along
+  it. Unlike the width_px this module returns above (a grain-centroid
+  scatter statistic, unstable at low n_grains and shown to have ~no
+  track/junk separation -- see analysis-note.md 2026-07-21), this
+  measures the actual foreground footprint: a stable, physically
+  meaningful width (px, convertible to um) that does separate
+  track/junk. Shared by track_classifier.py (as a classifier feature)
+  and cluster.py (as a fragment-merge quality score), both of which
+  import it from here to avoid a module.pipeline <-> track_classifier
+  circular import."""
+  h, w = binary.shape
+  seg_len = max(t.length_px, 1.0)
+  ux = (t.px2 - t.px1) / seg_len
+  uy = (t.py2 - t.py1) / seg_len
+  pxu, pyu = -uy, ux
+  n = max(int(t.length_px), 2)
+  xs = np.linspace(t.px1, t.px2, n)
+  ys = np.linspace(t.py1, t.py2, n)
+  cx = np.clip(np.round(xs).astype(int), 0, w - 1)
+  cy = np.clip(np.round(ys).astype(int), 0, h - 1)
+  center_fg = binary[cy, cx] > 0
+  run = np.zeros(n, dtype=np.int32)
+  for sign in (1, -1):
+    active = center_fg.copy()
+    for k in range(1, _FOOTPRINT_MAX_SEARCH_PX):
+      px = np.clip(np.round(xs + sign * k * pxu).astype(int), 0, w - 1)
+      py = np.clip(np.round(ys + sign * k * pyu).astype(int), 0, h - 1)
+      active &= binary[py, px] > 0
+      run += active.astype(np.int32)
+  widths = np.where(center_fg, run + 1, 0)
+  fg_widths = widths[widths > 0]
+  return float(np.median(fg_widths)) if fg_widths.size else 0.0
 
 
 def _pixel_to_stage(

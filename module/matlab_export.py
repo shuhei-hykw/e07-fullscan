@@ -60,6 +60,7 @@ import numpy as np
 from scipy.io import savemat
 from skimage.morphology import skeletonize
 
+from module import track_classifier
 from module.preprocess import (
   _FOG_KSIZE,
   _NOISE_AMAX,
@@ -96,6 +97,28 @@ _HOUGH_MIN_LINE = 10
 _HOUGH_MAX_GAP = 3
 _ALIGN_TOL_PX = 3.0
 _NOISE_AREA_FLOOR = 30.0
+
+# remove_unaligned_noise_v2: segment-level filter using module/server/
+# labeling.py's manual true/false labels (results/manual_labels/,
+# 512 decisions across 4 tiles as of 2026-07-18), rather than the
+# hard-coded align_tol/area_floor heuristic above. Hough params here
+# intentionally match labeling.py's own defaults (not this module's
+# _HOUGH_MAX_GAP=3 above) -- the classifier and the threshold values
+# below were both fit against segments detected at max_gap=20, so
+# scoring segments detected at a different max_gap would feed it
+# out-of-distribution inputs.
+_NOISE_V2_HOUGH_THR = 8
+_NOISE_V2_HOUGH_MIN_LINE = 10
+_NOISE_V2_HOUGH_MAX_GAP = 20
+# Non-ML fallback thresholds: grid search over cov_frac/max_gap_px on
+# all 512 labelled decisions, best F1 (analysis-note.md, 2026-07-18).
+# Precision 58.7% / recall 89.7% on the labelled set alone -- clearly
+# worse than the trained classifier (leave-one-tile-out precision
+# 73-93%, recall 53-96%) but needs no model file, just these two
+# numbers.
+_NOISE_V2_COV_FRAC_THR = 0.725
+_NOISE_V2_MAX_GAP_THR_PX = 19
+_DEFAULT_LABELS_DIR = Path(__file__).parents[1] / "results" / "manual_labels"
 
 
 def _binarize_slice(
@@ -252,6 +275,85 @@ def remove_unaligned_noise(
   return out
 
 
+def remove_unaligned_noise_v2(
+  binary: np.ndarray,
+  fog_img: np.ndarray,
+  cell: int = _GRID_CELL_PX,
+  hough_thr: int = _NOISE_V2_HOUGH_THR,
+  hough_min_line: int = _NOISE_V2_HOUGH_MIN_LINE,
+  hough_max_gap: int = _NOISE_V2_HOUGH_MAX_GAP,
+  align_tol: float = _ALIGN_TOL_PX,
+  method: str = "threshold",
+  classifier=None,
+  cov_frac_thr: float = _NOISE_V2_COV_FRAC_THR,
+  max_gap_thr_px: float = _NOISE_V2_MAX_GAP_THR_PX,
+) -> np.ndarray:
+  """Like ``remove_unaligned_noise``, but a small component survives
+  only if it's aligned with a Hough segment the noise classifier
+  considers a real track -- not just aligned with *any* detected
+  line, real or junk (the original function's only check). Segment
+  quality itself is judged by ``module.track_classifier``, trained
+  on manual true/false labels (see that module's docstring and
+  analysis-note.md 2026-07-18).
+
+  ``method="threshold"``: two hand-picked cutoffs (cov_frac, max_gap
+  -- how much of the segment's own length is actually covered by
+  foreground pixels, and the longest single gap along it). No model
+  file needed, but noticeably weaker (precision 58.7%/recall 89.7% on
+  the full labelled set).
+
+  ``method="classifier"``: a fitted sklearn pipeline (see
+  ``track_classifier.train_classifier``) scores each segment on 6
+  features instead of 2. Stronger (leave-one-tile-out precision
+  73-93%, recall 53-96%) but the caller must train/supply one --
+  this function does not train its own, so the same classifier can
+  be reused across every slice in a tile instead of refit per call.
+  """
+  n_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+    binary, connectivity=8
+  )
+  small_idx = np.array([
+    lbl for lbl in range(1, n_labels)
+    if stats[lbl][4] > 0 and max(stats[lbl][2], stats[lbl][3]) <= cell
+  ])
+  if small_idx.size == 0:
+    return binary
+
+  tracks = track_classifier.detect_lite_tracks(
+    binary, fog_img, hough_thr, hough_min_line, hough_max_gap)
+  if not tracks:
+    return binary  # nothing to score against; leave binary untouched
+
+  feats = track_classifier.extract_features(tracks, binary)
+  if method == "classifier":
+    if classifier is None:
+      raise ValueError("method='classifier' requires a fitted classifier "
+                        "(see track_classifier.train_classifier)")
+    keep_line = classifier.predict_proba(feats)[:, 1] >= 0.5
+  elif method == "threshold":
+    cov_frac, max_gap = feats[:, 4], feats[:, 5]
+    keep_line = (cov_frac >= cov_frac_thr) & (max_gap <= max_gap_thr_px)
+  else:
+    raise ValueError(f"unknown method: {method!r}")
+
+  kept_lines = np.array([
+    [t.px1, t.py1, t.px2, t.py2]
+    for t, k in zip(tracks, keep_line) if k
+  ], dtype=np.float64)
+  if kept_lines.size == 0:
+    kept_lines = np.empty((0, 4))
+
+  pts = centroids[small_idx]
+  dist = _line_alignment_dist(pts, kept_lines)
+  remove = small_idx[dist >= align_tol]
+  if remove.size == 0:
+    return binary
+
+  out = binary.copy()
+  out[np.isin(labels, remove)] = 0
+  return out
+
+
 def weighted_grid_hits(
   binary: np.ndarray, intensity: np.ndarray, cell: int = _GRID_CELL_PX,
 ) -> np.ndarray:
@@ -330,7 +432,8 @@ def export_hits_grid(
   noise_cmp: int = _NOISE_CMP,
   noise_amax_upper: int = _NOISE_AMAX_UPPER,
   cell: int = _GRID_CELL_PX,
-  denoise: bool = True,
+  denoise_method: str = "legacy",
+  classifier=None,
 ) -> np.ndarray:
   """Build the MATLAB hit pixel list ``pl`` (N x 6) via component-grouped
   grid binning (see ``weighted_grid_hits``).
@@ -342,10 +445,24 @@ def export_hits_grid(
   completed in 5.5h (see analysis-note.md, 2026-07-12). ``n`` is the
   occupied pixel count per hit.
 
-  If ``denoise`` (default), each slice's binary mask is also passed
-  through ``remove_unaligned_noise`` before hit extraction, dropping
-  ~19% of the point budget (see that function's docstring).
+  ``denoise_method`` selects the per-slice binary noise filter before
+  hit extraction:
+  - ``"off"``: no filtering.
+  - ``"legacy"`` (default): ``remove_unaligned_noise`` (Hough-line
+    alignment + area floor, no manual labels involved).
+  - ``"threshold"``: ``remove_unaligned_noise_v2`` with hand-picked
+    cov_frac/max_gap cutoffs (needs no model, weaker than below).
+  - ``"classifier"``: ``remove_unaligned_noise_v2`` scored by a
+    trained ``track_classifier`` model, passed in via ``classifier``
+    (train once with ``track_classifier.train_classifier`` and reuse
+    across every slice -- refitting per slice would be needlessly
+    slow and would let each slice silently use a slightly different
+    decision boundary).
   """
+  if denoise_method == "classifier" and classifier is None:
+    raise ValueError(
+      "denoise_method='classifier' requires a fitted classifier "
+      "(see track_classifier.train_classifier)")
   reader = load_spng(json_path)
   cols = []
   for z in range(len(reader)):
@@ -353,8 +470,14 @@ def export_hits_grid(
       reader, z, fog_ksize, noise_amin, noise_amax, noise_cmp,
       noise_amax_upper,
     )
-    if denoise:
+    if denoise_method == "legacy":
       binary = remove_unaligned_noise(binary, cell=cell)
+    elif denoise_method in ("threshold", "classifier"):
+      binary = remove_unaligned_noise_v2(
+        binary, fog, cell=cell, method=denoise_method,
+        classifier=classifier)
+    elif denoise_method != "off":
+      raise ValueError(f"unknown denoise_method: {denoise_method!r}")
     hits = weighted_grid_hits(binary, fog, cell)
     if hits.shape[0] == 0:
       continue
@@ -406,9 +529,20 @@ def main(argv: list[str] | None = None) -> int:
     help="grid mode: spatial bin size in px (default: %(default)s)",
   )
   p.add_argument(
-    "--no-denoise", action="store_true",
-    help="grid mode: skip remove_unaligned_noise (keep all small "
-         "components, ~19%% more hits)",
+    "--denoise-method",
+    choices=["off", "legacy", "threshold", "classifier"],
+    default="legacy",
+    help="grid mode: 'off' keeps all small components; 'legacy' is "
+         "the original Hough-alignment+area-floor filter (default); "
+         "'threshold'/'classifier' use track_classifier, trained on "
+         "manual labels in results/manual_labels/ (see that module's "
+         "docstring) -- 'classifier' is the stronger of the two but "
+         "needs enough labelled data to fit",
+  )
+  p.add_argument(
+    "--labels-dir", type=Path, default=_DEFAULT_LABELS_DIR,
+    help="manual_labels/ dir for --denoise-method classifier "
+         "(default: %(default)s)",
   )
   p.add_argument("--fog-ksize", type=int, default=_FOG_KSIZE)
   p.add_argument("--noise-amin", type=int, default=_NOISE_AMIN)
@@ -426,8 +560,17 @@ def main(argv: list[str] | None = None) -> int:
     noise_amax_upper=args.noise_amax_upper,
   )
   if args.mode == _MODE_GRID:
+    classifier = None
+    if args.denoise_method == "classifier":
+      X, y = track_classifier.build_training_set(args.labels_dir)
+      classifier = track_classifier.train_classifier(X, y)
+      if classifier is None:
+        p.error(
+          f"not enough labelled data in {args.labels_dir} to train a "
+          "classifier (need >=20 decisions with both true and false)")
     pl = export_hits_grid(
-      args.input, cell=args.cell_px, denoise=not args.no_denoise, **common
+      args.input, cell=args.cell_px, denoise_method=args.denoise_method,
+      classifier=classifier, **common
     )
   else:
     pl = export_hits(args.input, **common)

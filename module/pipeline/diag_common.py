@@ -15,7 +15,9 @@ from module.pipeline.finder import _ZPJ_HALF
 TRACK_CFG = dict(
   zpj_half=4, fog_ksize=51,
   noise_amin=2, noise_amax=100, noise_cmp=50, noise_amax_upper=0,
-  hough_thr=35, hough_min_line=30, hough_max_gap=5,
+  hough_thr=35, hough_min_line=30, hough_max_gap=40,  # was 5,
+  # see config/default.yaml hough_mg comment / analysis-note.md
+  # 2026-07-22
   grain_radius=15, px_scale_um=0.29,
 )
 

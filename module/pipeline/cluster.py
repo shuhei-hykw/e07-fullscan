@@ -3,27 +3,38 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+from .finder import _footprint_width
 from .track import Track
 
 if TYPE_CHECKING:
+  import numpy as np
   import pandas as pd
 
 _DIST_EPS  = 20.0  # rho tolerance in pixels
 _ANGLE_EPS = 5.0   # theta tolerance in degrees
 
 
-def _track_quality(t: Track) -> float:
+def _track_quality(t: Track, binary: "np.ndarray | None" = None) -> float:
   """Quality score for representative selection.
 
-  Real particle tracks: bright (high mean_intens) and narrow (low
-  width_px).  Score = mean_intens * sqrt(length_px) / width_px.
-  Each factor is applied only when the datum is available (> 0).
+  Real particle tracks: bright (high mean_intens) and narrow.
+  Score = mean_intens * sqrt(length_px) / width. Each factor is
+  applied only when the datum is available (> 0).
+
+  Width source: when `binary` is given, uses `_footprint_width`
+  (measures the mask's actual cross-sectional thickness -- shown to
+  separate track/junk, see analysis-note.md 2026-07-21). Falls back
+  to `t.width_px` (a grain-centroid scatter statistic, unstable at
+  low n_grains and shown to have ~no track/junk separation) when no
+  binary is available -- e.g. `cluster_df`, which operates on
+  already-extracted DataFrame rows with no image access.
   """
   score = t.length_px ** 0.5
   if t.mean_intens > 0:
     score *= t.mean_intens
-  if t.width_px > 0:
-    score /= t.width_px
+  width = _footprint_width(t, binary) if binary is not None else t.width_px
+  if width > 0:
+    score /= width
   return score
 
 
@@ -53,12 +64,16 @@ def cluster_tracks(
   *,
   dist_eps: float  = _DIST_EPS,
   angle_eps: float = _ANGLE_EPS,
+  binary: "np.ndarray | None" = None,
 ) -> list[Track]:
   """Merge duplicate Hough segments into one representative per cluster.
 
   Two tracks are in the same cluster when their Hough normal-form
   parameters satisfy |Δrho| < dist_eps (px) and |Δtheta| < angle_eps
-  (deg).  The longest segment in each cluster is returned.
+  (deg).  The highest-quality segment in each cluster is returned
+  (see `_track_quality`; pass `binary` when available -- the caller
+  already has it right after `find_tracks` -- for the more reliable
+  footprint-width-based quality score).
   """
   n = len(tracks)
   if n == 0:
@@ -90,7 +105,8 @@ def cluster_tracks(
     clusters.setdefault(find(i), []).append(i)
 
   return [
-    tracks[max(idx_list, key=lambda i: _track_quality(tracks[i]))]
+    tracks[max(idx_list,
+               key=lambda i: _track_quality(tracks[i], binary))]
     for idx_list in clusters.values()
   ]
 
@@ -105,6 +121,12 @@ def cluster_df(
 
   Expects the standard analysis output columns.  Returns a DataFrame
   with the same schema but one representative row per cluster.
+
+  Operates on already-extracted rows with no image access, so it
+  always falls back to the `t.width_px`-based quality score (no
+  `binary` to pass to `cluster_tracks`). Callers who have `binary` in
+  hand (e.g. right after `find_tracks` in a per-slice loop) should
+  call `cluster_tracks` directly instead for the better score.
   """
   import pandas as pd
 
