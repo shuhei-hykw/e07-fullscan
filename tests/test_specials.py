@@ -13,8 +13,12 @@ the event, not that any particular filter setting is optimal.
 
 Ground truth positions are in tests/specials_gt.json (XY pixel + Z in μm),
 recorded by expert click session 2026-05-12. Tolerance: 200 px XY, 30 μm Z.
-test_special_vertex_position currently fails for most events — this documents
-the pipeline gap and defines the improvement target.
+test_special_vertex_position used to fail for most events; as of
+2026-07-18 all 35 cases (detected/position/reader_loads x 9-13 events)
+pass. The likely cause of the earlier failures was the OpenCV 5
+HoughLinesP output-shape bug fixed 2026-07-11 (silently breaking
+track detection, not a vertex-finding logic gap) -- see
+analysis-note.md 2026-07-18 for the full re-run.
 """
 from __future__ import annotations
 
