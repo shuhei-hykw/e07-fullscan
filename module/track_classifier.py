@@ -182,3 +182,38 @@ def train_classifier(X: np.ndarray, y: np.ndarray):
   clf = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
   clf.fit(X, y)
   return clf
+
+
+CONF_HIGH = 0.9   # predict_proba >= this -> confident "track"
+CONF_LOW = 0.1    # predict_proba <= this -> confident "junk"
+# Rule-based inconsistency thresholds for flagging a confident
+# verdict as worth a human spot-check, not ground truth by
+# themselves -- see analysis-note.md 2026-07-22/23 (pseudo-label
+# triage: an AI-only visual pass on these was unreliable, a human
+# expert pass found 37/38 flagged "long junk" cases were correctly
+# junk and 1/38 was a correct track with an imprecise angle fit).
+_TRACK_NGRAINS_MED = 4.0
+_TRACK_FOOTPRINT_MED = 5.0
+_JUNK_LEN_SUSPECT_PX = 150.0
+
+
+def verdict_for(prob: float) -> str | None:
+  """"track"/"junk" for a confident prediction, else None (too
+  ambiguous to pseudo-label -- left unreviewed/ignored)."""
+  if prob >= CONF_HIGH:
+    return "track"
+  if prob <= CONF_LOW:
+    return "junk"
+  return None
+
+
+def flag_suspicious(verdict: str, feat_row: np.ndarray) -> str:
+  """Return a reason string if a confident verdict looks inconsistent
+  with its own features (worth a human spot-check), else ''."""
+  length_px, n_grains, footprint_w, mean_intens, cov_frac, max_gap = feat_row
+  if verdict == "track" and (n_grains < _TRACK_NGRAINS_MED / 2
+                              or footprint_w < _TRACK_FOOTPRINT_MED / 2):
+    return f"low n_grains={n_grains}/footprint={footprint_w:.1f} for a 'track'"
+  if verdict == "junk" and length_px > _JUNK_LEN_SUSPECT_PX:
+    return f"long ({length_px:.0f}px) for a 'junk'"
+  return ""

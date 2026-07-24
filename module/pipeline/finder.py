@@ -23,7 +23,13 @@ _HOUGH_MG    = 40  # was 4: measured to miss 56% of confirmed real
                     # recall while keeping false-bridging (long,
                     # grain-sparse lines) at the same low level as
                     # mg=20 -- see analysis-note.md 2026-07-22
-_GRAIN_RADIUS = 10.0  # search radius for grain counting (px)
+_GRAIN_RADIUS = 15.0  # search radius for grain counting (px) --
+                        # was 10.0, another finder.py-vs-config/
+                        # default.yaml mismatch like _HOUGH_MG; 15
+                        # (the yaml's real production value) measured
+                        # to raise classifier LOTO precision 83.4%->
+                        # 85.5% with zero recall cost, see
+                        # analysis-note.md 2026-07-23
 _FOOTPRINT_MAX_SEARCH_PX = 15  # max perpendicular search for
                                 # _footprint_width
 
