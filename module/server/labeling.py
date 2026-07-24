@@ -48,25 +48,23 @@ _FOG_KSIZE      = 51
 _NOISE_AMIN     = 2
 _NOISE_AMAX     = 100
 _NOISE_CMP      = 50
-# Deliberately permissive threshold/min-length (matches
-# module.matlab_export's denoise filter, not finder.py's stricter
-# find_tracks defaults) so review surfaces plenty of likely-noise
-# candidates alongside real tracks. max_gap is set higher than either
-# of those, specifically for review: a small gap chops one real track
-# into many short fragments, which is more tedious to review and
-# gives less context per decision than one longer merged segment.
-# Swept 15/20/25/40/60/100 on a real E07 tile (2026-07-15): 60
-# quadrupled the longest detected track (264px -> 1308px) with no
-# visible false bridging; 100 broke (a 2495px "segment" was a
-# straight line drawn through unrelated noise, confirmed visually).
-# Dialed back twice after hands-on review feedback (60 -> 40 -> 20,
-# same day) -- fewer, cleaner candidates day-to-day even though this
-# alone doesn't fully eliminate fragmentation (accepted tradeoff, see
-# module docstring). If it still feels too permissive, keep dialing
-# down; there was no sign 20 is a hard floor.
-_HOUGH_THR      = 8
-_HOUGH_ML       = 10
-_HOUGH_MG       = 20
+# 2026-07-23: aligned to the real production values
+# (config/default.yaml's viewer block, thr=35/ml=30/mg=40) instead
+# of the looser thr=8/ml=10/mg=20 used through 2026-07-22. Reason:
+# the classifier trained on labels collected under the loose values
+# was being applied to segments detected under the strict production
+# values -- a train/apply population mismatch, prime suspect for the
+# inconsistent per-tile LOTO results seen that week (e.g. one tile's
+# precision regressing after a classifier-filter change). Bonus: the
+# original tuning goal here -- "fewer, cleaner candidates, more
+# context per decision" -- is exactly what the stricter production
+# thr/ml also produce, so this isn't expected to make review worse.
+# See analysis-note.md 2026-07-19/22/23 for the mg=4->40 recall
+# study this number comes from (thr/ml were separately confirmed to
+# barely affect recall, so 35/30 is not a recall regression either).
+_HOUGH_THR      = 35
+_HOUGH_ML       = 30
+_HOUGH_MG       = 40
 
 _CROP_MARGIN_PX = 100  # context beyond the segment's own bounding box
 _CROP_MIN_HALF  = 200  # never show a crop smaller than this (short segs)
