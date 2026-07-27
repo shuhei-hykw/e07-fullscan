@@ -5824,3 +5824,28 @@ Fast test suite (52 tests) passes after both changes;
 `specials_x20` (-m slow) re-validation is running.
 Files touched: config/default.yaml, module/pipeline/diag_common.py,
 module/pipeline/finder.py, analysis-note.md.
+
+## 2026-07-27 JST — Claude (macOS): handoff note for the kekcc
+session, `HANDOFF_kekcc.md`
+
+Created a handoff note at the repo root for moving heavy compute to
+kekcc, from the macOS session (702bbb20-...) to the kekcc session
+(d7a92435-...). Covers: current state of Methods A/B/C/D, the three
+most important recent findings (CNN seed variance invalidating
+earlier comparisons, production-parameter definitions scattered
+across 5 locations, Method A's stage-4 being recall-only with
+catastrophic precision), the kekcc environment survey, and
+candidate work items for kekcc.
+
+**Blockers found on the kekcc side**:
+- `~/work/e07/fullscan` (note: NOT named `e07-fullscan`) is at
+  `baa81a2`, far behind; two weeks of work missing, needs git pull.
+- torch / sklearn / cv2 all absent (neither system python3.9 nor
+  /opt/anaconda3 has them).
+- `bsub`/`sbatch`/`qsub` are not on the login node's PATH and
+  `/usr/share/lsf*` doesn't exist -- unclear whether the repo's
+  LSF-based scripts (`scripts/kekcc_job.sh`, `cli_submit_kekcc.py`)
+  still work. Confirming the batch system is the top priority.
+- `e07-ml-binary-segmentation` is not cloned on kekcc.
+
+Files owned: HANDOFF_kekcc.md (new). No other files changed.

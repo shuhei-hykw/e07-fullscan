@@ -5323,3 +5323,27 @@ v6バッチ解析、`app.py`ビューワ既定値が参照)を5→40に変更。
 高速テスト52件は変更後も全通過、`specials_x20`検証(-m slow)は
 再実行中。所有ファイル: config/default.yaml, module/pipeline/
 diag_common.py, module/pipeline/finder.py, analysis-note.md。
+
+## 2026-07-27 JST — Claude (macOS): kekcc セッションへの引き継ぎメモ
+`HANDOFF_kekcc.md` を作成
+
+重い計算を kekcc へ移す方針が出たため、macOS セッション
+(702bbb20-...) から kekcc セッション (d7a92435-...) への引き継ぎ
+メモをリポジトリ直下に作成。内容: Method A/B/C/D の現状、直近の
+重要な発見3件(CNN のシードばらつきによる過去比較の無効化、
+本番パラメータ定義の5箇所分散問題、Method A の④が recall のみ
+良く precision 壊滅的)、kekcc 環境の調査結果、kekcc でやる価値の
+ある作業候補。
+
+**kekcc 側で要対応と判明した点**:
+- `~/work/e07/fullscan` (名前が `e07-fullscan` ではない) の HEAD が
+  `baa81a2` と大幅に古い。ここ2週間の作業が未反映、`git pull` 必要。
+- torch / sklearn / cv2 がいずれも未インストール
+  (system python3.9 にも /opt/anaconda3 にも無し)。
+- `bsub`/`sbatch`/`qsub` が login node の PATH に無く、
+  `/usr/share/lsf*` も存在しない。リポジトリの LSF 前提スクリプト
+  (`scripts/kekcc_job.sh`, `cli_submit_kekcc.py`) が現状動くか不明——
+  バッチシステムの現況確認が最優先。
+- `e07-ml-binary-segmentation` は kekcc に未クローン。
+
+所有ファイル: HANDOFF_kekcc.md (新規)。他ファイルへの変更なし。
