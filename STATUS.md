@@ -49,7 +49,8 @@ leave-one-tile-out：
 | 80 | 97.2% | 6,008（ただし偽ブリッジ急増） |
 
 **④ vertex 検出** — `specials_x20` の既知 ΛΛ ハイパー核 9 事象で
-`tests/test_specials.py` が 35/35 通過。
+`tests/test_specials.py` が 35/35 通過（2026-07-27 の yaml 一元化後に
+再確認、所要 29 分）。
 **ただしこれは recall のみの検証**。実際には 1 タイルあたり
 196〜380 個の候補が出て、正解は n_tracks 順で **7〜25 位に埋もれる**。
 `_MIN_N_TRACKS=5` だけでは判別力が全く足りない。
