@@ -1,35 +1,61 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import cv2
 import numpy as np
+import yaml
 
 from .track import Track
 # Shared branch-neutral preprocessing. Re-exported so existing callers of
 # `from module.pipeline.finder import preprocess` keep working.
 from module.preprocess import fog_remove, preprocess
 
-_ZPJ_HALF    = 4
-_FOG_KSIZE   = 51
-_NOISE_AMIN  = 2
-_NOISE_AMAX  = 100
-_NOISE_CMP   = 50
-_NOISE_AMAX_UPPER = 0  # 0 = disabled; >0 removes blobs larger than this
-_HOUGH_THR   = 20
-_HOUGH_ML    = 25
-_HOUGH_MG    = 40  # was 4: measured to miss 56% of confirmed real
-                    # track pixels (recall 44%); mg=40 reaches 92.2%
-                    # recall while keeping false-bridging (long,
-                    # grain-sparse lines) at the same low level as
-                    # mg=20 -- see analysis-note.md 2026-07-22
-_GRAIN_RADIUS = 15.0  # search radius for grain counting (px) --
-                        # was 10.0, another finder.py-vs-config/
-                        # default.yaml mismatch like _HOUGH_MG; 15
-                        # (the yaml's real production value) measured
-                        # to raise classifier LOTO precision 83.4%->
-                        # 85.5% with zero recall cost, see
-                        # analysis-note.md 2026-07-23
+# Single source of truth for production parameters: config/default.yaml's
+# `viewer` block, the same one analyze_cli.py and server/app.py read.
+# These used to be hardcoded here and drifted out of sync with the yaml
+# TWICE (hough_mg 4 vs 5, grain_radius 10 vs 15), each time silently
+# degrading detection until someone measured it -- hough_mg=4 was found
+# to miss 56% of confirmed real track pixels. Reading the yaml removes
+# that whole class of bug rather than documenting around it.
+# See analysis-note.md 2026-07-22/23.
+_CFG_PATH = Path(__file__).parents[2] / "config" / "default.yaml"
+_FALLBACK = {
+  "zpj_half": 4, "fog_ksize": 51,
+  "noise_amin": 2, "noise_amax": 100, "noise_cmp": 50,
+  "noise_amax_upper": 0,  # 0 = disabled; >0 removes blobs larger than this
+  "hough_thr": 35, "hough_ml": 30, "hough_mg": 40,
+  "grain_radius": 15,
+}
+
+
+def _load_viewer_cfg() -> dict:
+  """viewer block from config/default.yaml, falling back to _FALLBACK
+  when the file is missing or unreadable (e.g. the package used
+  standalone). Fallback values mirror the yaml as of 2026-07-27."""
+  try:
+    if _CFG_PATH.exists():
+      raw = yaml.safe_load(_CFG_PATH.read_text()) or {}
+      cfg = dict(_FALLBACK)
+      cfg.update(raw.get("viewer", {}) or {})
+      return cfg
+  except Exception:
+    pass
+  return dict(_FALLBACK)
+
+
+_CFG = _load_viewer_cfg()
+_ZPJ_HALF    = int(_CFG["zpj_half"])
+_FOG_KSIZE   = int(_CFG["fog_ksize"])
+_NOISE_AMIN  = int(_CFG["noise_amin"])
+_NOISE_AMAX  = int(_CFG["noise_amax"])
+_NOISE_CMP   = int(_CFG["noise_cmp"])
+_NOISE_AMAX_UPPER = int(_CFG["noise_amax_upper"])
+_HOUGH_THR   = int(_CFG["hough_thr"])
+_HOUGH_ML    = int(_CFG["hough_ml"])
+_HOUGH_MG    = int(_CFG["hough_mg"])
+_GRAIN_RADIUS = float(_CFG["grain_radius"])
 _FOOTPRINT_MAX_SEARCH_PX = 15  # max perpendicular search for
                                 # _footprint_width
 
