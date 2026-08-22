@@ -734,3 +734,395 @@ Files owned: STATUS.md (new, both repos), CLAUDE.md (both repos),
 module/pipeline/finder.py, discussion{,_ja}.md,
 discussion_archive_2026H1{,_ja}.md (new), analysis-note.md.
 52 fast tests pass; `specials_x20` (-m slow) still running.
+
+---
+
+## 2026-07-27 20:10 JST — Claude (kekcc): handoff verified on real hardware — two corrections
+
+Verified `HANDOFF_kekcc.md` against the actual kekcc environment (node cw07).
+Two of its claims are wrong, and one new blocker appeared.
+
+**Correction 1 — LSF works.** The note's top blocker ("bsub not in PATH; the
+whole plan does not hold without resolving this") is wrong here: bsub exists
+at `/opt/lsf/10.1/.../bsub`, LSF 10.1, cluster `centralcluster`. The note was
+written on cw02, so this is a login-node or PATH difference.
+`cli_submit_kekcc --dry-run` completes and emits a valid queue-`s` command
+(135 jobs). Method A full-scan submission is ready to go.
+
+**Correction 2 — repo is current.** Not `baa81a2`; HEAD is `f2b77d4`, in sync
+with origin/main, tree clean. `~/work/e07/fullscan` is a symlink to the gpfs
+checkout, not a second clone. (`e07-ml-binary-segmentation` is indeed absent.)
+
+**New blocker — no GPU.** `bqueues -l g` shows the GPU queue is unusable three
+ways: `USERS: shogo kmura ce_ibm/` excludes hayashu (`bqueues -u hayashu` =>
+`s l h p a` only), STATUS is `Closed:Inact_A`, and the sole GPU host `ccg01`
+is `unavail`. So candidate 1 (CNN LOTO on kekcc) loses most of its appeal —
+CPU only. Usable queues are all MEMLIMIT 4 GB; `h` allows 8-day walltime and
+TASKLIMIT 12, so CPU training is feasible there but `torch.set_num_threads()`
+must be capped at 12 (torch otherwise sees 64).
+
+**Environment change (user-approved).** Installed into conda `myenv`:
+scikit-learn 1.6.1, scikit-image 0.24.0, torch 2.8.0+cpu, torchvision
+0.23.0+cpu, with numpy pinned to 1.26.4 so the conda-built opencv 4.12.0 stays
+intact. The note's "no torch/sklearn/cv2" survey had missed `myenv` (cv2 was
+already there). Verified: all imports OK, `pytest -m "not slow"` 52 passed /
+35 deselected, matching the historical baseline.
+
+Files touched: `analysis-note.md` (2026-07-27 entry), this log and
+`discussion_ja.md`. No commit — recording only, per the handoff's rule that
+commits happen on explicit request.
+
+---
+
+## 2026-07-27 22:45 JST — Claude (kekcc): specials correction, rename, Method C env ready — blocked on manual_labels
+
+**User correction (major).** 11 of the 13 `specials_x20/` directories are
+**E07** emulsion with genuine reaction points: D005, D013, IBUKI, IRRAWADY,
+MINO, T004, T004_3body, T004_center, T011, T011_100, T011_200. Only KISO and
+NAGARA are E373 (deprioritised). Of the 9 events with measured GT in
+`tests/specials_gt.json`, **7 are E07**. This retracts two STATUS.md
+constraints ("specials_x20 is E373, do not optimise on it" and "real E07 has
+zero confirmed vertices"). The ~1.8-2x foreground-density measurement from
+2026-07-15 was KISO(E373) vs E07 full-scan data specifically, not a property
+of specials as a whole.
+
+**Directory renamed.** `~/work/e07/fullscan` -> `~/work/e07/e07-fullscan`
+on kekcc, per user request, so both machines use the same name. This also
+makes `e07-binary-segmentation/src/paths.py` resolve (it looks for a sibling
+named `e07-fullscan`). 52 fast tests still pass. Stale references remain only
+in append-only logs and `HANDOFF_kekcc.md`, which were left untouched.
+
+**STATUS.md updated in both repos** (overwrite-in-place, per CLAUDE.md):
+specials E07/E373 breakdown, the retracted constraints, kekcc environment
+(bsub works / no GPU / myenv contents / numpy pinned), the 2026-05-14 staleness
+of `results/`, and the mg=40 52x track-count blowup measured today.
+
+**Method C now runs on kekcc.** Installed into conda `myenv`:
+scikit-learn 1.6.1, scikit-image 0.24.0, torch 2.8.0+cpu, torchvision
+0.23.0+cpu, segmentation-models-pytorch 0.5.0, matplotlib. Verified
+`smp.Unet(resnet18, in_channels=1, classes=1)` forward on a 320x320 input and
+the sibling `module.reader` / `module.preprocess` import. numpy held at
+1.26.4 throughout so the conda-built opencv 4.12.0 stays intact.
+
+**BLOCKER for macOS side.** kekcc has no training data and cannot generate
+any. `e07-binary-segmentation/{data,results}` are macOS-local symlinks, and
+the upstream source `e07-fullscan/results/manual_labels/*.json` (the 512 human
+segment judgements) is not in git because `.gitignore` excludes `results/`.
+kekcc's copy is empty. This blocks pseudo-label generation too, since
+`scripts/generate_pseudo_labels.py` trains the classifier from those labels
+at run time (`build_training_set(LABELS_DIR)`). The judgements are human work
+and cannot be regenerated.
+
+Request: make `results/manual_labels/` available on kekcc. Suggest adding a
+`.gitignore` exception and committing it — the set is small, irreplaceable,
+and needed on both machines. Otherwise a manual copy works.
+
+Files owned this session: STATUS.md (both repos), analysis-note.md,
+discussion{,_ja}.md. No commit yet.
+
+---
+
+## 2026-07-28 01:05 JST — Claude (kekcc): intent — LOTO training runs (Method C)
+
+Launching leave-one-tile-out training on the work server cw07 (not LSF:
+these are short now, and the 4 GB queue cap is irrelevant at ~1 GB/run).
+
+Inputs (read-only): `e07-fullscan/results/manual_labels/*.json` (4 tiles,
+512 human decisions) via `e07-binary-segmentation/data/real_labels/*.npz`,
+regenerated tonight to carry the new orientation plane.
+Outputs (new, all inside the ML repo): `results/loto/{arm}_{tile}_s{seed}.pt`
+and `.log`, 24 combinations = 2 arms (binary-only, binary+orientation) x 4
+held-out tiles x 3 seeds, 50 epochs each, 4 threads per process.
+Owned files this session: in `e07-binary-segmentation` —
+`src/real_label_dataset.py`, `src/real_dataset.py`, `src/train_real.py`,
+`src/train.py`, `src/model_defaults.py` (new), `src/eval_segments.py` (new),
+`scripts/run_loto.sh` (new), `STATUS.md`. In `e07-fullscan` — `STATUS.md`,
+`analysis-note.md`, `discussion{,_ja}.md`. No writes to `e07-fullscan/results/`
+beyond reading the labels, and no LSF jobs.
+
+## 2026-07-28 02:10 JST — Claude (kekcc): correction — work server caps users at 4 cores; moving LOTO to LSF
+
+The 01:05 plan to train on cw07 was wrong and is withdrawn. kekcc puts
+CPU-heavy interactive processes into the cgroup
+`/user.slice/restricted_user`, whose `cpu.max` is `400000 100000` --
+**four cores total** for everything the user runs there, on a 128-core
+node. `nr_throttled` is in the millions. Training looked fine for the
+first two or three epochs (22 s each) and then dropped to ~370 s as the
+throttle took hold, with the machine sitting 96% idle throughout. The
+same pattern at 24, 12 and 6 concurrent processes, which is what made
+it look like self-contention rather than an external cap.
+
+Consequence beyond Method C: the "full Method A rescan takes ~6.5 h on
+the work server at 16 workers" figure recorded earlier today was
+measured before throttling and is optimistic by roughly 4x. The work
+server is for editing and short tests, not for production compute.
+
+Now submitting the same 24 runs as an LSF array to queue `h`
+(78 pending vs 522 running, the least congested; `l` has 113k pending
+and `s` 32k). Memory fits easily -- training peaks at ~1.3 GB against
+the 4 GB queue cap. Inputs unchanged (`results/manual_labels/*.json`
+via `data/real_labels/*.npz`). Outputs unchanged
+(`e07-binary-segmentation/results/loto/{arm}_{tile}_s{seed}.{pt,log}`),
+plus LSF stdout under `e07-binary-segmentation/logs/loto/`.
+New owned file: `scripts/loto_job.sh`. Local `results/loto/` was
+cleared of the throttled partial runs first.
+
+## 2026-07-28 05:00 JST — Claude (kekcc): done — LOTO complete, CNN has no discriminative power
+
+LSF array 54866034 finished: 24/24 runs, no failures, ~30 s/epoch on 4
+cores per job, ~1.3 GB peak (limit 3.9 GB), 96% CPU efficiency.
+
+**Result, pooled over 4 folds x 3 seeds (n=1536 segments, base rate
+43.6%):** binary-only and binary+orientation both give precision 43.9%
+[41.4, 46.4] with recall 98.5-99.0%. Precision equals the base rate in
+every stratum (rank<=100: 70.3-70.5% vs base 70.4%; rank>1000:
+14.6-15.4% vs base 14.6%). AUC is 0.43-0.56, so this is not a
+misplaced threshold -- the scores carry no information.
+
+**Root cause found.** Running a trained model over a real slice, it
+marks **78.6% of the slice as track** (97.5% for the binary-only arm),
+with probabilities never dropping below 0.34. The mask is `-1`
+(excluded from the loss) for 99% of pixels, so the only negatives the
+model ever sees are junk Hough segments -- thin line-like objects. It
+is never shown empty emulsion, so it cannot reject background. The
+2026-07-18 decision not to treat unreviewed pixels as 0 is right for
+Hough *candidates* but was applied too broadly: pixels far from any
+candidate are safely background.
+
+Fix is small and is now the top item in the Method C STATUS.md: dilate
+all candidate segments, mark everything outside as 0, re-run LOTO, and
+see whether AUC moves off 0.5. If it does not, the wall is data volume
+(3 training tiles).
+
+The orientation head neither helped nor hurt the binary channel, which
+at least confirms it is safe to keep. `extract_segments.py` works
+(direction coherence 0.950 with a trained model vs 0.837 untrained) but
+its output is physically meaningless while the mask covers most of the
+image -- connected components fuse into 2,890 px "segments".
+
+All work is committed to disk but NOT to git; 2 repos have uncommitted
+changes for review. Files touched are listed in the 01:05 and 02:10
+entries, plus `src/extract_segments.py`, `src/dump_segments.py`,
+`src/eval_segments.py`, `src/model_defaults.py`, `scripts/loto_job.sh`,
+`README.md` and `STATUS.md` in the ML repo, and `analysis-note.md` /
+`STATUS.md` here.
+
+## 2026-07-28 05:25 JST — Claude (kekcc): background-negative fix implemented, LOTO re-running
+
+Implemented the fix identified at 05:00: `real_label_dataset.py` now
+paints every Hough candidate with a 12 px brush and samples pixels
+outside that as junk (`_sample_background`, 2 background pixels per
+explicitly labelled pixel, seeded). Labelled coverage per tile goes
+from ~0.95% to ~2.9% of the slice.
+
+Smoke test (8 epochs, held-out V00000011) shows the intended change:
+
+| | predicted-track area | prob median | prob min | val_recall |
+|---|---|---|---|---|
+| before | 78.6% of slice | 0.563 | 0.340 | ~99% |
+| after | **14.3%** | **0.072** | **0.000** | 65-70% |
+
+The model now rejects background confidently instead of marking nearly
+everything as track. val_loss also drops from ~0.60 to ~0.37.
+
+Re-running the full LOTO as LSF array 55017237 (queue h, same 24
+combinations). Previous results and logs preserved as
+`results/loto_nobg/` and `logs/loto_nobg/` for comparison; new ones go
+to `results/loto/` and `logs/loto/`. Old npz kept as
+`data/real_labels_nobg/`. Segment-level evaluation follows when it
+finishes.
+
+## 2026-07-28 07:40 JST — Claude (kekcc): done — background fix works but is not enough (AUC 0.54 -> 0.59)
+
+LSF array 55017237 finished. Segment-level LOTO, 4 folds x 3 seeds,
+n=1536 segments, base rate 43.6%:
+
+| arm | precision | recall | predicted positive | AUC | before |
+|---|---|---|---|---|---|
+| binary | 49.5% [46.0, 53.1] | 55.8% | 49.0% | 0.582 | 0.549 |
+| orient | 48.6% [45.3, 52.0] | 61.0% | 54.6% | 0.597 | 0.539 |
+
+What improved: precision now sits significantly above the base rate
+(both CI lower bounds clear 43.6%), where before it matched the base
+rate exactly. Predicted-positive fell from 97.7% to 49.0%, and the
+model marks 14.3% of a slice as track instead of 78.6%, with
+probabilities reaching 0.000 instead of bottoming out at 0.340.
+
+What did not: AUC 0.59 is only modestly better than chance. Within
+each stratum the difference from the base rate is NOT significant
+(top-100: 73.9% vs base 70.4%, CI lower bound 69.5). So part of the
+overall AUC is just the model separating the top-100 stratum from the
+tail rather than discriminating within either. **Report per-stratum
+AUC as the primary number**, not the pooled one.
+
+The orientation arm is now slightly ahead of binary-only (0.597 vs
+0.582 overall, 0.593 vs 0.550 in the top stratum). Inside the CI, so
+not a claim -- but it is no longer indistinguishable, and it does no
+harm.
+
+`extract_segments.py` also improved: 680 segments (was 144), median
+length 27.9 px (was 15.8), longest fused component 1,246 px (was
+2,890). Still 355 of 680 flagged as crossings/blobs, so
+connected-component splitting remains weak; the orientation field is
+the natural tool for that next.
+
+Remaining wall is data volume: only 3 tiles are available for
+training, and overfitting is unresolved (train_loss 0.026 vs val_loss
+0.98). Next step in the Method C STATUS.md is more labels, with the
+E07 specials' vertex-radiating tracks as a non-circular source.
+
+Nothing committed to git; both repos hold uncommitted changes for
+review. Old no-background results kept at `results/loto_nobg/`,
+`logs/loto_nobg/`, `data/real_labels_nobg/`.
+
+## 2026-07-28 09:00 JST — Claude (kekcc): specials as a new label source, LOTO running
+
+Acting on the top next-step: more labels, from the E07 specials rather
+than from more human clicking.
+
+**Method.** A segment whose line passes within 10 px of a confirmed
+reaction vertex and whose nearer endpoint is within 150 px of it is
+very likely a real track from that event. The judgement comes from
+geometry plus a physics-confirmed vertex, not from a human grading
+Hough's output — so unlike pseudo-labels it does not feed the Method A
+classifier's opinion back to the CNN. Hough still proposes the
+segments; what changes is who decides they are real.
+
+**Purity is measured, not assumed.** The same cut is scored at 12
+random control points per event, and an event is used only if the true
+vertex selects >=3x the control median:
+
+| event | candidates | selected | control med | contrast | |
+|---|---|---|---|---|---|
+| D005 | 4569 | 42 | 6.0 | 7.0x | keep |
+| D013 | 3340 | 27 | 3.5 | 7.7x | keep |
+| IBUKI | 8074 | 32 | 16.0 | 2.0x | **skip** |
+| IRRAWADY | 8510 | 45 | 12.5 | 3.6x | keep |
+| MINO | 4850 | 40 | 8.0 | 5.0x | keep |
+| T004 | 4066 | 30 | 6.0 | 5.0x | keep |
+| T011 | 2472 | 30 | 1.5 | 20.0x | keep |
+
+IBUKI is dense enough that a random point selects nearly as many
+segments as the true vertex, so it contributes mostly accidents and is
+dropped. Six events kept, 214 positive segments, implied purity
+roughly 70-95% depending on event.
+
+**What this buys** is less the extra positives (27k track pixels
+against 139k) than the tile diversity: training tiles go from 3 to 9,
+against overfitting that currently drives train_loss to 0.026 while
+val_loss sits at 0.98.
+
+New file: `src/specials_label_dataset.py`. `train_real.py` gains
+`--specials`; those tiles are TRAINING only and never enter the
+validation split, which stays on human decisions. `pos_weight` now
+counts them (3.73 vs 4.16).
+
+Inputs (read-only): `/gpfs/group/had/sks/Users/shuhei/work/specials_x20/
+<event>/image.json` and `e07-fullscan/tests/specials_gt.json`.
+Outputs: `e07-binary-segmentation/data/specials_labels/*.npz` (6 files)
+and LSF array 55277503 writing `results/loto/` + `logs/loto/`.
+Previous background-fix results archived as `results/loto_bg/` and
+`logs/loto_bg/`; the pre-background ones remain in `results/loto_nobg/`.
+
+## 2026-07-28 19:55 JST — Claude (kekcc): done — specials labels are a NULL result (AUC 0.592 -> 0.594)
+
+Controlled A/B, four folds at one seed per arm, 20 epochs, n=512
+segments, base rate 43.6%:
+
+| | precision | recall | predicted positive | AUC |
+|---|---|---|---|---|
+| without specials | 48.0% [42.7, 53.4] | 70.4% | 63.9% | 0.592 |
+| with specials | 50.0% [43.7, 56.3] | 54.3% | 47.3% | 0.594 |
+
+Per-stratum AUC: top-100 0.555 -> 0.560, tail 0.538 -> 0.543. Training
+tiles went 3 -> 9 and discrimination did not move. The
+precision/recall changes are only an operating-point shift, which is
+exactly what AUC controls for.
+
+**Power caveat, stated up front:** at n=512 (223 track / 289 junk) the
+Hanley-McNeil SE on a single AUC is 0.025, so the smallest detectable
+difference is **0.070 AUC**. This experiment rules out a large gain,
+not any gain.
+
+The baseline here (20 epochs, 1 seed, AUC 0.592) reproduces this
+morning's 50-epoch 3-seed result (0.597), so the shortened setup is
+sound.
+
+**Interpretation.** The specials supply positives only. The hard
+distinction is line-like junk versus line-like track, and they say
+"this one is real" without adding a single junk example — while the
+model already over-predicts track (positive rate 64% even after the
+background fix). What was missing was never more positives; it is
+information that separates junk from track. Tile diversity not helping
+fits the same reading.
+
+**Where this leaves the plan.** Cheap geometric labelling is capped on
+the positive side. Remaining options: (1) more junk-side supervision,
+which means human review — but reviewing where classical and ML
+DISAGREE maximises information per click; (2) a different signal
+entirely — cross-slice 3D consistency, grain density — since a single
+slice's appearance may not separate junk from track even in principle,
+which AUC 0.59 may be telling us.
+
+Ran on the work server under its 4-core cap (8 runs, ~4.5 h) because
+LSF would not schedule: this user's fairshare priority is 0.000 in
+every queue after 400+ jobs in queue l, and queue s additionally caps
+CPU at 150 min, which fits only ~12 epochs of the 9-tile set. The
+3-seed LSF version is still queued and will strengthen the statistics
+if it ever starts.
+
+New/changed: `src/specials_label_dataset.py`, `--specials` in
+`train_real.py`, `scripts/run_local_ab.sh`, `scripts/loto_job.sh`.
+Results under `results/local_{sp,nosp}/`. Still nothing committed.
+
+## 2026-07-29 12:45 JST — Claude (kekcc): /label_disagree added; found and fixed a label-corrupting bug
+
+Acting on "what's missing is junk-vs-track information": added a
+browser queue that shows candidates in order of how much the classical
+classifier and the CNN disagree.
+
+**Measured before building.** Over 47,498 candidates on the four
+labelled tiles at production Hough parameters, the two reach opposite
+verdicts on **30.2%** (14,341), 9.3% differ by more than 0.5 in
+probability and 396 by more than 0.7. The queue is thick enough to be
+worth the UI.
+
+**Implementation.** `/label_disagree` (+ `/label_disagree_segments`)
+reuses the `/label_uncertain` template — endpoint and label are now
+template variables rather than a copy. CNN probabilities come from a
+file (`e07-binary-segmentation/data/cnn_scores.json`) so torch never
+enters the Flask process; produced by `dump_segments.py
+--all-candidates --hough 35,30,40` then the new `score_candidates.py`.
+
+**Latency 84 s -> 0.12 s.** Two things were recomputed on every
+request even though neither depends on the labels: per-tile Hough plus
+features for ~12,000 segments, and `build_training_set()` re-running
+Hough over every label file's tile. Both are memoised now
+(`labeling._cached_features`, `track_classifier.features_for_record`).
+First request still ~80 s to warm; `/label_uncertain` got the same
+speedup.
+
+**Label-corrupting bug, found and fixed before it fired.**
+`label_decide` stamps the CURRENT Hough parameters onto the record it
+writes. Review defaults moved to 35/30/40 on 2026-07-23; all 512
+existing decisions were recorded under 8/10/20 and untouched since
+2026-07-18. A decision is an index into the candidate list, so one new
+click would have rewritten the parameters and silently repointed all
+512 at a different candidate set (24,038 vs 12,003 entries, ordered
+independently). Nobody had clicked since the switch, so nothing was
+lost. Fixed by giving each parameter set its own file: matching
+parameters append to the existing file, different ones go to
+`..._z29__t35l30g40.json`. Verified end to end — a new decision landed
+in the new file, the legacy file's md5 was unchanged, all 512
+decisions intact. `real_label_dataset.py` already reads parameters per
+file, so both sets stay usable.
+
+**Note for whoever labels next:** new decisions accumulate on the
+35/30/40 candidate population, which is NOT the same population as the
+old 512. Do not add them up as one number.
+
+Changed: `module/server/labeling.py`, `module/track_classifier.py`,
+`README.md`, `STATUS.md`, `analysis-note.md` here; new
+`src/score_candidates.py` and `--all-candidates`/`--hough` in
+`src/dump_segments.py` in the ML repo. 52 fast tests pass. Server for
+review: `python -m module.server.app --port 8123`. Still uncommitted.

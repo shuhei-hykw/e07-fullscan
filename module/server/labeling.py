@@ -95,6 +95,40 @@ _MULTI_TILE_SOURCES = [
   (f"{_MULTI_TILE_PREFIX}/V00000991_L0_VX0001_VY0022_0_058.json", 29),
 ]
 
+# Per-segment CNN probabilities for /label_disagree, produced in the
+# sibling ML repo. Read as a file because torch and OpenCV cannot
+# share a process without deadlocking torch's backward pass.
+_CNN_SCORES_PATH = (
+  Path(__file__).resolve().parents[2].parent
+  / "e07-binary-segmentation" / "data" / "cnn_scores.json")
+
+
+_FEATURE_CACHE: dict = {}
+
+
+def _cached_features(json_rel_path: str, idx: int, hp: dict):
+  """Hough detection plus feature extraction for one tile, memoised.
+
+  Ranking a queue costs ~20 s per tile otherwise -- Hough over a
+  2048x2048 slice and features for ~12,000 segments -- which made
+  /label_uncertain and /label_disagree take over a minute to open.
+  None of that depends on the labels, only the classifier applied to
+  it afterwards does, so it can be computed once per process and
+  reused as decisions accumulate.
+  """
+  key = (json_rel_path, idx, hp["hough_thr"], hp["hough_min_line"],
+         hp["hough_max_gap"])
+  if key not in _FEATURE_CACHE:
+    record = dict(
+      json_rel_path=json_rel_path, idx=idx, fog_ksize=_FOG_KSIZE,
+      noise_amin=_NOISE_AMIN, noise_amax=_NOISE_AMAX,
+      noise_cmp=_NOISE_CMP, **hp,
+    )
+    tracks, binary = track_classifier._tracks_and_binary(record)
+    _FEATURE_CACHE[key] = track_classifier.extract_features(
+      tracks, binary)
+  return _FEATURE_CACHE[key]
+
 
 def _hough_params(request) -> dict:
   g = request.args.get
@@ -171,12 +205,38 @@ def _segment_crop_png(raw_img: np.ndarray, fog_img: np.ndarray, t) -> bytes:
 def register_labeling_routes(app: Flask, safe_resolve, labels_dir: Path):
   labels_dir.mkdir(parents=True, exist_ok=True)
 
-  def _label_file(json_rel_path: str, idx: int) -> Path:
-    safe_name = json_rel_path.replace("/", "__")
-    return labels_dir / f"{safe_name}__z{idx}.json"
+  def _label_file(json_rel_path: str, idx: int,
+                   hp: dict | None = None) -> Path:
+    """Where one tile's decisions live, per Hough parameter set.
 
-  def _load_record(json_rel_path: str, idx: int) -> dict:
-    p = _label_file(json_rel_path, idx)
+    A decision is an INDEX into the candidate list, so it means
+    nothing without the parameters that produced that list. Review
+    defaults moved from thr=8/ml=10/mg=20 to the production 35/30/40
+    on 2026-07-23, while all 512 existing decisions were recorded
+    under the old values; `label_decide` stamps the current parameters
+    onto the record it writes, so a single new click would have
+    silently repointed every one of those 512 at a different segment
+    (the two candidate lists are 24,038 and 12,003 entries long and
+    ordered independently). Distinct parameters therefore get distinct
+    files, and each stays internally consistent.
+    """
+    safe_name = json_rel_path.replace("/", "__")
+    base = labels_dir / f"{safe_name}__z{idx}.json"
+    if hp is None or not base.exists():
+      return base
+    rec = json.loads(base.read_text())
+    matches = all(
+      rec.get(k) == hp[k] for k in
+      ("hough_thr", "hough_min_line", "hough_max_gap"))
+    if matches or not rec.get("decisions"):
+      return base
+    tag = (f"t{hp['hough_thr']}l{hp['hough_min_line']}"
+           f"g{hp['hough_max_gap']}")
+    return labels_dir / f"{safe_name}__z{idx}__{tag}.json"
+
+  def _load_record(json_rel_path: str, idx: int,
+                    hp: dict | None = None) -> dict:
+    p = _label_file(json_rel_path, idx, hp)
     if p.exists():
       return json.loads(p.read_text())
     return {"decisions": {}}
@@ -218,9 +278,93 @@ def register_labeling_routes(app: Flask, safe_resolve, labels_dir: Path):
     hp = _hough_params(request)
     return render_template_string(
       _LABEL_UNCERTAIN_TEMPLATE,
+      endpoint="label_uncertain_segments",
+      mode_label="uncertainty-ranked",
       hough_thr=hp["hough_thr"], hough_ml=hp["hough_min_line"],
       hough_mg=hp["hough_max_gap"],
     )
+
+  @app.route("/label_disagree")
+  def label_disagree_page() -> str:
+    hp = _hough_params(request)
+    return render_template_string(
+      _LABEL_UNCERTAIN_TEMPLATE,
+      endpoint="label_disagree_segments",
+      mode_label="disagreement-ranked",
+      hough_thr=hp["hough_thr"], hough_ml=hp["hough_min_line"],
+      hough_mg=hp["hough_max_gap"],
+    )
+
+  @app.route("/label_disagree_segments")
+  def label_disagree_segments():
+    """Rank undecided segments by how much the classical classifier
+    and the CNN disagree (|p_classical - p_cnn| descending).
+
+    Where the two methods already agree, a click confirms what both
+    models believe and teaches neither. Where they differ, one of them
+    is wrong and the click says which -- so this ranks strictly above
+    /label_uncertain, which only knows one model's own doubt. Measured
+    on the four labelled tiles at production Hough parameters: the two
+    reach OPPOSITE verdicts on 30% of 47,498 candidates, and 396
+    differ by more than 0.7 in probability.
+
+    CNN probabilities are read from a file rather than computed here,
+    because importing torch into this process alongside OpenCV
+    deadlocks (see e07-binary-segmentation/src/model_defaults.py).
+    Regenerate with, in that repo:
+      python src/dump_segments.py --all-candidates --hough 35,30,40 \\
+        --out-dir data/segments_all
+      python src/score_candidates.py --checkpoint <a .pt>
+    """
+    hp = _hough_params(request)
+    if not _CNN_SCORES_PATH.exists():
+      return jsonify({
+        "error": f"no CNN scores at {_CNN_SCORES_PATH} -- generate "
+                 "them with dump_segments.py --all-candidates then "
+                 "score_candidates.py (see this route's docstring)",
+      }), 400
+    cnn = json.loads(_CNN_SCORES_PATH.read_text())
+    by_tile = {(t["path"], int(t["idx"])): t["scores"]
+               for t in cnn.get("tiles", [])}
+
+    X, y = track_classifier.build_training_set(labels_dir)
+    clf = track_classifier.train_classifier(X, y)
+    if clf is None:
+      return jsonify({
+        "error": "not enough labelled data yet to train a classifier "
+                 "(need >=20 decisions with both true and false)",
+        "n_labelled": len(y),
+      }), 400
+
+    scored = []
+    for json_rel_path, idx in _MULTI_TILE_SOURCES:
+      scores = by_tile.get((json_rel_path, idx))
+      if scores is None:
+        continue  # tile not covered by the score file; skip quietly
+      try:
+        decided = set(int(k) for k in
+                       _load_record(json_rel_path, idx, hp)["decisions"])
+        feats = _cached_features(json_rel_path, idx, hp)
+        probs = clf.predict_proba(feats)[:, 1]
+        for seg_id, prob in enumerate(probs, start=1):
+          if seg_id in decided:
+            continue
+          p_cnn = scores.get(str(seg_id))
+          if p_cnn is None:
+            continue
+          scored.append({
+            "path": json_rel_path, "idx": idx, "id": seg_id,
+            "prob": round(float(prob), 3),
+            "prob_cnn": round(float(p_cnn), 3),
+            "disagreement": round(abs(float(prob) - float(p_cnn)), 3),
+          })
+      except Exception as e:
+        return jsonify({"error": f"{json_rel_path}: {e}"}), 500
+
+    scored.sort(key=lambda s: -s["disagreement"])
+    return jsonify({"n_labelled": len(y),
+                     "checkpoint": cnn.get("checkpoint"),
+                     "items": scored[:1000]})
 
   @app.route("/label_uncertain_segments")
   def label_uncertain_segments():
@@ -241,15 +385,9 @@ def register_labeling_routes(app: Flask, safe_resolve, labels_dir: Path):
     scored = []
     for json_rel_path, idx in _MULTI_TILE_SOURCES:
       try:
-        record = dict(
-          json_rel_path=json_rel_path, idx=idx,
-          fog_ksize=_FOG_KSIZE, noise_amin=_NOISE_AMIN,
-          noise_amax=_NOISE_AMAX, noise_cmp=_NOISE_CMP, **hp,
-        )
-        tracks, binary = track_classifier._tracks_and_binary(record)
         decided = set(int(k) for k in
-                       _load_record(json_rel_path, idx)["decisions"])
-        feats = track_classifier.extract_features(tracks, binary)
+                       _load_record(json_rel_path, idx, hp)["decisions"])
+        feats = _cached_features(json_rel_path, idx, hp)
         probs = clf.predict_proba(feats)[:, 1]
         for seg_id, prob in enumerate(probs, start=1):
           if seg_id in decided:
@@ -297,7 +435,7 @@ def register_labeling_routes(app: Flask, safe_resolve, labels_dir: Path):
       seg_id = str(int(payload["id"]))
       decision = bool(payload["decision"])
       hp = _hough_params(request)
-      record = _load_record(json_rel_path, idx)
+      record = _load_record(json_rel_path, idx, hp)
       record["decisions"][seg_id] = decision
       record.update({
         "json_rel_path": json_rel_path,
@@ -311,7 +449,7 @@ def register_labeling_routes(app: Flask, safe_resolve, labels_dir: Path):
         "hough_max_gap": hp["hough_max_gap"],
         "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
       })
-      _label_file(json_rel_path, idx).write_text(
+      _label_file(json_rel_path, idx, hp).write_text(
         json.dumps(record, indent=2))
       n_true = sum(1 for v in record["decisions"].values() if v)
       return jsonify({"ok": True, "n_decided": len(record["decisions"]),
@@ -620,10 +758,13 @@ init();
 """
 
 
+# Shared by /label_uncertain and /label_disagree: the two differ only
+# in how the queue is ranked, so the page takes the endpoint and a
+# label as template variables rather than being copied.
 _LABEL_UNCERTAIN_TEMPLATE = """
 <html>
 <head>
-<title>Review (uncertainty sampling)</title>
+<title>Review ({{ mode_label }})</title>
 <style>
   body { background:#141414; color:#ddd; font-family:sans-serif;
          margin:0; padding:20px; display:flex; flex-direction:column;
@@ -714,7 +855,7 @@ function showCurrent() {
   }
   const it = items[pos];
   const tileLabel = it.path.split('/').pop();
-  counter.textContent = `${pos + 1} / ${items.length} (uncertainty-ranked)`;
+  counter.textContent = `${pos + 1} / ${items.length} ({{ mode_label }})`;
   tileNameEl.textContent = tileLabel;
   probEl.textContent = it.prob.toFixed(3);
   fill.style.width = `${100 * pos / items.length}%`;
@@ -753,7 +894,7 @@ document.addEventListener('keydown', (ev) => {
 });
 
 async function init() {
-  const res = await fetch(`/label_uncertain_segments?${houghQS}`);
+  const res = await fetch(`/{{ endpoint }}?${houghQS}`);
   const data = await res.json();
   if (!res.ok) {
     controls.style.display = 'none';

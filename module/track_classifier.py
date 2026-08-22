@@ -151,6 +151,29 @@ def _tracks_and_binary(record: dict):
   return tracks, binary
 
 
+_FEATURE_MEMO: dict = {}
+
+
+def features_for_record(record: dict):
+  """Features for every candidate of a record's slice, memoised.
+
+  Detection plus feature extraction costs ~12 s per tile and depends
+  only on the image and the Hough parameters, never on the decisions.
+  Rebuilding the training set after each click therefore recomputed
+  the same thing over and over: the review server's queue endpoints
+  took ~50 s per request before this. Cheap to keep -- roughly 12,000
+  rows of a handful of floats per tile.
+  """
+  key = (record["json_rel_path"], record["idx"], record["fog_ksize"],
+         record["noise_amin"], record["noise_amax"],
+         record["noise_cmp"], record["hough_thr"],
+         record["hough_min_line"], record["hough_max_gap"])
+  if key not in _FEATURE_MEMO:
+    tracks, binary = _tracks_and_binary(record)
+    _FEATURE_MEMO[key] = (len(tracks), extract_features(tracks, binary))
+  return _FEATURE_MEMO[key]
+
+
 def build_training_set(labels_dir: Path):
   """Return (X, y) from every decision across every label file."""
   X_all, y_all = [], []
@@ -158,8 +181,8 @@ def build_training_set(labels_dir: Path):
     record = json.loads(Path(path).read_text())
     if not record.get("decisions"):
       continue
-    tracks, binary = _tracks_and_binary(record)
-    feats = extract_features(tracks, binary)
+    n_tracks, feats = features_for_record(record)
+    tracks = range(n_tracks)  # only its length is used below
     for seg_id_str, is_track in record["decisions"].items():
       seg_id = int(seg_id_str)
       if not (1 <= seg_id <= len(tracks)):

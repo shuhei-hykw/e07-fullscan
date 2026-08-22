@@ -200,6 +200,49 @@ python -m module.server /path/to/scan_dir --port 8000
 | `/view/` | Image viewer — live pipeline preview, SPNG browsing |
 | `/results/` | Results viewer — stored track images |
 | `/viewer3d/` | 3D viewer — interactive track visualization |
+| `/label/<tile>/<idx>` | Review one tile's candidates, longest first |
+| `/label_mix` | Review across several tiles |
+| `/label_uncertain` | Review where the classifier is least sure |
+| `/label_disagree` | **Review where the classical classifier and the CNN disagree** |
+
+### Reviewing segments
+
+Each page shows one Hough candidate at a time — raw, fog-removed, and
+fog-removed with the segment highlighted — and you answer true (real
+track) or false (junk) with the arrow keys or the buttons. Decisions
+land in `results/manual_labels/` and a session can be resumed.
+
+`/label_disagree` is the one to use when both a classical classifier
+and a CNN exist. A candidate they both call the same thing teaches
+neither model anything; the informative clicks are where they differ,
+and there are plenty — measured over 47,498 candidates on the four
+labelled tiles at production parameters, the two reach **opposite
+verdicts on 30%**, and 396 differ by more than 0.7 in probability.
+
+It needs CNN probabilities, which are read from a file because torch
+and OpenCV deadlock in one process. Regenerate them in the sibling ML
+repo after changing the model:
+
+```bash
+cd ../e07-binary-segmentation/src
+python dump_segments.py --all-candidates --hough 35,30,40 \
+  --out-dir ../data/segments_all
+python score_candidates.py --checkpoint ../results/<run>.pt
+```
+
+The first queue request takes ~80 s while Hough and the features are
+computed for each tile; everything after that is ~0.1 s, since none of
+it depends on the decisions.
+
+> **Label files are per Hough parameter set.** A decision is an index
+> into the candidate list, so it only means anything alongside the
+> parameters that produced that list. Review switched from
+> thr=8/ml=10/mg=20 to the production 35/30/40 on 2026-07-23 while the
+> existing 512 decisions were all recorded under the old values, so
+> new decisions go to `..._z29__t35l30g40.json` rather than being
+> merged into `..._z29.json` and silently repointing every old one at
+> a different segment. Treat the two files as **different
+> populations**, not one pooled count.
 
 ## Run Traceability
 

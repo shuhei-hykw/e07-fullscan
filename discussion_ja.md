@@ -684,3 +684,359 @@ CLAUDE.mdの追記専用規約に例外条項（ユーザー明示依頼時の�
 module/pipeline/finder.py, discussion{,_ja}.md,
 discussion_archive_2026H1{,_ja}.md(新規), analysis-note.md。
 高速テスト52件通過。`specials_x20`検証(-m slow)は実行中。
+
+---
+
+## 2026-07-27 20:10 JST — Claude (kekcc): 引き継ぎメモを実機検証 — 2点訂正
+
+`HANDOFF_kekcc.md` を kekcc 実機（cw07）で照合。記載2点が誤りで、
+新たなブロッカーが1点判明した。
+
+**訂正1 — LSF は使える。** ノート最大のブロッカー（「bsub が PATH に
+無い、これが分からないと計画自体が成立しない」）は誤り。
+`/opt/lsf/10.1/.../bsub` が存在し LSF 10.1（cluster `centralcluster`）が
+稼働。ノートは cw02 での調査なので login node 差か PATH の問題。
+`cli_submit_kekcc --dry-run` も正常完走し queue `s` / 135 ジョブの
+bsub コマンドを生成する。Method A の全域投入はすぐ実行可能。
+
+**訂正2 — リポジトリは古くない。** `baa81a2` ではなく HEAD は `f2b77d4`、
+origin/main と同期、tree クリーン。`~/work/e07/fullscan` は gpfs 実体への
+シンボリックリンクで別クローンではない。
+（`e07-ml-binary-segmentation` 未クローンは記載どおり。）
+
+**新規ブロッカー — GPU が使えない。** `bqueues -l g` の結果、GPU queue は
+三重に不可: `USERS: shogo kmura ce_ibm/` に hayashu が含まれない
+（`bqueues -u hayashu` は `s l h p a` のみ）、STATUS が `Closed:Inact_A`、
+唯一の GPU ホスト `ccg01` が `unavail`。よって候補1（CNN LOTO を kekcc へ）
+の動機は大きく低下し、CPU 実行となる。使用可能 queue は全て MEMLIMIT 4 GB。
+`h` が walltime 8日 / TASKLIMIT 12 なので CPU 学習は可能だが、
+`torch.set_num_threads()` を 12 以下に制限すること（既定で 64 を認識）。
+
+**環境変更（ユーザー承認済み）。** conda `myenv` に追加:
+scikit-learn 1.6.1、scikit-image 0.24.0、torch 2.8.0+cpu、
+torchvision 0.23.0+cpu。numpy は 1.26.4 に固定し conda 版 opencv 4.12.0 を
+壊さないようにした。ノートの「torch/sklearn/cv2 無し」は `myenv` を
+見落としたもの（cv2 は元からあった）。検証: 全インポート OK、
+`pytest -m "not slow"` 52 passed / 35 deselected で従来ベースラインと一致。
+
+変更ファイル: `analysis-note.md`（2026-07-27 エントリ）、本ログ、
+`discussion.md`。コミットはしない（明示依頼時のみ、というノートの方針）。
+
+---
+
+## 2026-07-27 22:45 JST — Claude (kekcc): specials の訂正、rename、Method C 環境整備 — manual_labels 待ちで停止
+
+**ユーザーによる重要な訂正。** `specials_x20/` の 13 中 **11 が E07** 乾板で
+本物の反応点データ: D005, D013, IBUKI, IRRAWADY, MINO, T004, T004_3body,
+T004_center, T011, T011_100, T011_200。E373 は KISO と NAGARA のみ（優先度
+低）。`tests/specials_gt.json` の実測 9 事象のうち **7 事象が E07**。
+これにより STATUS.md の制約 2 件（「specials は E373 なので最適化対象に
+するな」「実 E07 に確認済み反応点は 1 件も無い」）は撤回。2026-07-15 の
+前景密度 約1.8〜2倍 の実測は KISO(E373) と E07 全面探査データの比較で
+あって、specials 全体の性質ではなかった。
+
+**ディレクトリ rename。** ユーザー指示により kekcc の
+`~/work/e07/fullscan` を `~/work/e07/e07-fullscan` へ rename、macOS と
+名前を統一。これで `e07-binary-segmentation/src/paths.py`（兄弟を
+`e07-fullscan` の名前で探す）も解決する。fast tests 52 passed。旧名の
+参照は追記専用ログと `HANDOFF_kekcc.md` にのみ残るが、規約どおり未編集。
+
+**STATUS.md を両リポジトリで更新**（CLAUDE.md に従い上書き）:
+specials の E07/E373 内訳、撤回した制約、kekcc 環境（bsub 可 / GPU 不可 /
+myenv の内容 / numpy 固定）、`results/` が 2026-05-14 で止まっている件、
+本日実測した mg=40 のトラック数 52 倍の件。
+
+**Method C が kekcc で動くようになった。** conda `myenv` に導入:
+scikit-learn 1.6.1、scikit-image 0.24.0、torch 2.8.0+cpu、
+torchvision 0.23.0+cpu、segmentation-models-pytorch 0.5.0、matplotlib。
+`smp.Unet(resnet18, in_channels=1, classes=1)` の 320x320 forward と、
+兄弟リポジトリの `module.reader` / `module.preprocess` の import を確認。
+numpy は 1.26.4 に固定したまま（conda 版 opencv 4.12.0 保護）。
+
+**macOS 側への依頼（ブロッカー）。** kekcc には学習データが無く、生成も
+できない。`e07-binary-segmentation/{data,results}` は macOS ローカルへの
+シンボリックリンクで、大元の `e07-fullscan/results/manual_labels/*.json`
+（人手 512 セグメント判定）は `.gitignore` の `results/` により git に
+乗らない。kekcc 側は空。疑似ラベル生成も
+`scripts/generate_pseudo_labels.py` が実行時に
+`build_training_set(LABELS_DIR)` で分類器を学習するため同様に不可。
+人手判定は再生成不能。
+
+依頼: `results/manual_labels/` を kekcc から見えるようにしてほしい。
+`.gitignore` に例外を入れて commit するのが妥当（小さく、代替不能で、
+両マシンで必要）。手動コピーでも可。
+
+本セッションの所有ファイル: STATUS.md（両リポジトリ）、analysis-note.md、
+discussion{,_ja}.md。コミットは未実施。
+
+---
+
+## 2026-07-28 01:05 JST — Claude (kekcc): 作業意図 — LOTO 学習の実行（Method C）
+
+ワークサーバ cw07 で leave-one-tile-out 学習を開始する（LSF ではない:
+1 run あたり約 1 GB で 4 GB 制限は無関係、かつ短時間で終わるため）。
+
+入力（読み取りのみ）: `e07-fullscan/results/manual_labels/*.json`（4 タイル、
+人手 512 判定）を、今夜方向プレーンを追加して再生成した
+`e07-binary-segmentation/data/real_labels/*.npz` 経由で使用。
+出力（新規、すべて ML リポジトリ内）:
+`results/loto/{arm}_{tile}_s{seed}.pt` と `.log`。24 通り =
+2 arm（binary のみ / binary+方向）× 4 検証タイル × 3 seed、各 50 epoch、
+1 プロセス 4 スレッド。
+本セッションの所有ファイル: `e07-binary-segmentation` 側 —
+`src/real_label_dataset.py`, `src/real_dataset.py`, `src/train_real.py`,
+`src/train.py`, `src/model_defaults.py`（新規）, `src/eval_segments.py`（新規）,
+`scripts/run_loto.sh`（新規）, `STATUS.md`。`e07-fullscan` 側 — `STATUS.md`,
+`analysis-note.md`, `discussion{,_ja}.md`。
+`e07-fullscan/results/` へはラベル読み取り以外の書き込みをせず、LSF ジョブも投げない。
+
+## 2026-07-28 02:10 JST — Claude (kekcc): 訂正 — ワークサーバは4コア上限。LOTO を LSF へ移す
+
+01:05 の「cw07 で学習する」計画は誤りだったので撤回する。kekcc は CPU を
+food う対話プロセスを cgroup `/user.slice/restricted_user` に入れ、その
+`cpu.max` は `400000 100000` ＝ **合計4コア**（128コアのノード上でも）。
+`nr_throttled` は数百万回に達している。学習は最初の2〜3エポックこそ
+22秒だったが、その後 throttle が効いて約370秒に落ちた。その間マシンは
+96% アイドル。24／12／6 並列のいずれでも同じ挙動で、これが「自分同士の
+競合」に見えていた原因。
+
+Method C 以外への影響: 本日記録した「Method A の全域再解析はワーク
+サーバ 16 worker で約6.5時間」は throttle 前の測定で、実際は約4倍かかる。
+ワークサーバは編集と短時間テスト用であり、本番計算用ではない。
+
+同じ 24 run を LSF の queue `h` に配列ジョブとして投入する（pending 78 /
+running 522 で最も空いている。`l` は 113k、`s` は 32k pending）。
+メモリは学習ピークが約 1.3 GB で 4 GB 制限に十分収まる。入力は変更なし
+（`results/manual_labels/*.json` → `data/real_labels/*.npz`）。出力も
+変更なし（`e07-binary-segmentation/results/loto/{arm}_{tile}_s{seed}.{pt,log}`）
+＋ LSF 標準出力を `e07-binary-segmentation/logs/loto/` に。
+新規所有ファイル: `scripts/loto_job.sh`。ローカルの throttle された
+途中結果は投入前に削除済み。
+
+## 2026-07-28 05:00 JST — Claude (kekcc): 完了 — LOTO 完走、CNN は判別力ゼロ
+
+LSF 配列ジョブ 54866034 完了: 24/24 成功、失敗なし。1 ジョブ 4 コアで
+約 30 秒/epoch、ピークメモリ約 1.3 GB（制限 3.9 GB）、CPU 効率 96%。
+
+**結果（4 fold × 3 seed 統合、n=1536 セグメント、基準率 43.6%）**:
+binary のみ / binary+方向 のいずれも precision 43.9% [41.4, 46.4]、
+recall 98.5〜99.0%。**precision はどの層でも基準率と一致**
+（rank≤100: 70.3〜70.5% vs 基準 70.4%、rank>1000: 14.6〜15.4% vs 14.6%）。
+AUC は 0.43〜0.56 なので閾値のずれではなく、スコアに情報が無い。
+
+**原因を特定。** 学習済みモデルを実スライスに通すと**画像の 78.6% を
+飛跡と判定**（binary arm は 97.5%）、確率は最小でも 0.34 で「飛跡でない」
+と言える場所が無い。マスクは画素の 99% が `-1`（損失から除外）なので、
+モデルが見る負例は junk と判定された Hough セグメント＝薄い線状物体だけ。
+**何もない乳剤を一度も負例として見ていない**ため背景を棄却できない。
+2026-07-18 の「未レビューを 0 にしない」判断は Hough **候補**については
+正しいが、候補から遠い空白画素にまで適用したのが行き過ぎだった。
+
+修正は小さく、Method C 側 STATUS.md の「次にやる候補」最上段に置いた:
+全候補線分を膨張させ、その外側を 0 とし、LOTO を再実行して AUC が 0.5 から
+動くか見る。動かなければ壁はデータ量（学習に使えるのは 3 タイル）。
+
+方向ヘッドは binary を悪化も改善もさせず、少なくとも併設して安全なことは
+確認できた。`extract_segments.py` は動作する（学習済みで方向一致度 0.950、
+未学習 0.837）が、マスクが画像の大半を覆う現状では連結成分が融合して
+2,890 px の「線分」が出るなど、出力は物理的に無意味。
+
+作業はすべてディスクに保存済みだが **git には未コミット**。2 リポジトリに
+レビュー待ちの変更がある。対象ファイルは 01:05 / 02:10 のエントリに加え、
+ML 側の `src/extract_segments.py`, `src/dump_segments.py`,
+`src/eval_segments.py`, `src/model_defaults.py`, `scripts/loto_job.sh`,
+`README.md`, `STATUS.md`、fullscan 側の `analysis-note.md`, `STATUS.md`。
+
+## 2026-07-28 05:25 JST — Claude (kekcc): 背景負例の修正を実装、LOTO 再実行中
+
+05:00 に特定した原因への対策を実装。`real_label_dataset.py` が全 Hough
+候補を 12px 幅で描き、その外側の画素を junk としてサンプリングする
+(`_sample_background`、明示ラベル 1 画素あたり背景 2 画素、seed 固定)。
+1 タイルのラベル被覆率は約 0.95% → 約 2.9% になった。
+
+スモークテスト（8 epoch、検証タイル V00000011）で意図した変化を確認:
+
+| | 飛跡と判定した面積 | 確率中央値 | 確率最小 | val_recall |
+|---|---|---|---|---|
+| 修正前 | スライスの 78.6% | 0.563 | 0.340 | 約99% |
+| 修正後 | **14.3%** | **0.072** | **0.000** | 65〜70% |
+
+ほぼ全部を飛跡と答える状態から、背景を明確に棄却するようになった。
+val_loss も約 0.60 → 約 0.37 に改善。
+
+同じ 24 通りの LOTO を LSF 配列ジョブ 55017237（queue h）で再実行中。
+比較のため旧結果は `results/loto_nobg/` と `logs/loto_nobg/` に保存、
+新しい結果は `results/loto/` と `logs/loto/` へ。旧 npz は
+`data/real_labels_nobg/` に残した。完了後にセグメント単位評価を行う。
+
+## 2026-07-28 07:40 JST — Claude (kekcc): 完了 — 背景修正は効いたが十分ではない（AUC 0.54 → 0.59）
+
+LSF 配列ジョブ 55017237 完了。セグメント単位 LOTO、4 fold × 3 seed、
+n=1536、基準率 43.6%:
+
+| arm | precision | recall | 予測陽性率 | AUC | 修正前 |
+|---|---|---|---|---|---|
+| binary | 49.5% [46.0, 53.1] | 55.8% | 49.0% | 0.582 | 0.549 |
+| orient | 48.6% [45.3, 52.0] | 61.0% | 54.6% | 0.597 | 0.539 |
+
+**改善した点**: precision が基準率を有意に上回った（両 arm とも CI 下限が
+43.6% を超える）。修正前は precision＝基準率ちょうどだった。予測陽性率は
+97.7% → 49.0%、スライス上で飛跡と判定する面積は 78.6% → 14.3%、確率の
+最小値も 0.340 → 0.000 になり、背景を明確に棄却するようになった。
+
+**足りない点**: AUC 0.59 は偶然よりましというだけ。**層内では基準率との差が
+有意でない**（上位100位帯 73.9% vs 基準率 70.4%、CI 下限 69.5）。よって
+全体 AUC の一部は「上位帯と裾帯を見分けているだけ」の可能性が高い。
+**主指標は層内 AUC にすること。**
+
+方向 arm が binary をわずかに上回った（全体 0.597 vs 0.582、上位帯
+0.593 vs 0.550）。CI 内なので断定はできないが、修正前のように区別
+不能ではなくなり、害も無い。
+
+`extract_segments.py` も改善: 線分 680 本（旧 144）、中央長 27.9px
+（旧 15.8）、最大の融合成分 1,246px（旧 2,890）。ただし 680 本中 355 本が
+交差/塊フラグ付きで、連結成分ベースの分割は依然弱い。方向場を使った
+分割が次の自然な手。
+
+残る壁はデータ量。学習に使えるのは 3 タイルだけで、過学習も未解消
+（train_loss 0.026 vs val_loss 0.98）。次の一手は Method C 側 STATUS.md
+の最上段＝ラベル追加で、E07 specials の反応点から放射する飛跡が
+非循環な供給源になる。
+
+git には未コミット。両リポジトリにレビュー待ちの変更あり。背景なしの
+旧結果は `results/loto_nobg/`、`logs/loto_nobg/`、`data/real_labels_nobg/`
+に保存。
+
+## 2026-07-28 09:00 JST — Claude (kekcc): specials を新しいラベル源に、LOTO 実行中
+
+最優先の次手（ラベル追加）に着手。人手クリックを増やすのではなく、
+E07 specials の既知反応点を使う。
+
+**手法**: 線分の直線が確認済み反応点から 10px 以内を通り、かつ近い方の
+端点が反応点から 150px 以内にあるなら、その線分はその事象の本物の飛跡で
+ある可能性が高い。判断の根拠は幾何と物理的に確認された反応点であって、
+人間が Hough 出力を採点した結果ではない——よって疑似ラベルと違い、
+Method A 分類器の意見を CNN に還流させる循環にならない。線分を提案するのは
+依然 Hough だが、本物かを決める主体が変わる。
+
+**純度は仮定せず実測する。** 同じ条件を 1 事象あたり 12 個のランダム点でも
+評価し、真の反応点が対照中央値の 3 倍以上を選ぶ事象だけ採用:
+
+| 事象 | 候補 | 選択 | 対照中央値 | 比 | |
+|---|---|---|---|---|---|
+| D005 | 4569 | 42 | 6.0 | 7.0倍 | 採用 |
+| D013 | 3340 | 27 | 3.5 | 7.7倍 | 採用 |
+| IBUKI | 8074 | 32 | 16.0 | 2.0倍 | **除外** |
+| IRRAWADY | 8510 | 45 | 12.5 | 3.6倍 | 採用 |
+| MINO | 4850 | 40 | 8.0 | 5.0倍 | 採用 |
+| T004 | 4066 | 30 | 6.0 | 5.0倍 | 採用 |
+| T011 | 2472 | 30 | 1.5 | 20.0倍 | 採用 |
+
+IBUKI は密度が高く、ランダム点でも真の反応点とほぼ同数を選ぶため、
+偶然が大半を占めるので除外。6 事象・正例 214 線分、推定純度は事象により
+約 70〜95%。
+
+**効果の本体は正例の量（track 画素 2.7 万 vs 既存 13.9 万）ではなく
+タイルの多様性**。学習タイルが 3 → 9 になる。現状 train_loss 0.026 に対し
+val_loss 0.98 という過学習への対策として効くことを期待する。
+
+新規ファイル: `src/specials_label_dataset.py`。`train_real.py` に
+`--specials` を追加。これらのタイルは**学習専用**で検証分割には入れない
+（検証は人手判断のまま）。`pos_weight` は specials も数えるよう修正
+（4.16 → 3.73）。
+
+入力（読み取りのみ）: `/gpfs/group/had/sks/Users/shuhei/work/specials_x20/
+<event>/image.json`、`e07-fullscan/tests/specials_gt.json`。
+出力: `e07-binary-segmentation/data/specials_labels/*.npz`（6 件）と
+LSF 配列 55277503（`results/loto/`、`logs/loto/`）。背景修正版の結果は
+`results/loto_bg/`・`logs/loto_bg/` に、背景なし版は `results/loto_nobg/`
+に保存済み。
+
+## 2026-07-28 19:55 JST — Claude (kekcc): 完了 — specials ラベルは帰無（AUC 0.592 → 0.594）
+
+対照実験（各アーム 4 fold × seed 1、20 epoch、n=512、基準率 43.6%）:
+
+| | precision | recall | 予測陽性率 | AUC |
+|---|---|---|---|---|
+| specials なし | 48.0% [42.7, 53.4] | 70.4% | 63.9% | 0.592 |
+| specials あり | 50.0% [43.7, 56.3] | 54.3% | 47.3% | 0.594 |
+
+層別 AUC は上位100位帯 0.555→0.560、裾帯 0.538→0.543。学習タイルを
+3→9 に増やしたが**判別力は動かなかった**。precision/recall の変化は
+動作点の移動にすぎず、AUC はまさにそれを補正した指標。
+
+**検出力の注意（先に明記）**: n=512（track 223 / junk 289）での AUC の
+標準誤差は Hanley-McNeil で 0.025、差の検出限界は **0.070 AUC**。
+よってこの実験は「大きな改善が無い」ことを示すのであって「効果ゼロ」
+を示すものではない。
+
+なおベースライン（20 epoch・1 seed、AUC 0.592）は本日朝の 50 epoch・
+3 seed の結果（0.597）を再現しており、短縮設定でも妥当。
+
+**解釈**: specials は正例しか供給しない。判別すべきは「線状の junk」と
+「線状の本物」の区別で、specials は junk の例を一つも足さずに「これは
+本物だ」とだけ教える。しかもモデルは背景修正後でも予測陽性率 64% と
+track を過剰予測している。足りなかったのは正例ではなく**junk と track
+を分ける情報**。タイル多様性が効かなかったことも同じ解釈と整合する。
+
+**方針への影響**: 幾何による安価なラベル生成は正例側で頭打ち。残る
+選択肢は (1) junk 側の教師を増やす＝人手レビュー。ただし**古典と ML が
+食い違う箇所**を優先すればクリックあたりの情報量を最大化できる。
+(2) 別種の信号——スライス間 3D 整合性、grain density。1 スライスの
+見た目だけでは原理的に分離しにくい可能性があり、AUC 0.59 の頭打ちは
+その示唆かもしれない。
+
+実行はワークサーバの 4 コア枠で行った（8 ラン、約 4.5 時間）。LSF が
+スケジュールしなかったため——本ユーザーの fairshare 優先度が全 queue で
+0.000（queue l に 400 件超投入した影響）、加えて queue s は CPU 上限
+150 分で 9 タイルでは 12 epoch しか入らない。3 seed 版の LSF ジョブは
+投入したまま残してあり、動けば統計が増える。
+
+新規・変更: `src/specials_label_dataset.py`、`train_real.py` の
+`--specials`、`scripts/run_local_ab.sh`、`scripts/loto_job.sh`。
+結果は `results/local_{sp,nosp}/`。git は引き続き未コミット。
+
+## 2026-07-29 12:45 JST — Claude (kekcc): `/label_disagree` を追加、ラベル破壊バグを発見・修正
+
+「足りないのは junk と track を分ける情報」という結論を受け、古典分類器と
+CNN の不一致が大きい順に候補を出すブラウザ用キューを追加した。
+
+**作る前に測定**: 本番 Hough パラメータで 4 タイル計 47,498 候補のうち
+**30.2%（14,341 件）が真逆の判定**、確率差 0.5 超が 9.3%、0.7 超が 396 件。
+UI を作る価値が十分ある厚みだと確認してから実装した。
+
+**実装**: `/label_disagree`（＋ `/label_disagree_segments`）は
+`/label_uncertain` のテンプレートを共用（endpoint とラベルをテンプレート
+変数化。コピーはしていない）。CNN 確率はファイル経由
+（`e07-binary-segmentation/data/cnn_scores.json`）で渡し、Flask に torch を
+持ち込まない。生成は `dump_segments.py --all-candidates --hough 35,30,40` →
+新規 `score_candidates.py`。
+
+**応答 84 秒 → 0.12 秒**: ラベルに依存しない計算を毎回やり直していた 2 箇所
+——タイルごとの Hough ＋ 約 12,000 セグメントの特徴量抽出と、
+`build_training_set()` が全ラベルファイルのタイルで Hough を再実行する処理
+——をメモ化（`labeling._cached_features`、
+`track_classifier.features_for_record`）。初回のみ約 80 秒のキャッシュ構築。
+`/label_uncertain` も同じ恩恵を受けた。
+
+**ラベル破壊バグ（発火前に発見・修正）**: `label_decide` は保存時に
+レコードの Hough パラメータを**現在のサーバ既定値で上書き**する。既定値は
+2026-07-23 に 35/30/40 へ変更されたが、既存 512 判定はすべて 8/10/20 で
+記録され 2026-07-18 以降未更新。決定は候補リストへの添字なので、
+**新規に 1 クリック保存すれば 512 判定が全て別の候補集合（24,038 本 vs
+12,003 本、順序も独立）を指すよう静かに書き換わる**ところだった。
+7/23 以降クリックが無かったため実害はゼロ。対策としてパラメータごとに
+ファイルを分けた（一致すれば追記、異なれば `..._z29__t35l30g40.json`）。
+実機検証済み: 新規判定は別ファイルに入り、既存ファイルの md5 は不変、
+512 判定は無傷。`real_label_dataset.py` は各ファイルのパラメータを読む
+設計なので両方とも正しく使える。
+
+**次にラベルする人への注意**: 新規判定は 35/30/40 の候補母集団に貯まり、
+既存 512（8/10/20）とは**別母集団**。単純に合計して数えないこと。
+
+変更: 当リポジトリの `module/server/labeling.py`、
+`module/track_classifier.py`、`README.md`、`STATUS.md`、
+`analysis-note.md`。ML 側は `src/score_candidates.py` 新規、
+`src/dump_segments.py` に `--all-candidates` / `--hough` 追加。
+fast tests 52 passed。レビュー起動は
+`python -m module.server.app --port 8123`。git は未コミット。
