@@ -46,6 +46,9 @@ module/
 │   ├── cli_submit_kekcc.py
 │   ├── cli_submit_vertex_kekcc.py
 │   └── diag_*.py          # Diagnostics (python -m module.pipeline.diag_X)
+├── graphdet/        # Python port of the MATLAB graph detector
+│   ├── geom.py            # norma/isaline*/mindistance*/L2lseg/lseg2L
+│   └── detectlseg.py      # detect_lseg_smallregion(), detect_lseg_view()
 └── server/          # Web viewer (flask)
 ```
 
@@ -187,6 +190,48 @@ intensity.
 
 Real tiles are dense (a 2048×2048×58 tile yields ~2×10⁷ hits), so MATLAB-side
 `mabiki` down-sampling is essential before the graph stages.
+
+## MATLAB Graph Detector, Ported (`module.graphdet`)
+
+A Python port of the detector in `e07/matlab`, so the graph stages can
+run on kekcc (no MATLAB is installed there) and so their constants can
+be retuned against E07 data. Depends only on numpy and scipy.
+
+Stage 1 is ported: `detect_lseg_smallregion()` (from
+`detectlseg_smallregion.m`) turns one 128×128×80 sub-region of hits into
+3-D line segments, and `detect_lseg_view()` walks the 16×16 grid of a
+full view. `integrate_smallregions` and `detectbunki` follow.
+
+```python
+from module.graphdet import detect_lseg_view
+segments, per_region = detect_lseg_view(hits)   # (2, 3, M) endpoints
+```
+
+### Checking the port
+
+`e07/matlab/work1.mat` stores a complete input/output pair — the 41,609
+hits of simulation event 1 and the 1,239 segments MATLAB produced from
+them — so fidelity can be checked with no MATLAB installation:
+
+```bash
+python scripts/check_lseg_reference.py        # or: pytest -m slow tests/test_graphdet.py
+```
+
+The port currently reproduces all 1,239 segments with a worst endpoint
+error of 2.5e-13 px, in 14 s for the whole view against roughly 9 h for
+the MATLAB original (see analysis-note.md, 2026-08-22).
+
+### Constants
+
+Defaults reproduce MATLAB exactly and are **not** right for E07 data.
+The most consequential is `geom.MATLAB_Z_SCALE = 3.0 / 0.29`, which
+assumes 3 µm slices; E07 full-scan data is 1.5 µm/slice, so distances
+along z come out twice too large. Pass `z_scale=` to override. Likewise
+`TH_SPLIT`/`TH_GROW`, the merge fractions and `REGION_PX`/`REGION_Z`
+were tuned on a simulation with 159 tracks per view and ~3 px spacing
+along a track. Retuning is a separate step, deliberately kept apart from
+the port so that a disagreement means a porting bug, not a parameter
+choice.
 
 ## Web Viewer
 

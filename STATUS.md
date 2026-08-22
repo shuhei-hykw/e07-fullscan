@@ -1,6 +1,6 @@
 # STATUS — 現在の状態（e07-fullscan）
 
-**最終更新: 2026-07-29**
+**最終更新: 2026-08-22**
 
 このファイルは「**今どうなっているか**」だけを書く。**追記ではなく
 上書き**する（変遷は `git log -p STATUS.md` で追える）。
@@ -19,13 +19,52 @@
 | Method | 内容 | ML | 状態 |
 |---|---|---|---|
 | **A** | Pure Python（`find_tracks`→`find_vertices`→`merge_vertex_slices`） | 不使用 | **主軸**。③は一通り最適化済み、④に未解決の重大問題 |
-| **B** | MATLAB 経路（`export_hits_grid`→`detectlseg`→`integrate_smallregions`→`detectbunki`） | 任意 | **休止中**（当面使わない方針、2026-07-27時点） |
+| **B'** | グラフ検出器（`export_hits_grid`→`detectlseg`→`integrate_smallregions`→`detectbunki`） | 不使用 | **Python 移植中**。Phase 1-1（`detectlseg`）完了・参照と完全一致 |
 | **C** | CNN 生画素セグメンテーション（別リポジトリ `e07-binary-segmentation`） | 使用 | **注力対象。弱い判別力が出た段階**（LOTO・セグメント単位で AUC 0.59、precision 49.5% > 基準率 43.6%）。実用には遠い |
 | **D** | 教師なしクラスタリング（KMeans/GMM） | 使用 | **失敗確定・打ち切り**（precision 46〜50%＝ほぼチャンス） |
 
 Method A/B が共用する補助部品として、手作り特徴量分類器
 `module/track_classifier.py`（6 特徴量ロジスティック回帰）がある。
 ③と④の間のノイズ除去、および Method C の疑似教師データ生成に使う。
+
+---
+
+## Method B' — MATLAB グラフ検出器の Python 移植
+
+**MATLAB は kekcc に無い**（PATH にも `/sw/packages` にも無し）。実行
+できるのは macbook の R2026a だけで、1 view 約9.2時間かかる。全域
+2025 view は約2.1年になり不可能。またシミュレーション用の定数が
+E07 に合っているか検証できない。この2点を同時に解く手として、
+`e07/matlab` の 1,096行を `module/graphdet/` へ移植中。依存は
+numpy + scipy のみ。
+
+| 段 | MATLAB | 状態 |
+|---|---|---|
+| 1 | `detectlseg_smallregion` | **完了**（2026-08-22） |
+| 2 | `integrate_smallregions` + `pixellist2poly` | 次 |
+| 3 | `detectbunki` | 未 |
+
+**検証に MATLAB は要らない。** `e07/matlab/work1.mat` が入出力の対を
+持っている（シミュレーション事象1の 41,609点 → `lseg` 1,239線分 →
+`polylines` 149本）。Phase 1-1 は **1,239 セグメント全一致・最大端点
+誤差 2.5e-13 px**、所要 14.0 秒/view。照合は
+`python scripts/check_lseg_reference.py` か
+`pytest -m slow tests/test_graphdet.py`。
+
+`simdata8.mat` の `Summary` から**真の分岐点14個**を復元できるので、
+Phase 1-3 でこのパイプラインの efficiency/purity を初めて測れる。
+
+**定数は MATLAB のまま**にしてある。一致が崩れたら移植のバグだと
+判別できるようにするため。実データ用の較正は Phase 2 で別途行う。
+特に効くもの:
+
+- `geom.MATLAB_Z_SCALE = 3.0/0.29` — 3µm スライス前提。E07 は
+  **1.5µm/スライス**なので z 距離が2倍過大。
+- 全定数がシミュレーション（159本/view、飛跡に沿った点間隔 約3px）
+  で調整されている。実データのエクスポートは `_GRID_CELL_PX = 30` で
+  **点間隔が10倍粗い**ため、`dl=20`（伸長窓）や `err<1.5` は機能して
+  いない。移植で detectlseg が桁で速くなったので、`_GRID_CELL_PX` を
+  下げて density を戻す選択肢が現実的になった。
 
 ---
 
@@ -181,6 +220,14 @@ hough_mg=40, grain_radius=15, px_scale_um=0.29`
 
 ## 次にやる候補
 
+- **Phase 1-2: `integrate_smallregions` + `pixellist2poly` の移植**
+  （現在の最優先）。`work1.mat` の `polylines`（149本）と照合する。
+  続いて Phase 1-3 で `detectbunki` と、真の分岐点14個に対する
+  efficiency/purity の初測定。
+- **Phase 2: 定数を E07 に較正**。z_step 1.5µm、`_GRID_CELL_PX`、
+  直線性の TH。目的関数は既知 vertex での分岐グループ数と順位。
+  ここで要る人手は **GT vertex のクリックだけ**（T004_3body /
+  T004_center / T011_100 / T011_200 の4事象が未クリック）。
 - **飛跡抽出を古典・ML の 2 手法で確立する**（現在の目標、反応点より前）。
   Method C 側は 2026-07-28 に方向ヘッドを追加し、`extract_segments.py`
   で CNN 出力から Hough を通さずに線分（端点・長さ・角度）を取れる
@@ -226,6 +273,9 @@ hough_mg=40, grain_radius=15, px_scale_um=0.29`
   scikit-image 0.24.0 / torch 2.8.0+cpu / torchvision 0.23.0+cpu を
   導入。**numpy は 1.26.4 に固定**（conda/pip 混成環境なので
   numpy を上げると conda 版 opencv が壊れる）。
+- **kekcc に MATLAB は無い**（PATH にも `/sw/packages` にも無し。
+  あるのは ansys のみ）。MATLAB が動くのは macbook の R2026a
+  だけ。これが Method B' を Python へ移植している理由。
 - **kekcc のバッチ**: `bsub` は使える（LSF 10.1、cw07 で確認）。
   投入可能 queue は `s l h p a`（全て MEMLIMIT 4 GB）。
   `s`=300分だが pending 4.4 万件で大渋滞、`h`=11520分（8日）。
