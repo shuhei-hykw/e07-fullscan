@@ -23,7 +23,10 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from .config import MATLAB_CONFIG, DetectorConfig
-from .geom import is_a_line3, is_a_line3a, min_distance_to_polyline, norma
+from .geom import (
+  hits_near_polyline, is_a_line3, is_a_line3a, min_distance_to_polyline,
+  norma,
+)
 from .polyfit import pixellist_to_poly
 # Slack (px) on the "is this hit inside the polyline's extent?" test.
 # A polyline's end vertex IS the projection of its outermost hit, so
@@ -150,19 +153,24 @@ def _resample(
   n, m = x.shape[0], len(polylines)
   lengths = np.zeros(m)
   owned = np.zeros((n, m), dtype=bool)
+  tree = cKDTree(x)
   refit = []
   for i, poly in enumerate(polylines):
-    ell, err, _, lpoly = min_distance_to_polyline(poly, x)
+    cand = hits_near_polyline(tree, poly, th)
+    if cand.size == 0:
+      refit.append(poly)
+      continue
+    ell, err, _, lpoly = min_distance_to_polyline(poly, x[cand])
     sel = ((ell >= -_ELL_SLACK_PX) & (ell <= lpoly + _ELL_SLACK_PX)
            & (err < th))
-    owned[sel, i] = True
-    idx = np.flatnonzero(sel)
+    owned[cand[sel], i] = True
+    idx = cand[sel]
     if idx.size == 0:
       # Nothing to re-fit; leave it at zero length and the next pass
       # will skip it.
       refit.append(poly)
       continue
-    idx = idx[np.argsort(ell[idx], kind="stable")]
+    idx = idx[np.argsort(ell[sel], kind="stable")]
     fit = pixellist_to_poly(x[idx], dim, th)
     refit.append(fit[0])
     lengths[i] = fit[5]

@@ -21,7 +21,10 @@ data:
   # NOTE: the tree has an E07/ level between fullscan/ and MOD108/. It was
   # missing here until 2026-09-08 and every job would have died on it.
   input: /gpfs/group/had/sks/E07/tohoku/fullscan/E07/MOD108/PL12/tohoku-v1/AREA00/IMAGE00_AREA00
-  output_dir: results
+  # NOT plain results/: that still holds the 2026-05-14 run at
+  # hough_mg=5, and chunk_0001..0135 would collide with the first 135
+  # jobs of the 2025-job array.
+  output_dir: results/fullscan_v7
   total_views: 2025
 
 analysis:

@@ -16,6 +16,7 @@ known to agree.
 from __future__ import annotations
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from .config import MATLAB_CONFIG, MATLAB_Z_SCALE, DetectorConfig
 
@@ -354,3 +355,30 @@ def min_distance_to_polyline(
     c[tied] = elover[tied].argmin(axis=1)
   ell = (el + el0[:-1])[np.arange(n), c]
   return ell, err, c, lpoly
+
+
+def hits_near_polyline(
+  tree: cKDTree, poly: np.ndarray, reach: float, end_reach: float = 0.0,
+) -> np.ndarray:
+  """Hits that could lie within ``reach`` of a polyline, ascending.
+
+  Both callers ask which hits a polyline claims, and both used to scan
+  every hit in the view for every polyline: fine for a simulation's
+  41,609 hits and 175 polylines, hours for a real E07 tile's 240,824
+  and ~10,000. A hit within ``reach`` of the curve is within
+  ``half-length + reach`` of some segment's midpoint, so a ball query
+  per segment is a superset of the answer and the exact test still
+  runs on what comes back. ``end_reach`` extends the query past the
+  two ends, for callers that count hits beyond them.
+  """
+  mid = 0.5 * (poly[:-1] + poly[1:])
+  half = 0.5 * norma(np.diff(poly, axis=0), 1)
+  found: set = set()
+  for m, h in zip(mid, half):
+    found.update(tree.query_ball_point(m, h + reach))
+  if end_reach > 0.0:
+    for end in (poly[0], poly[-1]):
+      found.update(tree.query_ball_point(end, end_reach))
+  if not found:
+    return np.zeros(0, dtype=np.int64)
+  return np.sort(np.fromiter(found, dtype=np.int64, count=len(found)))

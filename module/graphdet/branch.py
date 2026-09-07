@@ -13,9 +13,10 @@ shared hits the grouping already found.
 from __future__ import annotations
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from .config import MATLAB_CONFIG, DetectorConfig
-from .geom import min_distance_to_polyline, scale_z
+from .geom import hits_near_polyline, min_distance_to_polyline, scale_z
 
 _CODE_BODY = 1
 _CODE_END = 2
@@ -37,16 +38,22 @@ def attachment_codes(
   """
   n, m = x.shape[0], len(polylines)
   codes = np.zeros((n, m), dtype=np.uint8)
+  tree = cKDTree(x)
+  reach = cfg.attach_max_dist
+  end_reach = cfg.end_reach + reach
   for i, poly in enumerate(polylines):
-    ell, err, _, lpoly = min_distance_to_polyline(poly, x)
+    cand = hits_near_polyline(tree, poly, reach, end_reach)
+    if cand.size == 0:
+      continue
+    ell, err, _, lpoly = min_distance_to_polyline(poly, x[cand])
     near = err < cfg.attach_max_dist
     body = (near & (ell >= cfg.end_margin)
             & (ell <= lpoly - cfg.end_margin))
     ends = near & (
       ((ell < cfg.end_margin) & (ell > -cfg.end_reach))
       | ((ell > lpoly - cfg.end_margin) & (ell < lpoly + cfg.end_reach)))
-    codes[body, i] = _CODE_BODY
-    codes[ends, i] = _CODE_END  # wins where both matched
+    codes[cand[body], i] = _CODE_BODY
+    codes[cand[ends], i] = _CODE_END  # wins where both matched
   return codes
 
 
