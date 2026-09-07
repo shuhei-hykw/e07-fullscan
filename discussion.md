@@ -1290,3 +1290,18 @@ high-multiplicity stars were structurally invisible before.
 
 22 fast graphdet tests pass. Commits 1717a10, 35e52a7, b2e79fe,
 dd393d1 and the follow-ups.
+
+**Addendum (same day, 22:00): the density wall is passed.** The "6 px is
+not realistic" conclusion above is retracted. (1) Switching the export's
+`denoise_method` to the classifier mode -- using the classifier already
+trained on the existing labels, no new human input -- cuts 6 px hits
+from 1,667,324 to **784,522**. (The `threshold` mode is looser than
+`legacy` and ten times slower; there is no reason to use it.) (2)
+`_merge_overlapping` now answers "is any other segment claiming this
+hit" for all segments at once; after the refine_endpoints fix it was 85%
+of stage 1, and a 3,013-hit sub-region goes from 331.8 s to **39.0 s**.
+Together, 6 px is **~2.77 h/view** for stage 1, ~3 h/view in total, with
+stage 1 peaking at 0.3 GB. Simulated purity there is **75.9%** against
+17.5% at 30 px. Reference checks unchanged (1,239/1,239 at 2.5e-13 px).
+The 6 px end-to-end run has NOT been done -- it belongs on LSF queue
+`h`. Commit e763a36.

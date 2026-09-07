@@ -1198,3 +1198,14 @@ branch,geom,config}.py`、`config/kekcc.yaml`、`scripts/kekcc_job.sh`、
 
 fast tests 22 passed（graphdet）。commits: 1717a10 / 35e52a7 / b2e79fe /
 dd393d1 / それ以降。
+
+**追記（同日 22:00）: 密度の壁は越えた。** 上の「cell=6 は非現実的」は撤回。
+① エクスポートの `denoise_method` を分類器モードに（既存512ラベルで学習、
+人手追加なし）→ cell=6 の hits 1,667,324 → **784,522**（2.1倍減）。
+`threshold` モードは legacy より甘く10倍遅いので使う理由が無い。
+② `_merge_overlapping` を全セグメント同時計算に（`refine_endpoints` を
+直した後は段1の85%）→ N=3,013 で 331.8 → **39.0 秒**。
+結果 **cell=6 が約2.77時間/view**（合計 約3時間/view、段1 メモリ 0.3 GB）。
+シミュレーションでの purity は cell=30 の 17.5% に対し **75.9%**。
+参照照合は不変（段1 1,239本 全一致 2.5e-13 px）。
+**cell=6 の end-to-end は未実施**——LSF queue `h` 向き。commit e763a36。

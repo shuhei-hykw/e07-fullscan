@@ -343,16 +343,34 @@ One full-scan tile, end to end, at 30 px (2026-09-08):
 | stage 2 | 28,988 polylines | 163 s |
 | stage 3 | 20,511 groups, 8,118 branch points | 10 s |
 
-It runs, which took three exact optimisations to achieve (see the
-2026-09-08 analysis-note entry) — before them stage 1 alone
+It runs, which took four exact optimisations to achieve (see the
+2026-09-08 analysis-note entries) — before them stage 1 alone
 extrapolated to 21 hours per view and stage 3 wanted a 7 GB dense
-matrix. **The output is not usable yet**, and the limit is track
-density rather than grid size: the simulation yields 149 polylines per
-view where real E07 yields 28,988, and 13 branch points where it
-yields 8,118. 6 px is worse still — one sub-region alone exceeds 25
-minutes in stage 1. Reducing density at export time, or shrinking
-`REGION_PX` so a sub-region holds the ~163 hits the constants were
-tuned for, is the next thing to try.
+matrix.
+
+At 30 px the output is not usable: the simulation yields 149 polylines
+per view where real E07 yields 28,988, and 13 branch points where it
+yields 8,118, which is what a simulated purity of 17.5% looks like on
+real data. 6 px is the setting the simulation argues for (75.9%), and
+two things made it affordable:
+
+- `export_hits_grid(denoise_method="classifier")`, using the classifier
+  already trained on the existing labels, cuts 6 px hits from 1,667,324
+  to 784,522. (The `"threshold"` mode is looser than `"legacy"` **and**
+  ten times slower — there is no reason to use it.)
+- `_merge_overlapping` now answers "is any other segment claiming this
+  hit" for every segment at once, taking a 3,013-hit sub-region from
+  331.8 s to 39.0 s.
+
+| | 30 px, legacy | **6 px, classifier** |
+|---|---|---|
+| hits per sub-region (median) | 972 | 3,024 |
+| export | 80 s | 853 s |
+| stage 1 | 2,449 s | ~2.77 h |
+| simulated purity | 17.5% | **75.9%** |
+
+~3 h/view in total, and stage 1 peaks at 0.3 GB, so it belongs on LSF
+queue `h` one view per job. That end-to-end run has not been done yet.
 
 `z_scale` is still the MATLAB `3.0 / 0.29`, which assumes 3 µm slices;
 E07 is 1.5 µm/slice, and `config.E07_Z_SCALE` holds the right value.
