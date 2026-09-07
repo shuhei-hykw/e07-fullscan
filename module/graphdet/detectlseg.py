@@ -191,12 +191,13 @@ def _merge_overlapping(e: np.ndarray) -> np.ndarray:
       ef = e.astype(np.float64)
       continue
 
-    shared = np.zeros(m)
-    for i in range(m):
-      others = np.ones(m, dtype=bool)
-      others[i] = False
-      shared[i] = np.count_nonzero(e[:, i] & e[:, others].any(axis=1))
-    shared /= sizes
+    # "is this hit claimed by any segment other than i" is the row
+    # count minus i's own bit, which answers it for every i at once.
+    # MATLAB rebuilds the (N, M-1) slice per segment, an O(N*M^2) pass
+    # that was 85% of stage 1 on a dense real region.
+    counts = e.sum(axis=1)
+    others_any = (counts[:, None] - e) > 0
+    shared = np.count_nonzero(e & others_any, axis=0) / sizes
     k = int(np.argmax(shared))
     if shared[k] > _DROP_FRAC:
       e[:, k] = False
