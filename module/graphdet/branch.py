@@ -13,6 +13,8 @@ shared hits the grouping already found.
 from __future__ import annotations
 
 import numpy as np
+from scipy.sparse import coo_matrix, csr_matrix
+from scipy.sparse.csgraph import connected_components
 from scipy.spatial import cKDTree
 
 from .config import MATLAB_CONFIG, DetectorConfig
@@ -35,9 +37,15 @@ def attachment_codes(
 
   0 = not attached, _CODE_BODY = near the middle, _CODE_END = near (or
   just past) one end.
+
+  Sparse on purpose. A hit touches a handful of polylines at most, but
+  a real E07 tile has ~29,000 polylines over ~241,000 hits and the
+  dense matrix would be 7 GB -- more than any kekcc queue allows.
   """
   n, m = x.shape[0], len(polylines)
-  codes = np.zeros((n, m), dtype=np.uint8)
+  rows: list[np.ndarray] = []
+  cols: list[np.ndarray] = []
+  vals: list[np.ndarray] = []
   tree = cKDTree(x)
   reach = cfg.attach_max_dist
   end_reach = cfg.end_reach + reach
@@ -52,54 +60,67 @@ def attachment_codes(
     ends = near & (
       ((ell < cfg.end_margin) & (ell > -cfg.end_reach))
       | ((ell > lpoly - cfg.end_margin) & (ell < lpoly + cfg.end_reach)))
-    codes[cand[body], i] = _CODE_BODY
-    codes[cand[ends], i] = _CODE_END  # wins where both matched
-  return codes
+    # _CODE_END wins where both matched, so body entries that are also
+    # ends are dropped rather than summed.
+    body &= ~ends
+    for mask, code in ((body, _CODE_BODY), (ends, _CODE_END)):
+      if mask.any():
+        rows.append(cand[mask])
+        cols.append(np.full(int(mask.sum()), i, dtype=np.int64))
+        vals.append(np.full(int(mask.sum()), code, dtype=np.uint8))
+  if not rows:
+    return csr_matrix((n, m), dtype=np.uint8)
+  return coo_matrix(
+    (np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
+    shape=(n, m), dtype=np.uint8).tocsr()
 
 
-def junction_hits(codes: np.ndarray) -> np.ndarray:
+def junction_hits(codes) -> np.ndarray:
   """Indices of hits that tie two or more polylines together."""
   # int64 on purpose: MATLAB sums these uint8 codes natively and would
   # saturate at 255, which happens to be harmless for a ">2" test but
   # is not something to carry over.
-  return np.flatnonzero(
-    codes.sum(axis=1, dtype=np.int64) > _MIN_JUNCTION_CODE_SUM)
+  total = np.asarray(
+    codes.astype(np.int64).sum(axis=1)).ravel()
+  return np.flatnonzero(total > _MIN_JUNCTION_CODE_SUM)
 
 
-def _components(adjacency: np.ndarray) -> np.ndarray:
+def _components(adjacency) -> np.ndarray:
   """Connected-component label per node, in first-member order.
 
   MATLAB gets these from ``linkage``/``cluster`` at a 0.5 cutoff over a
   0/1 distance matrix, which for single linkage (the default) is
   exactly connected components -- at O(M^3) and via a dense M x M
   distance matrix.
+
+  Labels are renumbered by first member so the result does not depend
+  on SciPy's traversal order.
   """
-  n = adjacency.shape[0]
-  labels = np.full(n, -1, dtype=np.int64)
-  label = 0
-  for start in range(n):
-    if labels[start] >= 0:
-      continue
-    stack = [start]
-    labels[start] = label
-    while stack:
-      node = stack.pop()
-      for nxt in np.flatnonzero(adjacency[node] & (labels < 0)):
-        labels[nxt] = label
-        stack.append(int(nxt))
-    label += 1
+  if not hasattr(adjacency, "tocsr"):
+    adjacency = csr_matrix(np.asarray(adjacency))
+  _, raw = connected_components(adjacency, directed=False)
+  order = np.full(raw.max() + 1 if raw.size else 0, -1, dtype=np.int64)
+  labels = np.empty(raw.size, dtype=np.int64)
+  nxt = 0
+  for i, r in enumerate(raw):
+    if order[r] < 0:
+      order[r] = nxt
+      nxt += 1
+    labels[i] = order[r]
   return labels
 
 
 def branch_adjacency(polylines: list[np.ndarray], x: np.ndarray,
-                     codes: np.ndarray | None = None,
-                     cfg: DetectorConfig = MATLAB_CONFIG) -> np.ndarray:
-  """(M, M) boolean: do these two polylines share a junction hit?"""
+                     codes=None,
+                     cfg: DetectorConfig = MATLAB_CONFIG):
+  """Sparse (M, M): do these two polylines share a junction hit?"""
   if codes is None:
     codes = attachment_codes(polylines, x, cfg)
-  sub = codes[junction_hits(codes)].astype(np.float64)
-  adjacency = (sub.T @ sub) > 0
-  np.fill_diagonal(adjacency, False)
+  sub = csr_matrix(codes)[junction_hits(codes)]
+  sub.data = np.ones_like(sub.data)
+  adjacency = (sub.T @ sub).tocsr()
+  adjacency.setdiag(0)
+  adjacency.eliminate_zeros()
   return adjacency
 
 
@@ -146,19 +167,23 @@ def branch_points(
   idx = junction_hits(codes)
   if idx.size == 0:
     return np.zeros((0, 3)), np.zeros(0, dtype=np.int64)
-  sub = codes[idx] > 0
-  centroids, members = [], []
-  m = len(polylines)
-  for i in range(m):
-    for j in range(i + 1, m):
-      both = sub[:, i] & sub[:, j]
-      if both.any():
-        centroids.append(x[idx[both]].mean(axis=0))
-        members.append({i, j})
-  if not centroids:
+  # Walk the junction hits rather than all M^2 polyline pairs: a hit
+  # ties a handful of polylines together, so this is O(H * k^2) with a
+  # tiny k, where the pair loop was 840 million iterations on a real
+  # E07 tile.
+  sub = csr_matrix(codes)[idx]
+  shared: dict = {}
+  for h in range(idx.size):
+    attached = sub.indices[sub.indptr[h]:sub.indptr[h + 1]]
+    for a in range(attached.size):
+      for b in range(a + 1, attached.size):
+        key = (int(attached[a]), int(attached[b]))
+        shared.setdefault(key, []).append(idx[h])
+  if not shared:
     return np.zeros((0, 3)), np.zeros(0, dtype=np.int64)
-
-  centroids = np.array(centroids)
+  keys = sorted(shared)
+  centroids = np.array([x[shared[k]].mean(axis=0) for k in keys])
+  members = [set(k) for k in keys]
   labels = _components(
     np.linalg.norm(
       scale_z(centroids[:, None, :] - centroids[None, :, :],

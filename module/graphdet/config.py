@@ -9,14 +9,28 @@ testable: ``scripts/scan_sampling.py`` re-thins the same simulation at
 other block sizes, so the truth stays intact while the spacing
 changes.
 
-The split below is the whole point of the file. A **length scale** is
-a distance measured ALONG a track or between neighbouring hits, and it
-has to grow with the hit spacing. A **transverse tolerance** is a
-distance measured ACROSS a track -- track width plus measurement error
--- and it does not: the E07 export skeletonises each component before
-sampling, so its hits sit on the centreline however coarse the grid
-is. Scaling the two together is the mistake this separation exists to
-prevent.
+Constants split three ways, and which group a constant belongs to was
+settled by measurement, not by reading the code.
+
+**Hit-spacing scales** -- how far to look for the NEXT HIT. These must
+grow with the spacing or the step they gate never fires, and
+``for_spacing`` scales exactly these.
+
+**Transverse tolerances** -- distances measured ACROSS a track, i.e.
+its width plus measurement error. These do not grow: the E07 export
+skeletonises each component before sampling, so its hits sit on the
+centreline however coarse the grid is.
+
+**Track-geometry gaps** -- how far apart two reconstructed PIECES of
+one track may be, or how far a track may stop short of a vertex. These
+are set by the physics and by the sub-region grid, not by how densely
+the track was sampled, so they do not grow either. Scaling them was
+tried and is worse: on the simulation re-thinned to 6 px, scaling
+everything gives 90.2% efficiency at 66.0% purity, while scaling only
+the hit-spacing group gives 87.8% at 75.5% -- and purity is the weak
+side. At 10 px the gap is wider still (54.0% against 67.3%). It also
+costs dearly in runtime, because a 10x larger endpoint search box
+turns stage 2's chaining quadratic on real data.
 """
 from __future__ import annotations
 
@@ -60,7 +74,7 @@ class DetectorConfig:
   # as touching it. The tightest tolerance in the whole pipeline.
   attach_max_dist: float = 1.5
 
-  # -- length scales (scale with hit spacing) ------------------------
+  # -- hit-spacing scales (for_spacing scales exactly these) ---------
   # How far past its own extent a component looks for more hits.
   grow_margin: float = 20.0
   # Endpoint refinement: how far an endpoint may slide, in what steps,
@@ -70,8 +84,11 @@ class DetectorConfig:
   refine_dl_min: float = 2.0
   # isaline5: two single-hit components this close are one track.
   single_point_max_dist: float = 20.0
+
+  # -- track-geometry gaps (do NOT scale; see the module docstring) --
   # Half-widths of the box searched for an endpoint to continue a
-  # track into. z is in slices, and a slice is ~10 px, hence far
+  # track into. Set by where the sub-region grid cuts a track, not by
+  # the sampling. z is in slices, and a slice is ~10 px, hence far
   # smaller.
   neighbour_xy: float = 50.0
   neighbour_z: float = 5.0
@@ -88,10 +105,11 @@ class DetectorConfig:
   vertex_merge: float = 10.0
 
   def for_spacing(self, spacing_px: float) -> "DetectorConfig":
-    """Rescale every length to a different hit spacing.
+    """Rescale the hit-spacing group to a different hit spacing.
 
-    Transverse tolerances are deliberately left alone -- see the
-    module docstring.
+    Transverse tolerances and track-geometry gaps are deliberately
+    left alone -- see the module docstring for the measurement that
+    settled it.
     """
     k = spacing_px / self.spacing_px
     return replace(
@@ -101,12 +119,6 @@ class DetectorConfig:
       refine_dl_step=self.refine_dl_step * k,
       refine_dl_min=self.refine_dl_min * k,
       single_point_max_dist=self.single_point_max_dist * k,
-      neighbour_xy=self.neighbour_xy * k,
-      join_max_overlap=self.join_max_overlap * k,
-      join_short_poly=self.join_short_poly * k,
-      end_margin=self.end_margin * k,
-      end_reach=self.end_reach * k,
-      vertex_merge=self.vertex_merge * k,
     )
 
 

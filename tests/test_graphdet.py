@@ -287,13 +287,16 @@ def test_mabiki_keeps_slices_apart():
   assert mabiki(hits, 30).shape[0] == 2
 
 
-def test_for_spacing_scales_lengths_but_not_tolerances():
+def test_for_spacing_scales_only_the_hit_spacing_group():
   cfg = MATLAB_CONFIG.for_spacing(30.0)
   assert cfg.grow_margin == MATLAB_CONFIG.grow_margin * 10
-  assert cfg.end_reach == MATLAB_CONFIG.end_reach * 10
-  # Transverse tolerances track the measurement error, not the spacing.
+  assert cfg.refine_dl == MATLAB_CONFIG.refine_dl * 10
+  # Transverse tolerances track the measurement error, not spacing.
   assert cfg.th_split == MATLAB_CONFIG.th_split
   assert cfg.attach_max_dist == MATLAB_CONFIG.attach_max_dist
+  # Track-geometry gaps are set by the physics and the region grid.
+  assert cfg.end_reach == MATLAB_CONFIG.end_reach
+  assert cfg.neighbour_xy == MATLAB_CONFIG.neighbour_xy
 
 
 def test_default_config_reproduces_the_module_constants():
