@@ -20,6 +20,7 @@ block stays broken until here.
 from __future__ import annotations
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from .config import MATLAB_CONFIG, DetectorConfig
 from .geom import is_a_line3, is_a_line3a, min_distance_to_polyline, norma
@@ -53,26 +54,47 @@ def _neighbour_box(cfg: DetectorConfig) -> np.ndarray:
   return np.array([cfg.neighbour_xy, cfg.neighbour_xy, cfg.neighbour_z])
 
 
-def _endpoints_near(lseg: np.ndarray, point: np.ndarray,
-                     box: np.ndarray) -> np.ndarray:
-  """(2, M) mask of segment endpoints inside the search box.
+class _EndpointIndex:
+  """Box queries over segment endpoints, without scanning all of them.
 
-  Consumed segments are marked NaN, and every NaN comparison is false,
-  so they drop out here without a separate test -- as in MATLAB.
+  MATLAB tests every endpoint of every segment against the search box
+  on every extension step, which is O(M) per step and O(M^2) per view
+  -- fine for the simulation's 1,239 segments, hours for the 44,360 a
+  real E07 tile produces. Dividing by the box half-widths turns the
+  test into a Chebyshev ball of radius 1, which a k-d tree answers
+  directly.
+
+  Segments are never moved, only consumed (set to NaN), so the tree is
+  built once. A consumed segment fails the exact re-check below --
+  every NaN comparison is false -- exactly as in MATLAB.
   """
-  with np.errstate(invalid="ignore"):
-    return np.all(
-      np.abs(lseg - point[None, :, None]) < box[None, :, None], axis=1)
 
+  def __init__(self, lseg: np.ndarray, box: np.ndarray):
+    self.lseg, self.box = lseg, box
+    self.m = lseg.shape[2]
+    ends = np.concatenate([lseg[0].T, lseg[1].T], axis=0) / box
+    self.tree = cKDTree(np.nan_to_num(ends, nan=np.inf))
 
-def _candidates(mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-  """Segment and endpoint indices, in MATLAB's find() order.
+  def near(self, point: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Segment and endpoint indices, in MATLAB's find() order.
 
-  find() on a (2, M) array walks column-major, i.e. by segment and
-  then by endpoint; ties in the later min() are broken by this order,
-  so it has to be reproduced exactly.
-  """
-  return np.nonzero(mask.T)
+    find() on the (2, M) mask walks column-major, i.e. by segment and
+    then by endpoint; ties in the later min() are broken by this
+    order, so it has to be reproduced exactly.
+    """
+    idx = np.asarray(
+      self.tree.query_ball_point(point / self.box, 1.0, p=np.inf),
+      dtype=np.int64)
+    if idx.size == 0:
+      return idx, idx
+    ends, segs = idx // self.m, idx % self.m
+    with np.errstate(invalid="ignore"):
+      keep = np.all(
+        np.abs(self.lseg[ends, :, segs] - point[None, :]) < self.box,
+        axis=1)
+    ends, segs = ends[keep], segs[keep]
+    order = np.lexsort((ends, segs))
+    return segs[order], ends[order]
 
 
 def _chain_segments(lseg: np.ndarray,
@@ -83,6 +105,7 @@ def _chain_segments(lseg: np.ndarray,
   order = np.argsort(-lengths, kind="stable")
   lengths, lseg = lengths[order], lseg[:, :, order].copy()
 
+  index = _EndpointIndex(lseg, box)
   polylines = []
   for i in range(lseg.shape[2]):
     if np.isnan(lseg[0, 0, i]) or lengths[i] == 0:
@@ -95,10 +118,9 @@ def _chain_segments(lseg: np.ndarray,
         # its last segment: a chain that has already bent should not
         # keep growing along its latest piece.
         stub = poly[[-1, 0]] if forward else poly[[0, -1]]
-        mask = _endpoints_near(lseg, stub[0], box)
-        if not mask.any():
+        segs, ends = index.near(stub[0])
+        if segs.size == 0:
           break
-        segs, ends = _candidates(mask)
         d = np.array([
           is_a_line3(stub, lseg[[e, 1 - e], :, s], cfg)
           for s, e in zip(segs, ends)])
@@ -166,8 +188,8 @@ def _join_polylines(
   """Pass 3: join whole polylines end to end on the angle criterion."""
   if not polylines:
     return [], []
-  box = _neighbour_box(cfg)
   lseg = np.stack([p[[0, -1]] for p in polylines], axis=2).astype(float)
+  index = _EndpointIndex(lseg, _neighbour_box(cfg))
   joined: list[np.ndarray] = []
   changed: list[bool] = []
   for i in range(len(polylines)):
@@ -183,10 +205,9 @@ def _join_polylines(
         # polyline may genuinely bend, so its chord says nothing about
         # which way it leaves either end.
         stub = joined[-1][[-1, -2]] if forward else joined[-1][[0, 1]]
-        mask = _endpoints_near(lseg, stub[0], box)
-        if not mask.any():
+        segs, ends = index.near(stub[0])
+        if segs.size == 0:
           break
-        segs, ends = _candidates(mask)
         d = np.array([
           is_a_line3a(
             stub, polylines[s][[0, 1] if e == 0 else [-1, -2]], cfg)
