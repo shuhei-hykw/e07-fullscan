@@ -1240,3 +1240,53 @@ value; `E07_Z_SCALE` is defined but not yet the default.
 rows 3-5x slower than the earlier ones. Do not trust the absolute times.
 
 22 fast graphdet tests pass, 2 slow. Still uncommitted.
+
+## 2026-09-08 — Running the graph detector on a real E07 tile; the Method A / LSF constraint is retracted
+
+**Inputs (read-only)**: one real E07 tile
+`.../IMAGE00_AREA00/V00000000_L0_VX0000_VY0000_0_058.{json,spng}`,
+`e07/matlab/simdata8.mat`.
+**Scratch outputs (outside the repo, in `~/private/tmp/`)**:
+`e07_pl_cell{6,30}.npy`, `e07_seg_cell30.npy`, `e07_poly_cell30.npy`,
+`memtest.parquet`, `mg5.parquet`, `vtx_*.parquet`.
+**Changed (owned by this repo)**: `module/graphdet/{detectlseg,integrate,
+branch,geom,config}.py`, `config/kekcc.yaml`, `scripts/kekcc_job.sh`,
+`tests/test_graphdet.py`, `README.md`, `STATUS.md`, `analysis-note.md`.
+
+**1. It runs end to end on a real tile, ~45 min/view.** Three exact
+optimisations got it there, with every reference check unchanged:
+recompute only the moving segment's column when refining endpoints
+(176.9 -> 4.23 s on an 800-hit region, exponent 2.6 -> 1.6); a k-d tree
+for the endpoint box query; neighbourhood queries instead of scanning
+every hit in `_resample` and `attachment_codes`. Stage 3 additionally
+needed a sparse representation -- its dense codes matrix was 7 GB and
+`branch_points` looped over 840 million polyline pairs.
+
+**2. `for_spacing()` was scaling the wrong group.** Scaling everything
+widens the endpoint search box from 50 to 500 px, and real-tile stage 2
+never finished in 60 minutes. Measured on the simulation at 6 px:
+90.2/66.0 (scale all) vs 87.8/**75.5** (spacing only) vs 85.4/75.9
+(none). Purity is the weak side, so spacing-only wins. Real-tile stage
+2: over 60 min -> **154 s**.
+
+**3. The limit is track density, not grid size.** Real E07 at 30 px
+gives 28,988 polylines where the simulation gives 149, and 8,118 branch
+points where it gives 13. 6 px is worse -- one sub-region alone exceeds
+25 min in stage 1. Next: cut density at export time, or shrink
+`REGION_PX` so a sub-region holds the ~163 hits the constants assume.
+
+**4. Method A can go to LSF after all** (July's conclusion retracted).
+`config/kekcc.yaml` and `scripts/kekcc_job.sh` had three fatal bugs: the
+input path was missing its `E07/` level, the job script called a
+non-existent `module.analyze`, and `n_jobs: 135` blew the memory cap.
+Measured: 1 view is **1.55 GB** and ~2 min; July's "6.75 GB" was four
+views in one job. Now `n_jobs: 2025`, output `results/fullscan_v7`.
+**Not submitted** -- submission awaits an explicit request.
+
+**5. The mg=40 impact on stage 4 is measured** (the precondition for the
+full re-analysis). One real view: 193 -> 2,533 candidates (13.1x). But
+mg=5 yields **zero** candidates with n>=8 while mg=40 yields 66 --
+high-multiplicity stars were structurally invisible before.
+
+22 fast graphdet tests pass. Commits 1717a10, 35e52a7, b2e79fe,
+dd393d1 and the follow-ups.

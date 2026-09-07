@@ -1153,3 +1153,48 @@ viewer overlay は 30 px でチューニング済みなので `noise_cell` で�
 時間がかかっている。時間の絶対値は信用しないこと。
 
 fast tests 22 passed（graphdet）、slow 2 passed。git は未コミット。
+
+## 2026-09-08 — グラフ検出器を実 E07 タイルで走らせた + Method A の LSF 制約を撤回
+
+**入力（読むだけ）**: 実 E07 タイル
+`.../IMAGE00_AREA00/V00000000_L0_VX0000_VY0000_0_058.{json,spng}`、
+`e07/matlab/simdata8.mat`。
+**出力（作業ファイル、`~/private/tmp/` に置いた。リポジトリ外）**:
+`e07_pl_cell{6,30}.npy`、`e07_seg_cell30.npy`、`e07_poly_cell30.npy`、
+`memtest.parquet`、`mg5.parquet`、`vtx_*.parquet`。
+**変更（当リポジトリ所有）**: `module/graphdet/{detectlseg,integrate,
+branch,geom,config}.py`、`config/kekcc.yaml`、`scripts/kekcc_job.sh`、
+`tests/test_graphdet.py`、`README.md`、`STATUS.md`、`analysis-note.md`。
+
+**結果1: 実タイルで end-to-end が通った（約45分/view）。** そこまでに
+**厳密な最適化3件**（参照照合は完全に不変）:
+① `refine_endpoints` は動いた1本の列だけ再計算（N=800 の region で
+176.9→4.23 秒、指数 2.6→1.6）、② 段2 の端点探索を k-d tree に、
+③ `_resample`/`attachment_codes` の全 hit 走査を近傍クエリに。
+さらに段3 は密行列 7 GB・M² =8.4億ペアだったので疎行列＋junction hit
+走査に変えた。
+
+**結果2: `for_spacing()` の分類が間違っていた。** 全部スケールすると
+端点探索箱が 50→500 px になり実タイルの段2 が60分超で終わらない。
+シミュレーションで測ると block 6 で 90.2/66.0（全部）vs 87.8/**75.5**
+（間隔のみ）vs 85.4/75.9（なし）。弱いのは purity なので**間隔のみ**が
+正しい。実タイル段2 は 60分超 → **154 秒**。
+
+**結果3: 壁は格子ではなく密度。** 実 E07 は cell=30 でも折れ線が
+28,988本（シミュレーション 149本の約200倍）、branch point 8,118個
+（同13個）。cell=6 は 1 region 25分超で非現実的。次は**エクスポート
+段階の密度削減**か **`REGION_PX` を下げて 1 region 約163点に保つ**か。
+
+**結果4: Method A は LSF に投げられる（7月の結論を撤回）。**
+`config/kekcc.yaml`/`scripts/kekcc_job.sh` に致命的バグ3件（input パスの
+`E07/` 欠落、存在しない `module.analyze` の呼び出し、`n_jobs: 135` の
+メモリ超過）。実測 1 view **1.55 GB** / 2分。7月の「6.75 GB」は
+4 view 相当だった。→ `n_jobs: 2025`、出力先 `results/fullscan_v7`。
+**未投入**（投入は明示依頼待ち）。
+
+**結果5: mg=40 の④への影響を測った**（全域再解析の前提条件）。
+実 view 1枚で候補 193→2,533（13.1倍）。ただし **mg=5 では n≥8 の
+候補がゼロ、mg=40 では66個**。高多重度の星が原理的に見えていなかった。
+
+fast tests 22 passed（graphdet）。commits: 1717a10 / 35e52a7 / b2e79fe /
+dd393d1 / それ以降。

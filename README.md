@@ -324,8 +324,35 @@ still reconstructed, and all 14 true vertices still have a polyline
 vertex within 25 px. Stage 3 does not, and no constant fixes it:
 detectbunki decides a branch from hits shared within 1.5 px, and a
 coarse grid is precisely what removes them. So the answer was to sample
-finer, not to retune — `matlab_export._GRAPH_CELL_PX` is now 6 px. Its
-cost on real E07 data is **not** measured.
+finer, not to retune — `matlab_export._GRAPH_CELL_PX` is now 6 px.
+
+`for_spacing()` rescales **only** the hit-spacing group. Scaling the
+track-geometry gaps as well was measured to be worse at every usable
+spacing (at 6 px, 90.2%/66.0% against 87.8%/**75.5%**; purity is the
+weak side) and it makes stage 2 quadratic on real data by widening the
+endpoint search box tenfold.
+
+### On real E07 data
+
+One full-scan tile, end to end, at 30 px (2026-09-08):
+
+| step | result | time |
+|---|---|---|
+| export | 240,824 hits | 80 s |
+| stage 1 | 44,360 segments | 2,449 s |
+| stage 2 | 28,988 polylines | 163 s |
+| stage 3 | 20,511 groups, 8,118 branch points | 10 s |
+
+It runs, which took three exact optimisations to achieve (see the
+2026-09-08 analysis-note entry) — before them stage 1 alone
+extrapolated to 21 hours per view and stage 3 wanted a 7 GB dense
+matrix. **The output is not usable yet**, and the limit is track
+density rather than grid size: the simulation yields 149 polylines per
+view where real E07 yields 28,988, and 13 branch points where it
+yields 8,118. 6 px is worse still — one sub-region alone exceeds 25
+minutes in stage 1. Reducing density at export time, or shrinking
+`REGION_PX` so a sub-region holds the ~163 hits the constants were
+tuned for, is the next thing to try.
 
 `z_scale` is still the MATLAB `3.0 / 0.29`, which assumes 3 µm slices;
 E07 is 1.5 µm/slice, and `config.E07_Z_SCALE` holds the right value.
