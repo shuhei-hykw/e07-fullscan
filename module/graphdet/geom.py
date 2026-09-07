@@ -112,7 +112,11 @@ def min_distance_to_lineseg(
   """
   du = lseg[1] - lseg[0]
   length = float(np.linalg.norm(du))
-  du = du / length
+  # A zero-length segment (a polyline fitted from a single hit) gives
+  # NaN here, as it does in MATLAB. Callers treat a NaN distance as
+  # "no match" rather than propagating it.
+  with np.errstate(invalid="ignore", divide="ignore"):
+    du = du / length
   el = x @ du - lseg[0] @ du
   x0 = el[:, None] * du + lseg[0]
   return el, norma(x - x0, 1), length
@@ -229,10 +233,16 @@ def is_a_line3(lseg1: np.ndarray, lseg2: np.ndarray) -> float:
   Both segments are given "focus point first". Returns the (weighted)
   endpoint gap, or inf if the pair does not form one straight line.
   """
-  v1 = np.diff(lseg1, axis=0)[0]
-  v1 = v1 / np.linalg.norm(v1)
-  v2 = np.diff(lseg2, axis=0)[0]
-  v2 = v2 / np.linalg.norm(v2)
+  v1, v2 = np.diff(lseg1, axis=0)[0], np.diff(lseg2, axis=0)[0]
+  n1, n2 = np.linalg.norm(v1), np.linalg.norm(v2)
+  if n1 == 0 or n2 == 0:
+    # A degenerate segment has no direction to be collinear with.
+    # MATLAB divides by zero here and returns NaN, which its min()
+    # then skips -- except when EVERY candidate is NaN, where it
+    # returns index 1 and joins on a distance of NaN. Rejecting is
+    # what the skipping was for.
+    return np.inf
+  v1, v2 = v1 / n1, v2 / n2
   if v1 @ v2 > 0:  # pointing the same way: they cannot meet head to head
     return np.inf
 
@@ -271,10 +281,11 @@ def is_a_line3a(lseg1: np.ndarray, lseg2: np.ndarray) -> float:
   if _colmajor_argmin(d) != (0, 0):
     return np.inf  # some other endpoint pair is closer
 
-  v1 = np.diff(lseg1, axis=0)[0]
-  v1 = v1 / np.linalg.norm(v1)
-  v2 = np.diff(lseg2, axis=0)[0]
-  v2 = v2 / np.linalg.norm(v2)
+  v1, v2 = np.diff(lseg1, axis=0)[0], np.diff(lseg2, axis=0)[0]
+  n1, n2 = np.linalg.norm(v1), np.linalg.norm(v2)
+  if n1 == 0 or n2 == 0:
+    return np.inf
+  v1, v2 = v1 / n1, v2 / n2
   if v1 @ v2 > 0:
     return np.inf
 
@@ -297,11 +308,12 @@ def is_a_line3a(lseg1: np.ndarray, lseg2: np.ndarray) -> float:
   if er1[0] + er2[0] > _JOIN_MAX_KINK_PX:
     return np.inf
 
-  u1 = mid - lseg1[1]
-  u1 = u1 / np.linalg.norm(u1)
-  u2 = mid - lseg2[1]
-  u2 = u2 / np.linalg.norm(u2)
-  return float(np.degrees(np.arccos(np.clip(-(u1 @ u2), -1.0, 1.0))))
+  u1, u2 = mid - lseg1[1], mid - lseg2[1]
+  n1, n2 = np.linalg.norm(u1), np.linalg.norm(u2)
+  if n1 == 0 or n2 == 0:
+    return np.inf
+  return float(np.degrees(np.arccos(
+    np.clip(-((u1 / n1) @ (u2 / n2)), -1.0, 1.0))))
 
 
 # mindistance_to_polyline.m calls two segments equidistant within this.
@@ -340,7 +352,8 @@ def min_distance_to_polyline(
     el[:, i], er[:, i] = e, r
 
   # MATLAB's min skips NaN, which a zero-length segment produces.
-  er_cmp = np.where(np.isnan(er), np.inf, er)
+  with np.errstate(invalid="ignore"):
+    er_cmp = np.where(np.isnan(er), np.inf, er)
   c = er_cmp.argmin(axis=1)
   err = er_cmp[np.arange(n), c]
   # Among segments the point is equally far from, prefer the one it

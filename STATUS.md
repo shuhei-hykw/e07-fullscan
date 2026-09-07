@@ -19,7 +19,7 @@
 | Method | 内容 | ML | 状態 |
 |---|---|---|---|
 | **A** | Pure Python（`find_tracks`→`find_vertices`→`merge_vertex_slices`） | 不使用 | **主軸**。③は一通り最適化済み、④に未解決の重大問題 |
-| **B'** | グラフ検出器（`export_hits_grid`→`detectlseg`→`integrate_smallregions`→`detectbunki`） | 不使用 | **Python 移植中**。Phase 1-1/1-2 完了。生 hit → 軌跡が 24.5 秒/view |
+| **B'** | グラフ検出器（`export_hits_grid`→`detectlseg`→`integrate_smallregions`→`detectbunki`） | 不使用 | **移植完了（3段とも）**。シミュレーション真値で分岐点 efficiency 96.2% / purity 74.0% |
 | **C** | CNN 生画素セグメンテーション（別リポジトリ `e07-binary-segmentation`） | 使用 | **注力対象。弱い判別力が出た段階**（LOTO・セグメント単位で AUC 0.59、precision 49.5% > 基準率 43.6%）。実用には遠い |
 | **D** | 教師なしクラスタリング（KMeans/GMM） | 使用 | **失敗確定・打ち切り**（precision 46〜50%＝ほぼチャンス） |
 
@@ -35,14 +35,16 @@ Method A/B が共用する補助部品として、手作り特徴量分類器
 できるのは macbook の R2026a だけで、1 view 約9.2時間かかる。全域
 2025 view は約2.1年になり不可能。またシミュレーション用の定数が
 E07 に合っているか検証できない。この2点を同時に解く手として、
-`e07/matlab` の 1,096行を `module/graphdet/` へ移植中。依存は
+`e07/matlab` の 1,096行を `module/graphdet/` へ移植した。依存は
 numpy + scipy のみ。
 
 | 段 | MATLAB | 状態 |
 |---|---|---|
 | 1 | `detectlseg_smallregion` | **完了**（2026-08-22）14.0 秒/view |
 | 2 | `integrate_smallregions` + `pixellist2poly` | **完了**（2026-09-07）10.5 秒/view |
-| 3 | `detectbunki` | 次 |
+| 3 | `detectbunki` | **完了**（2026-09-07）1.0 秒/view |
+
+**移植は完了。次は Phase 2（E07 への較正）。**
 
 **検証に MATLAB は要らない。** `e07/matlab/work1.mat` が入出力の対を
 持っている（シミュレーション事象1の 41,609点 → `lseg` 1,239線分 →
@@ -63,8 +65,24 @@ numpy + scipy のみ。
   150本・最悪 76 px、「常に除く」だと hit ゼロの折れ線が出て落ちる。
   詳細は analysis-note.md 2026-09-07。
 
-`simdata8.mat` の `Summary` から**真の分岐点14個**を復元できるので、
-Phase 1-3 でこのパイプラインの efficiency/purity を初めて測れる。
+### このパイプラインの実力（2026-09-07 初測定）
+
+`simdata8.mat` の `Summary` から**真の分岐点**を復元して測った
+（10事象、真 130 個 vs 再構成 215 個、距離は等方化。
+`python scripts/eval_branches.py --events 1-10`）:
+
+| 一致半径 | efficiency | purity |
+|---|---|---|
+| 10 px | 93.1% | 55.3% |
+| **25 px** | **96.2%** | **74.0%** |
+| 100 px | 96.2% | 85.1% |
+
+**efficiency は高く、弱点は purity**（真 130 に対し 215 個を出す）。
+参考までに Method A の④は 1タイル 196〜380 候補に対し正解 1 個
+なので、**桁違いに良い**。ただし一致した 125 個のうち 4 個は別の
+真の分岐点と同じ頂点に潰れており、分解能はこの数字ほど良くない。
+`branch_points()` は移植ではなく追加（`detectbunki` はグループしか
+返さない）。詳細は analysis-note.md 2026-09-07。
 
 **定数は MATLAB のまま**にしてある。一致が崩れたら移植のバグだと
 判別できるようにするため。実データ用の較正は Phase 2 で別途行う。
@@ -232,10 +250,13 @@ hough_mg=40, grain_radius=15, px_scale_um=0.29`
 
 ## 次にやる候補
 
-- **Phase 1-3: `detectbunki` の移植**（現在の最優先）。
-  `simdata8.mat` の `Summary` から**真の分岐点14個**（多重度 最大6）を
-  復元できるので、**このパイプラインの efficiency/purity をここで
-  初めて測れる**。段1・段2 だけでは「MATLAB と同じか」しか言えない。
+- **Phase 2: 定数を E07 に較正**（現在の最優先）。目的関数は
+  Phase 1-3 で決まった：**真の分岐点に対する purity**（efficiency は
+  既に 96.2%、伸ばすべきは purity 74.0%）。まず効くのは
+  `geom.MATLAB_Z_SCALE`（E07 は 1.5µm/スライスなので z が2倍過大）と
+  `_GRID_CELL_PX = 30`（実データの点間隔がシミュレーションの10倍粗い。
+  移植で detectlseg が桁で速くなったので下げられる）。
+  ここで要る人手は **GT vertex のクリックだけ**。
 - **Phase 2: 定数を E07 に較正**。z_step 1.5µm、`_GRID_CELL_PX`、
   直線性の TH。目的関数は既知 vertex での分岐グループ数と順位。
   ここで要る人手は **GT vertex のクリックだけ**（T004_3body /

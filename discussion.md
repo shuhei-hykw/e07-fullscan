@@ -1160,3 +1160,39 @@ scale to a view.
 Changed: `module/graphdet/{integrate,polyfit,geom,__init__}.py`,
 `scripts/check_polylines_reference.py`, `tests/test_graphdet.py`,
 `README.md`, `STATUS.md`, `analysis-note.md`. Still uncommitted.
+
+## 2026-09-07 — Phase 1-3: porting `detectbunki` and the first efficiency/purity measurement
+
+**Inputs (read-only)**: `e07/matlab/detectbunki.m`,
+`e07/matlab/simdata8.mat` (`Summary` for 10 events, `dspl` hits).
+**Outputs (new, owned by this repo)**: `module/graphdet/branch.py`,
+`scripts/eval_branches.py`; updates to `__init__.py`,
+`tests/test_graphdet.py`, `README.md`, `STATUS.md`, `analysis-note.md`.
+
+**Result**: all three stages are now ported. Against the 130 true branch
+points of the 10 simulation events, matching at 25 px isotropic:
+**efficiency 96.2%, purity 74.0%** (93.1% / 55.3% at 10 px). Efficiency
+is fine; purity is the weak side — 215 vertices found for 130 real ones.
+4 of the 125 matched truths collapse onto a shared reconstructed vertex,
+so the resolution is worse than the efficiency figure suggests.
+
+**Two porting judgements**:
+- MATLAB's `linkage` + `cluster` at a 0.5 cutoff over a 0/1 distance
+  matrix is, for the default single linkage, exactly connected
+  components. Replaced the dense M x M distance matrix with a BFS.
+- `branch_points()` is an **addition, not a port**. detectbunki returns
+  groups and never coordinates, but coordinates are what E07 needs, so
+  they are derived from the shared hits the grouping already uses.
+
+**One more MATLAB defect**: a degenerate zero-length segment makes
+`v./norm(v)` NaN, which `min` normally skips — but when EVERY candidate
+is NaN, `min` returns NaN with index 1 and `~isinf(NaN)` is true, so it
+joins on a NaN distance. The port rejects degenerate segments outright.
+Event 1, the one used for the stage-2 reference check, has no
+zero-length segments, so that check is unchanged.
+
+**Timing caveat**: events 6-10 took ~5x longer than events 1-5, but all
+three stages slowed by the same ratio — that is the work server's 4-core
+cap, not the data. The unthrottled figure is 24.5 s/view.
+
+68 fast tests pass. Still uncommitted.

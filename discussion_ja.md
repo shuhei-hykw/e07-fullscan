@@ -1084,3 +1084,36 @@ hit ゼロの折れ線が出て例外。採用版は本数が参照と一致し�
 変更: `module/graphdet/{integrate,polyfit,geom,__init__}.py`、
 `scripts/check_polylines_reference.py`、`tests/test_graphdet.py`、
 `README.md`、`STATUS.md`、`analysis-note.md`。git は未コミット。
+
+## 2026-09-07 — Phase 1-3: `detectbunki` 移植 + efficiency/purity の初測定
+
+**入力（読むだけ）**: `e07/matlab/detectbunki.m`、`e07/matlab/simdata8.mat`
+（`Summary` 10事象分、`dspl` 間引き hit）。
+**出力（新規・当リポジトリ所有）**: `module/graphdet/branch.py`、
+`scripts/eval_branches.py`。`__init__.py`・`tests/test_graphdet.py`・
+`README.md`・`STATUS.md`・`analysis-note.md` を更新。
+
+**結果**: 移植3段が揃った。10事象の真の分岐点 130 個に対し、
+一致半径 25 px で **efficiency 96.2% / purity 74.0%**（10 px なら
+93.1% / 55.3%）。**efficiency は十分、弱点は purity**（真 130 に対し
+215 個を出す）。一致した 125 個のうち 4 個は別の真の分岐点と同じ
+再構成頂点に潰れており、分解能はこの数字ほど良くない。
+
+**移植上の判断2件**:
+- MATLAB の `linkage`+`cluster`(cutoff 0.5) は 0/1 距離・single linkage
+  なので**連結成分そのもの**。密な M×M 距離行列をやめて BFS にした。
+- `branch_points()` は**移植ではなく追加**。`detectbunki` はグループしか
+  返さないが E07 が要るのは座標なので、グループ化が既に使っている
+  共有 hit の重心から導出した。
+
+**MATLAB のバグをもう1件**: 退化した長さ0の線分に対し `v./norm(v)` が
+NaN を作り、`min` が NaN を飛ばすことで通常は無害だが、**候補が全部
+NaN のとき `min` は NaN と添字1を返し `~isinf(NaN)` が真なので誤接続
+する**。移植側は退化線分を inf として明示的に弾いた。事象1（参照照合に
+使う事象）には長さ0の線分が無いので、段2の照合結果は不変。
+
+**測定時の注意**: 事象6〜10 の所要が事象1〜5 の約5倍だが、これはデータ
+ではなく**ワークサーバの4コア制限**（3段すべてが同じ比率で遅くなって
+いる）。素の値は 24.5 秒/view。
+
+fast tests 68 passed。git は未コミット。

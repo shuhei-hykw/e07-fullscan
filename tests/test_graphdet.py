@@ -12,8 +12,9 @@ import numpy as np
 import pytest
 
 from module.graphdet import (
-  detect_lseg_smallregion, detect_lseg_view, inflection_nodes,
-  integrate_smallregions, iter_regions, split_into_linear_components,
+  branch_points, detect_branches, detect_lseg_smallregion,
+  detect_lseg_view, inflection_nodes, integrate_smallregions,
+  iter_regions, split_into_linear_components,
 )
 
 MATLAB_DIR = Path(os.environ.get(
@@ -203,3 +204,55 @@ def test_reference_polylines_match_matlab():
   got = integrate_smallregions(x, lseg)
   assert len(got) == len(ref)
   assert _worst_hausdorff(got, ref) < _MAX_POLY_HAUSDORFF_PX
+
+
+def test_no_polylines_gives_no_groups():
+  groups, ids = detect_branches([], np.zeros((0, 3)))
+  assert groups == [] and ids.size == 0
+
+
+def _tee_hits():
+  """A straight track with a second one leaving its middle."""
+  stem = _line(60, (100, 500, 40), (5, 0, 0))
+  branch = _line(40, (250, 502, 40), (2, 4, 0))
+  return stem, branch, np.vstack([stem, branch])
+
+
+def test_branching_tracks_land_in_one_group():
+  stem, branch, hits = _tee_hits()
+  polys = [np.array([stem[0], stem[-1]]),
+           np.array([branch[0], branch[-1]])]
+  groups, ids = detect_branches(polys, hits)
+  assert len(groups) == 2
+  assert ids[0] == ids[1] == 1
+
+
+def test_separate_tracks_stay_in_separate_groups():
+  a = _line(40, (100, 100, 10), (5, 0, 0))
+  b = _line(40, (100, 900, 70), (5, 0, 0))
+  hits = np.vstack([a, b])
+  polys = [np.array([a[0], a[-1]]), np.array([b[0], b[-1]])]
+  _, ids = detect_branches(polys, hits)
+  assert set(ids.tolist()) == {1, 2}
+
+
+def test_branch_point_lands_on_the_junction():
+  stem, branch, hits = _tee_hits()
+  polys = [np.array([stem[0], stem[-1]]),
+           np.array([branch[0], branch[-1]])]
+  points, mult = branch_points(polys, hits)
+  assert points.shape[0] == 1
+  assert mult[0] == 2
+  assert np.linalg.norm(points[0] - branch[0]) < 20.0
+
+
+def test_groups_come_back_largest_first():
+  a = _line(40, (100, 100, 10), (5, 0, 0))
+  b = _line(40, (200, 102, 10), (0, 5, 0))     # branches off a
+  c = _line(40, (100, 900, 70), (5, 0, 0))     # alone
+  hits = np.vstack([a, b, c])
+  polys = [np.array([c[0], c[-1]]), np.array([a[0], a[-1]]),
+           np.array([b[0], b[-1]])]
+  _, ids = detect_branches(polys, hits)
+  # The two-track group must be group 1 and come first.
+  assert ids.tolist() == [1, 1, 2]

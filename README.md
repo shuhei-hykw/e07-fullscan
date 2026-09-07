@@ -50,7 +50,8 @@ module/
 │   ├── geom.py            # norma/isaline*/mindistance*/L2lseg/lseg2L
 │   ├── detectlseg.py      # detect_lseg_smallregion(), detect_lseg_view()
 │   ├── polyfit.py         # pixellist_to_poly(), inflection_nodes()
-│   └── integrate.py       # integrate_smallregions()
+│   ├── integrate.py       # integrate_smallregions()
+│   └── branch.py          # detect_branches(), branch_points()
 └── server/          # Web viewer (flask)
 ```
 
@@ -199,7 +200,7 @@ A Python port of the detector in `e07/matlab`, so the graph stages can
 run on kekcc (no MATLAB is installed there) and so their constants can
 be retuned against E07 data. Depends only on numpy and scipy.
 
-Stages 1 and 2 are ported; `detectbunki` (branch grouping) follows.
+All three stages are ported.
 
 `detect_lseg_smallregion()` (from `detectlseg_smallregion.m`) turns one
 128×128×80 sub-region of hits into 3-D line segments, and
@@ -208,12 +209,23 @@ Stages 1 and 2 are ported; `detectbunki` (branch grouping) follows.
 whole tracks — chaining them end to end, re-fitting each chain against
 the hits it owns (`pixellist_to_poly()`, from `pixellist2poly.m`), and
 finally joining polylines across the gaps that chaining cannot bridge.
+`detect_branches()` (from `detectbunki.m`) then groups tracks that meet:
+a hit lying on one track's body and at another's end is evidence of a
+branch, and the groups are the connected components of that relation.
 
 ```python
-from module.graphdet import detect_lseg_view, integrate_smallregions
-segments, per_region = detect_lseg_view(hits)   # (2, 3, M) endpoints
-tracks = integrate_smallregions(hits, segments) # list of (K+1, 3)
+from module.graphdet import (
+  branch_points, detect_branches, detect_lseg_view, integrate_smallregions)
+segments, per_region = detect_lseg_view(hits)    # (2, 3, M) endpoints
+tracks = integrate_smallregions(hits, segments)  # list of (K+1, 3)
+grouped, group_id = detect_branches(tracks, hits)
+vertices, multiplicity = branch_points(tracks, hits)
 ```
+
+`branch_points()` is **not** in the MATLAB original, which returns
+groups and never vertex coordinates. It derives them from the same
+shared hits the grouping already found, because coordinates are what
+the E07 analysis needs.
 
 ### Checking the port
 
@@ -227,6 +239,10 @@ python scripts/check_lseg_reference.py        # stage 1
 python scripts/check_polylines_reference.py   # stage 2, from ref segments
 pytest -m slow tests/test_graphdet.py         # both, as tests
 ```
+
+Stage 3 has no MATLAB reference to compare against — `detect_tracks.m`
+never saves detectbunki's output. It is checked against the truth
+instead (below), which is the more useful test anyway.
 
 Stage 1 reproduces all 1,239 segments with a worst endpoint error of
 2.5e-13 px, in 14 s for the whole view against roughly 9 h for the
@@ -243,6 +259,31 @@ includes those hits deterministically (`_ELL_SLACK_PX`), which is what
 the comparison means in exact arithmetic; taking MATLAB's literal `>= 0`
 instead shrinks a fit by ~1 px per pass and can starve a short polyline
 of hits entirely (analysis-note.md, 2026-09-07).
+
+### How well it works
+
+Agreement with MATLAB says the port is faithful, not that the detector
+is any good. `simdata8.mat`'s `Summary` gives the truth: an endpoint
+shared by two or more simulated tracks is a real branch point, 130 of
+them across the 10 events.
+
+```bash
+python scripts/eval_branches.py --events 1-10
+```
+
+Distances are isotropic (one slice is ~10 px at the simulation's 3 µm
+spacing), matching at 25 px:
+
+| | value |
+|---|---|
+| efficiency | **96.2%** (125/130) |
+| purity | **74.0%** (159/215) |
+
+Efficiency is high; purity is the weak side — 215 vertices found for
+130 real ones. Two caveats: 4 of the 125 matched truths collapse onto a
+shared reconstructed vertex, so the resolution is worse than the
+efficiency suggests, and a point where three track bodies cross passes
+the `1 + 1 + 1 > 2` code test and is reported as a branch.
 
 ### Constants
 
