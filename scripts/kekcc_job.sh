@@ -33,7 +33,7 @@ echo "Start   : $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
 echo "Output  : $OUT_FILE"           | tee -a "$LOG_FILE"
 echo "---"                            | tee -a "$LOG_FILE"
 
-python -m module.analyze \
+python -m module.pipeline \
   "$DATA_DIR" \
   -o "$OUT_FILE" \
   --chunk-id  "$CHUNK_ID" \

@@ -1,16 +1,30 @@
 job:
   name:     e07full     # LSF job name (array index appended automatically)
-  queue:    s            # s: priority 120 (highest); l has massive backlog
-  n_cores:  2            # CPU slots per job (-n); OpenCV threading に使用
-  mem_mb:   4000         # memory limit per job in MB (-M)
-  walltime: "01:00"      # wall time HH:MM (-W)
-  n_jobs:   135          # 2025/135=15 views/job (~9 min); sweet spot for s queue
+  queue:    s            # s: 300 min walltime, 150 min CPU; l has a backlog
+  n_cores:  2            # CPU slots per job (-n); used by OpenCV threading
+  mem_mb:   4000         # memory limit per job in MB (-M). This is also the
+                         # HARD cap on every kekcc queue -- asking for more
+                         # is not an option, so the job has to fit.
+  walltime: "01:00"      # wall time HH:MM (-W); one view takes ~2 min
+  n_jobs:   2025         # ONE view per job. Measured 2026-09-08 on a real
+                         # E07 tile: 1 view peaks at 1.55 GB, 2 views at
+                         # 4.35 GB, because results accumulate in memory
+                         # until the chunk is written. Two views per job
+                         # therefore already blows the 4 GB cap. The older
+                         # value of 135 (15 views/job) is what produced the
+                         # "Method A cannot go to LSF, it needs 6.75 GB"
+                         # conclusion; per view it fits comfortably.
+                         # Raising this again requires writing each view
+                         # out as it finishes instead of at the end.
 
 data:
-  input: /gpfs/group/had/sks/E07/tohoku/fullscan/MOD108/PL12/tohoku-v1/AREA00/IMAGE00_AREA00
+  # NOTE: the tree has an E07/ level between fullscan/ and MOD108/. It was
+  # missing here until 2026-09-08 and every job would have died on it.
+  input: /gpfs/group/had/sks/E07/tohoku/fullscan/E07/MOD108/PL12/tohoku-v1/AREA00/IMAGE00_AREA00
   output_dir: results
   total_views: 2025
 
 analysis:
   config:  config/default.yaml
-  workers: 1   # intra-job parallelism; 1 to avoid OOM (parallelism = n_jobs)
+  workers: 1   # intra-job parallelism; 1 to stay inside mem_mb (parallelism
+               # comes from n_jobs)
