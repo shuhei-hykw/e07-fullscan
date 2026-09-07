@@ -263,6 +263,16 @@ def refine_endpoints(
   lseg = np.zeros((2, 3, 0))
   for _ in range(_REFINE_PASSES):
     lseg, _, _ = segments_from_membership(x, e, _REFINE_FIT_TH)
+    # Shifting one endpoint changes that segment's column of the
+    # membership matrix and nothing else, so the other columns are
+    # computed once per pass and only the moving column is redone.
+    # MATLAB recomputes all of them for every candidate shift, which
+    # is the whole cost of stage 1: 97% of a real E07 sub-region's
+    # runtime before this, and it turns an O(N*M^2) pass into O(N*M).
+    _, _, dist = membership_from_segments(x, lseg, th, _ALONG_TOL)
+    inside = dist < th
+    counts = inside.sum(axis=1)
+    last: tuple | None = None
     moved = False
     for i in range(lseg.shape[2]):
       if np.isnan(lseg[:, :, i]).any():
@@ -270,16 +280,28 @@ def refine_endpoints(
       for j in range(2):
         dv = lseg[j, :, i] - lseg[1 - j, :, i]
         dv = dv / np.linalg.norm(dv)
-        lseg2 = lseg.copy()
+        others = counts - inside[:, i]
+        one = lseg[:, :, i:i + 1].copy()
         err = np.zeros(dl.size)
+        cols = []
         for k in range(dl.size):
-          lseg2[j, :, i] = lseg[j, :, i] + dv * dl[k]
-          _, e, _ = membership_from_segments(x, lseg2, th, _ALONG_TOL)
-          err[k] = np.count_nonzero(e.sum(axis=1) != 1)
+          one[j, :, 0] = lseg[j, :, i] + dv * dl[k]
+          _, _, dk = membership_from_segments(x, one, th, _ALONG_TOL)
+          cols.append(dk[:, 0] < th)
+          err[k] = np.count_nonzero(others + cols[k] != 1)
         k = int(np.argmin(err))
         lseg[j, :, i] = lseg[j, :, i] + dv * dl[k]
+        inside[:, i] = cols[k]
+        counts = others + cols[k]
+        last = (i, cols[-1])
         if dl[k] != 0:
           moved = True
+    if last is not None:
+      # MATLAB leaves `e` holding the LAST candidate's membership, not
+      # the chosen one, and the next pass fits its segments to that.
+      # Reproduced rather than corrected.
+      e = inside.copy()
+      e[:, last[0]] = last[1]
     if not moved:
       dl = dl / 2
     if dl[-1] < cfg.refine_dl_min:
