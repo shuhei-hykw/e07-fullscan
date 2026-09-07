@@ -83,11 +83,25 @@ _ORIGIN_OFFSET = 1
 _MODE_PIXEL = "pixel"
 _MODE_GRID = "grid"
 _DEFAULT_MODE = _MODE_GRID
-# Spatial bin size for grid mode (px). Chosen from a density/runtime sweep
-# on KISO (analysis-note.md, 2026-07-11 entry): keeps detectlseg_smallregion
-# near its proven ~2.5h/tile (connected-component mode) run time while
-# guaranteeing >=1 sample per ~_GRID_CELL_PX along any track, however long.
+# Spatial bin size for the noise filters and the viewer overlay (px).
+# Chosen from a density/runtime sweep on KISO (analysis-note.md,
+# 2026-07-11): keeps MATLAB's detectlseg_smallregion near its proven
+# ~2.5h/tile run time while guaranteeing >=1 sample per cell along any
+# track, however long.
 _GRID_CELL_PX = 30
+# Spatial bin size for the hits handed to the graph detector (px). It
+# used to be _GRID_CELL_PX for the runtime reason above, but that
+# reason is gone: module.graphdet runs stage 1 roughly 250x faster
+# than MATLAB. 30 px is measured to be far too coarse -- re-thinning
+# the MATLAB simulation to that spacing drops branch-point purity from
+# 78.8% to 17.5% and efficiency from 92.7% to 53.7%, and no constant
+# recovers it, because detectbunki decides a branch from hits shared
+# within 1.5 px and those are exactly what a coarse grid removes
+# (analysis-note.md, 2026-09-07). The same sweep puts the knee at
+# 6 px: 75.9% purity, 85.4% efficiency.
+# NOTE: the cost of 6 px on real E07 data is NOT measured. The
+# simulation has 159 tracks per view; a real E07 view is far denser.
+_GRAPH_CELL_PX = 6
 # Noise-filter parameters (see remove_unaligned_noise). Chosen from a
 # sweep on KISO (analysis-note.md, 2026-07-12): removes ~19% of the point
 # budget while a vertex-region visual check confirmed real track-aligned
@@ -431,7 +445,8 @@ def export_hits_grid(
   noise_amax: int = _NOISE_AMAX,
   noise_cmp: int = _NOISE_CMP,
   noise_amax_upper: int = _NOISE_AMAX_UPPER,
-  cell: int = _GRID_CELL_PX,
+  cell: int = _GRAPH_CELL_PX,
+  noise_cell: int = _GRID_CELL_PX,
   denoise_method: str = "legacy",
   classifier=None,
 ) -> np.ndarray:
@@ -440,7 +455,8 @@ def export_hits_grid(
 
   Each slice is binarized independently, then reduced to one
   intensity-weighted hit per occupied ``cell``-px cell within each
-  connected component. Cuts the KISO tile's point count from 12.36M raw
+  connected component. ``noise_cell`` is kept separate because the
+  noise filters were tuned at 30 px and the sampling grid was not. Cuts the KISO tile's point count from 12.36M raw
   pixels to ~130k (~95x): a full 256-region ``detectlseg_smallregion`` run
   completed in 5.5h (see analysis-note.md, 2026-07-12). ``n`` is the
   occupied pixel count per hit.
@@ -471,10 +487,10 @@ def export_hits_grid(
       noise_amax_upper,
     )
     if denoise_method == "legacy":
-      binary = remove_unaligned_noise(binary, cell=cell)
+      binary = remove_unaligned_noise(binary, cell=noise_cell)
     elif denoise_method in ("threshold", "classifier"):
       binary = remove_unaligned_noise_v2(
-        binary, fog, cell=cell, method=denoise_method,
+        binary, fog, cell=noise_cell, method=denoise_method,
         classifier=classifier)
     elif denoise_method != "off":
       raise ValueError(f"unknown denoise_method: {denoise_method!r}")
@@ -525,7 +541,7 @@ def main(argv: list[str] | None = None) -> int:
          "pixel: one hit per raw binary pixel (dense, for comparison)",
   )
   p.add_argument(
-    "--cell-px", type=int, default=_GRID_CELL_PX,
+    "--cell-px", type=int, default=_GRAPH_CELL_PX,
     help="grid mode: spatial bin size in px (default: %(default)s)",
   )
   p.add_argument(

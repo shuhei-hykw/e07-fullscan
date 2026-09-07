@@ -21,16 +21,9 @@ from __future__ import annotations
 
 import numpy as np
 
+from .config import MATLAB_CONFIG, DetectorConfig
 from .geom import is_a_line3, is_a_line3a, min_distance_to_polyline, norma
 from .polyfit import pixellist_to_poly
-
-# Half-widths (px, px, slices) of the box searched for an endpoint to
-# continue a track into. The z half-width is much tighter because a
-# slice step is ~10x a pixel.
-_NEIGHBOUR_BOX = np.array([50.0, 50.0, 5.0])
-# Perpendicular distance (px) within which a hit is claimed by a
-# polyline when re-fitting it.
-_RESAMPLE_TH = 2.0
 # Slack (px) on the "is this hit inside the polyline's extent?" test.
 # A polyline's end vertex IS the projection of its outermost hit, so
 # that hit sits at arc length exactly 0 (or exactly lpoly) in exact
@@ -49,14 +42,19 @@ _MAX_SHARED_FRACTION = 0.8
 # two only apply when the candidate is the ONLY plausible
 # continuation, and the loosest also requires the other polyline to be
 # short: a stub has a poorly determined direction, so its angle is
-# weak evidence either way.
+# weak evidence either way. Angles, so they do not scale with spacing
+# and stay out of DetectorConfig.
 _JOIN_ANGLE_DEG = 5.0
 _JOIN_ANGLE_SOLE_DEG = 20.0
 _JOIN_ANGLE_SOLE_SHORT_DEG = 40.0
-_JOIN_SHORT_POLY_PX = 20.0
 
 
-def _endpoints_near(lseg: np.ndarray, point: np.ndarray) -> np.ndarray:
+def _neighbour_box(cfg: DetectorConfig) -> np.ndarray:
+  return np.array([cfg.neighbour_xy, cfg.neighbour_xy, cfg.neighbour_z])
+
+
+def _endpoints_near(lseg: np.ndarray, point: np.ndarray,
+                     box: np.ndarray) -> np.ndarray:
   """(2, M) mask of segment endpoints inside the search box.
 
   Consumed segments are marked NaN, and every NaN comparison is false,
@@ -64,8 +62,7 @@ def _endpoints_near(lseg: np.ndarray, point: np.ndarray) -> np.ndarray:
   """
   with np.errstate(invalid="ignore"):
     return np.all(
-      np.abs(lseg - point[None, :, None]) < _NEIGHBOUR_BOX[None, :, None],
-      axis=1)
+      np.abs(lseg - point[None, :, None]) < box[None, :, None], axis=1)
 
 
 def _candidates(mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -78,8 +75,10 @@ def _candidates(mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
   return np.nonzero(mask.T)
 
 
-def _chain_segments(lseg: np.ndarray) -> list[np.ndarray]:
+def _chain_segments(lseg: np.ndarray,
+                     cfg: DetectorConfig = MATLAB_CONFIG) -> list:
   """Pass 1: chain segments into polylines, longest seed first."""
+  box = _neighbour_box(cfg)
   lengths = norma(np.diff(lseg, axis=0)[0], 0)
   order = np.argsort(-lengths, kind="stable")
   lengths, lseg = lengths[order], lseg[:, :, order].copy()
@@ -96,12 +95,12 @@ def _chain_segments(lseg: np.ndarray) -> list[np.ndarray]:
         # its last segment: a chain that has already bent should not
         # keep growing along its latest piece.
         stub = poly[[-1, 0]] if forward else poly[[0, -1]]
-        mask = _endpoints_near(lseg, stub[0])
+        mask = _endpoints_near(lseg, stub[0], box)
         if not mask.any():
           break
         segs, ends = _candidates(mask)
         d = np.array([
-          is_a_line3(stub, lseg[[e, 1 - e], :, s])
+          is_a_line3(stub, lseg[[e, 1 - e], :, s], cfg)
           for s, e in zip(segs, ends)])
         k = int(np.argmin(d))
         if np.isinf(d[k]):
@@ -116,8 +115,8 @@ def _chain_segments(lseg: np.ndarray) -> list[np.ndarray]:
 
 
 def _resample(
-  polylines: list[np.ndarray], x: np.ndarray, th: float = _RESAMPLE_TH,
-  dim: int = 3,
+  polylines: list[np.ndarray], x: np.ndarray,
+  cfg: DetectorConfig = MATLAB_CONFIG, dim: int = 3,
 ) -> tuple[list[np.ndarray], np.ndarray, np.ndarray]:
   """Port of resamplingpoly: re-fit each polyline to the hits it owns.
 
@@ -125,6 +124,7 @@ def _resample(
   over the input (the caller needs the mask to know which entries
   vanished).
   """
+  th = cfg.resample_th
   n, m = x.shape[0], len(polylines)
   lengths = np.zeros(m)
   owned = np.zeros((n, m), dtype=bool)
@@ -161,10 +161,12 @@ def _resample(
 
 def _join_polylines(
   polylines: list[np.ndarray], lengths: np.ndarray,
+  cfg: DetectorConfig = MATLAB_CONFIG,
 ) -> tuple[list[np.ndarray], list[bool]]:
   """Pass 3: join whole polylines end to end on the angle criterion."""
   if not polylines:
     return [], []
+  box = _neighbour_box(cfg)
   lseg = np.stack([p[[0, -1]] for p in polylines], axis=2).astype(float)
   joined: list[np.ndarray] = []
   changed: list[bool] = []
@@ -181,19 +183,19 @@ def _join_polylines(
         # polyline may genuinely bend, so its chord says nothing about
         # which way it leaves either end.
         stub = joined[-1][[-1, -2]] if forward else joined[-1][[0, 1]]
-        mask = _endpoints_near(lseg, stub[0])
+        mask = _endpoints_near(lseg, stub[0], box)
         if not mask.any():
           break
         segs, ends = _candidates(mask)
         d = np.array([
           is_a_line3a(
-            stub, polylines[s][[0, 1] if e == 0 else [-1, -2]])
+            stub, polylines[s][[0, 1] if e == 0 else [-1, -2]], cfg)
           for s, e in zip(segs, ends)])
         k = int(np.argmin(d))
         sole = int(np.isfinite(d).sum()) == 1
         if not (d[k] < _JOIN_ANGLE_DEG
                 or (sole and d[k] < _JOIN_ANGLE_SOLE_DEG)
-                or (sole and lengths[segs[k]] < _JOIN_SHORT_POLY_PX
+                or (sole and lengths[segs[k]] < cfg.join_short_poly
                     and d[k] < _JOIN_ANGLE_SOLE_SHORT_DEG)):
           break
         other = polylines[segs[k]]
@@ -211,6 +213,7 @@ def _join_polylines(
 
 def integrate_smallregions(
   x: np.ndarray, lseg: np.ndarray,
+  cfg: DetectorConfig = MATLAB_CONFIG,
 ) -> list[np.ndarray]:
   """Port of integrate_smallregions.m.
 
@@ -219,20 +222,20 @@ def integrate_smallregions(
   polyline vertices per reconstructed track.
   """
   x = np.asarray(x, dtype=float)
-  polylines = _chain_segments(np.asarray(lseg, dtype=float))
-  polylines, lengths, _ = _resample(polylines, x)
+  polylines = _chain_segments(np.asarray(lseg, dtype=float), cfg)
+  polylines, lengths, _ = _resample(polylines, x, cfg)
   order = np.argsort(-lengths, kind="stable")
   polylines = [polylines[i] for i in order]
   lengths = lengths[order]
 
-  polylines, changed = _join_polylines(polylines, lengths)
+  polylines, changed = _join_polylines(polylines, lengths, cfg)
   idx = [i for i, c in enumerate(changed) if c]
   if idx:
     # MATLAB writes the re-fit polylines straight back over the ones
     # that changed, which errors out if _resample dropped any. It
     # never did on the reference run; here a dropped polyline is
     # simply removed, which is what the assignment was meant to do.
-    refit, _, keep = _resample([polylines[i] for i in idx], x)
+    refit, _, keep = _resample([polylines[i] for i in idx], x, cfg)
     for i, k in zip(idx, keep):
       polylines[i] = None if not k else refit.pop(0)
     polylines = [p for p in polylines if p is not None]

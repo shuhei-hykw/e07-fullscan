@@ -1196,3 +1196,47 @@ three stages slowed by the same ratio — that is the work server's 4-core
 cap, not the data. The unthrottled figure is 24.5 s/view.
 
 68 fast tests pass. Still uncommitted.
+
+## 2026-09-07 — Phase 2: calibrating the export grid; 30 px measured to be far too coarse
+
+**Inputs (read-only)**: `e07/matlab/{mabiki.m,simdata8.mat}`.
+**Outputs (new, owned by this repo)**: `module/graphdet/{config,downsample,
+simeval}.py`, `scripts/scan_sampling.py`; updates to
+`module/graphdet/{geom,detectlseg,integrate,branch,__init__}.py`,
+`module/matlab_export.py`, `tests/test_graphdet.py`, `README.md`,
+`STATUS.md`, `analysis-note.md`.
+
+**Conclusion**: `matlab_export._GRID_CELL_PX = 30` drops branch-point
+purity from 78.8% to 17.5%. Measured by re-thinning the same simulation
+at other block sizes — the truth comes from `Summary`, so it survives
+the thinning. The knee is at 6 px. The 30 px value was chosen on
+2026-07-11 to keep MATLAB near 2.5 h/tile; the port is ~250x faster, so
+that constraint is gone. `_GRAPH_CELL_PX = 6` is now the export and CLI
+default, with `noise_cell` keeping the noise filters at their own
+separately tuned 30 px.
+
+**Which stage breaks**: stages 1 and 2 survive the coarse grid (98% of
+track length, all 14 true vertices still have a polyline vertex within
+25 px). Only stage 3 fails, and no constant fixes it: detectbunki
+decides a branch from hits shared within 1.5 px, which a coarse grid
+removes. A geometric alternative (polyline endpoint near another
+polyline) was prototyped and rejected — it restores efficiency to 83%
+but purity only to 26%.
+
+**Scaffolding**: `DetectorConfig` collects every distance constant. Its
+organising idea is the split between transverse tolerances and length
+scales; `for_spacing()` rescales only the latter. Defaults are the
+MATLAB values, so all reference checks are unchanged (stage 1: 1,239/1,239
+segments, worst 2.5e-13 px; stage 2: 149 polylines; stage 3: 92.9%
+efficiency / 92.3% purity). `mabiki.m` is ported too and reproduces the
+stored `dspl` exactly.
+
+**Unmeasured risk**: the cost of 6 px on real E07 data. The simulation
+has 159 tracks per view and real E07 is far denser — measure one tile
+before running an export for real. `z_scale` is also still the MATLAB
+value; `E07_Z_SCALE` is defined but not yet the default.
+
+**Timing caveat**: the work server's 4-core cap made the later sweep
+rows 3-5x slower than the earlier ones. Do not trust the absolute times.
+
+22 fast graphdet tests pass, 2 slow. Still uncommitted.

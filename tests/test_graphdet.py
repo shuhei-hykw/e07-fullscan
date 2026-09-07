@@ -12,9 +12,9 @@ import numpy as np
 import pytest
 
 from module.graphdet import (
-  branch_points, detect_branches, detect_lseg_smallregion,
+  MATLAB_CONFIG, branch_points, detect_branches, detect_lseg_smallregion,
   detect_lseg_view, inflection_nodes, integrate_smallregions,
-  iter_regions, split_into_linear_components,
+  iter_regions, mabiki, split_into_linear_components, true_branch_points,
 )
 
 MATLAB_DIR = Path(os.environ.get(
@@ -256,3 +256,62 @@ def test_groups_come_back_largest_first():
   _, ids = detect_branches(polys, hits)
   # The two-track group must be group 1 and come first.
   assert ids.tolist() == [1, 1, 2]
+
+
+def test_mabiki_matches_the_stored_downsampling():
+  """The reference dspl is mabiki(pl, 3); the port must reproduce it."""
+  import scipy.io as sio
+  path = MATLAB_DIR / "simdata8.mat"
+  if not path.exists():
+    pytest.skip(f"MATLAB reference not found: {path}")
+  data = sio.loadmat(path)
+  for event in range(3):
+    pl = np.asarray(data["pl"].ravel()[event], dtype=float)
+    ref = np.asarray(data["dspl"].ravel()[event], dtype=float)
+    got = mabiki(pl[:, :3], 3)
+    key = lambda a: np.lexsort((a[:, 2], a[:, 1], a[:, 0]))
+    assert got.shape == ref.shape
+    assert np.allclose(got[key(got)], ref[key(ref)])
+
+
+def test_mabiki_collapses_a_block_to_its_centroid():
+  hits = np.array([[10, 10, 5], [11, 10, 5], [10, 11, 5], [11, 11, 5]])
+  out = mabiki(hits, 3)
+  assert out.shape == (1, 4)
+  assert out[0, 3] == 4
+  assert np.allclose(out[0, :3], [10.5, 10.5, 5])
+
+
+def test_mabiki_keeps_slices_apart():
+  hits = np.array([[10, 10, 5], [10, 10, 6]])
+  assert mabiki(hits, 30).shape[0] == 2
+
+
+def test_for_spacing_scales_lengths_but_not_tolerances():
+  cfg = MATLAB_CONFIG.for_spacing(30.0)
+  assert cfg.grow_margin == MATLAB_CONFIG.grow_margin * 10
+  assert cfg.end_reach == MATLAB_CONFIG.end_reach * 10
+  # Transverse tolerances track the measurement error, not the spacing.
+  assert cfg.th_split == MATLAB_CONFIG.th_split
+  assert cfg.attach_max_dist == MATLAB_CONFIG.attach_max_dist
+
+
+def test_default_config_reproduces_the_module_constants():
+  # The reference checks only mean something if passing no config is
+  # the same as passing the MATLAB one.
+  from module.graphdet import detectlseg
+  assert detectlseg.TH_SPLIT == MATLAB_CONFIG.th_split
+  assert detectlseg.TH_GROW == MATLAB_CONFIG.th_grow
+  assert MATLAB_CONFIG.spacing_px == 3.0
+
+
+def test_true_branch_points_needs_a_shared_endpoint():
+  # id, start(3), end(3), edep, pid, sheet -- only the coords matter.
+  summary = np.zeros((3, 10))
+  summary[0, 1:7] = [0, 0, 0, 10, 0, 0]
+  summary[1, 1:7] = [10, 0, 0, 20, 5, 0]   # starts where track 0 ends
+  summary[2, 1:7] = [10, 0, 0, 20, -5, 0]  # and so does track 2
+  points, mult = true_branch_points(summary)
+  assert points.shape[0] == 1
+  assert mult[0] == 3
+  assert np.allclose(points[0], [10, 0, 0])

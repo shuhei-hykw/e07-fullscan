@@ -1117,3 +1117,39 @@ NaN のとき `min` は NaN と添字1を返し `~isinf(NaN)` が真なので誤
 いる）。素の値は 24.5 秒/view。
 
 fast tests 68 passed。git は未コミット。
+
+## 2026-09-07 — Phase 2: エクスポート格子の較正。30 px は粗すぎると実測
+
+**入力（読むだけ）**: `e07/matlab/{mabiki.m,simdata8.mat}`。
+**出力（新規・当リポジトリ所有）**: `module/graphdet/{config,downsample,
+simeval}.py`、`scripts/scan_sampling.py`。`module/graphdet/{geom,detectlseg,
+integrate,branch,__init__}.py`、`module/matlab_export.py`、
+`tests/test_graphdet.py`、`README.md`、`STATUS.md`、`analysis-note.md` を更新。
+
+**結論**: `matlab_export` の `_GRID_CELL_PX = 30` は**分岐点 purity を
+78.8% → 17.5% に落とす**。同じシミュレーションを別ブロックで間引き直して
+測った（真値は `Summary` 由来なので間引きに影響されない）。膝は **6 px**。
+30 px は 2026-07-11 に MATLAB を 2.5時間/tile に収めるため選ばれたもので、
+移植で約250倍速くなった今その制約は無い。
+→ `_GRAPH_CELL_PX = 6` を新設し export/CLI の既定に。ノイズフィルタと
+viewer overlay は 30 px でチューニング済みなので `noise_cell` で分離。
+
+**段の切り分け**: 段1・段2 は 30 px でも無傷（軌跡長 98%、真の頂点 14/14 の
+近くに折れ線の頂点がある）。**壊れるのは段3だけ**で、`detectbunki` が
+「1.5 px 以内で共有された hit」で判定するため、定数では直らない。
+幾何判定（端点近接）の代案も試作したが purity 26% 止まりで**不採用**。
+
+**足場**: `DetectorConfig` に全距離定数を集約。**透過方向の許容値と
+長さスケールを分離**したのが要点で、`for_spacing()` は後者だけを直す。
+既定は MATLAB 値のままなので参照照合は不変（段1 1,239本 全一致・
+最大 2.5e-13 px、段2 149本、段3 eff 92.9%/purity 92.3%）。
+`mabiki.m` も移植し `dspl` と完全一致を確認。
+
+**未測定のリスク**: 6 px の実 E07 データでのコスト。シミュレーションは
+159本/view だが実 E07 はもっと密。**本番エクスポート前に 1 tile で実測**。
+また `z_scale` はまだ MATLAB 値のまま（`E07_Z_SCALE` は定義済み）。
+
+**測定時の注意**: ワークサーバの4コア制限で、掃引の後半は前半の3〜5倍の
+時間がかかっている。時間の絶対値は信用しないこと。
+
+fast tests 22 passed（graphdet）、slow 2 passed。git は未コミット。

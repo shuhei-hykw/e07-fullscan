@@ -51,7 +51,10 @@ module/
 │   ├── detectlseg.py      # detect_lseg_smallregion(), detect_lseg_view()
 │   ├── polyfit.py         # pixellist_to_poly(), inflection_nodes()
 │   ├── integrate.py       # integrate_smallregions()
-│   └── branch.py          # detect_branches(), branch_points()
+│   ├── branch.py          # detect_branches(), branch_points()
+│   ├── config.py          # DetectorConfig: every tunable distance
+│   ├── downsample.py      # mabiki()
+│   └── simeval.py         # scoring against the simulation truth
 └── server/          # Web viewer (flask)
 ```
 
@@ -285,17 +288,49 @@ shared reconstructed vertex, so the resolution is worse than the
 efficiency suggests, and a point where three track bodies cross passes
 the `1 + 1 + 1 > 2` code test and is reported as a branch.
 
-### Constants
+### Constants and calibration
 
-Defaults reproduce MATLAB exactly and are **not** right for E07 data.
-The most consequential is `geom.MATLAB_Z_SCALE = 3.0 / 0.29`, which
-assumes 3 µm slices; E07 full-scan data is 1.5 µm/slice, so distances
-along z come out twice too large. Pass `z_scale=` to override. Likewise
-`TH_SPLIT`/`TH_GROW`, the merge fractions and `REGION_PX`/`REGION_Z`
-were tuned on a simulation with 159 tracks per view and ~3 px spacing
-along a track. Retuning is a separate step, deliberately kept apart from
-the port so that a disagreement means a porting bug, not a parameter
-choice.
+Every distance the three stages measure against lives in
+`config.DetectorConfig`, and every entry point takes a `cfg=`. The
+defaults are the MATLAB values, so passing nothing reproduces the
+reference run.
+
+The file's organising idea is the split between a **transverse
+tolerance** (`th_split`, `attach_max_dist`, ...) — a distance measured
+across a track, i.e. its width plus measurement error — and a **length
+scale** (`grow_margin`, `end_reach`, ...) — a distance measured along a
+track or between neighbouring hits. Only the second has to grow when
+the hits get sparser, and `DetectorConfig.for_spacing()` scales only
+those.
+
+That distinction was worth making. The MATLAB constants were tuned at
+~3 px hit spacing; the E07 export used to sample at 30 px, and
+re-thinning the same simulation to that spacing (`mabiki`, ported in
+`downsample.py`) drops branch-point purity from 78.8% to 17.5%:
+
+```bash
+python scripts/scan_sampling.py --events 1-3 [--scale-constants]
+```
+
+| hit spacing | efficiency | purity |
+|---|---|---|
+| 3 px | 92.7% | 78.8% |
+| **6 px** | 85.4% | **75.9%** |
+| 10 px | 75.6% | 58.9% |
+| 30 px | 53.7% | 17.5% |
+
+Stages 1 and 2 survive the coarse grid — 98% of the track length is
+still reconstructed, and all 14 true vertices still have a polyline
+vertex within 25 px. Stage 3 does not, and no constant fixes it:
+detectbunki decides a branch from hits shared within 1.5 px, and a
+coarse grid is precisely what removes them. So the answer was to sample
+finer, not to retune — `matlab_export._GRAPH_CELL_PX` is now 6 px. Its
+cost on real E07 data is **not** measured.
+
+`z_scale` is still the MATLAB `3.0 / 0.29`, which assumes 3 µm slices;
+E07 is 1.5 µm/slice, and `config.E07_Z_SCALE` holds the right value.
+The simulation cannot validate that switch, since 3.0 / 0.29 is correct
+there.
 
 ## Web Viewer
 

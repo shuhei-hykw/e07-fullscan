@@ -31,34 +31,30 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
 from scipy.spatial.distance import pdist, squareform
 
+from .config import MATLAB_CONFIG, MATLAB_Z_SCALE, DetectorConfig
 from .geom import (
-  MATLAB_Z_SCALE, is_a_line, is_same_track, membership_from_segments,
-  norma, scale_z, segments_from_membership,
+  is_a_line, is_same_track, membership_from_segments, norma, scale_z,
+  segments_from_membership,
 )
 
-# Straightness tolerance when cutting the spanning tree (subfunc1) and
-# when growing segments (subfunc2). MATLAB calls these TH.
-TH_SPLIT = 2.0
-TH_GROW = 1.5
+# Straightness tolerances, kept as names because callers pass them
+# positionally; the values live in DetectorConfig.
+TH_SPLIT = MATLAB_CONFIG.th_split
+TH_GROW = MATLAB_CONFIG.th_grow
 
 # A component needs this many hits before a line is fitted to it;
 # below it, the component claims exactly its own hits.
 _MIN_FIT_POINTS = 3
-
-# How far past its own extent a component looks for more hits, in px.
-_GROW_MARGIN = 20.0
 
 # Merge component i into j when this fraction of i's hits are also j's;
 # drop i outright when this fraction are claimed by any other segment.
 _MERGE_FRAC = 0.65
 _DROP_FRAC = 0.8
 
-# Endpoint refinement: candidate shifts, and the fit tolerance used to
-# turn memberships back into segments while refining.
+# Endpoint refinement: how many passes, and the fit tolerance used to
+# turn memberships back into segments while refining. The shift
+# window itself is a length scale and lives in DetectorConfig.
 _REFINE_PASSES = 10
-_REFINE_DL = 20.0
-_REFINE_DL_STEP = 5.0
-_REFINE_DL_MIN = 2.0
 _REFINE_FIT_TH = 10.0
 # Along-axis tolerance for lseg2L. Tiny on purpose: overshooting an
 # endpoint is penalised by TH / this ratio, which excludes the hit.
@@ -105,6 +101,7 @@ def _conncomp(
 def split_into_linear_components(
   x: np.ndarray, th: float = TH_SPLIT,
   z_scale: float = MATLAB_Z_SCALE,
+  cfg: DetectorConfig = MATLAB_CONFIG,
 ) -> np.ndarray:
   """Port of subfunc1: cut a spanning tree until every part is straight.
 
@@ -162,7 +159,7 @@ def split_into_linear_components(
     lu = lab[u]
     ind1 = lab == lu
     ind2 = lab == lab[v]
-    if is_same_track(x[ind1], x[ind2], th, z_scale) == 3:
+    if is_same_track(x[ind1], x[ind2], th, z_scale, cfg) == 3:
       lab[ind2] = lu
       revived.append(idx)
   if revived:
@@ -210,6 +207,7 @@ def _merge_overlapping(e: np.ndarray) -> np.ndarray:
 
 def grow_segments(
   x: np.ndarray, labels: np.ndarray, th: float = TH_GROW,
+  cfg: DetectorConfig = MATLAB_CONFIG,
 ) -> np.ndarray:
   """Port of subfunc2: let each component absorb nearby collinear hits.
 
@@ -239,8 +237,8 @@ def grow_segments(
       _, _, vt = np.linalg.svd(x1 - mu, full_matrices=True)
       y = (x - mu) @ vt.T
       along = np.sort(y[ind, 0])
-      sel = ((along[0] - _GROW_MARGIN < y[:, 0])
-             & (y[:, 0] < along[-1] + _GROW_MARGIN))
+      sel = ((along[0] - cfg.grow_margin < y[:, 0])
+             & (y[:, 0] < along[-1] + cfg.grow_margin))
       d[sel, i] = norma(y[sel, 1:], 1)
     old_e = e
     e = _merge_overlapping(d < th)
@@ -252,6 +250,7 @@ def grow_segments(
 
 def refine_endpoints(
   x: np.ndarray, e: np.ndarray, th: float = TH_GROW,
+  cfg: DetectorConfig = MATLAB_CONFIG,
 ) -> np.ndarray:
   """Port of the endpoint tuning loop at the end of subfunc2.
 
@@ -259,8 +258,8 @@ def refine_endpoints(
   leaves the fewest hits claimed by other than exactly one segment.
   Shrinks the step once a pass changes nothing.
   """
-  dl = np.arange(-_REFINE_DL, _REFINE_DL + _REFINE_DL_STEP / 2,
-                 _REFINE_DL_STEP)
+  dl = np.arange(-cfg.refine_dl, cfg.refine_dl + cfg.refine_dl_step / 2,
+                 cfg.refine_dl_step)
   lseg = np.zeros((2, 3, 0))
   for _ in range(_REFINE_PASSES):
     lseg, _, _ = segments_from_membership(x, e, _REFINE_FIT_TH)
@@ -283,22 +282,30 @@ def refine_endpoints(
           moved = True
     if not moved:
       dl = dl / 2
-    if dl[-1] < _REFINE_DL_MIN:
+    if dl[-1] < cfg.refine_dl_min:
       break
 
   return lseg[:, :, ~np.isnan(lseg[0, 0, :])]
 
 
 def detect_lseg_smallregion(
-  x: np.ndarray, *, th_split: float = TH_SPLIT, th_grow: float = TH_GROW,
-  z_scale: float = MATLAB_Z_SCALE,
+  x: np.ndarray, *, cfg: DetectorConfig = MATLAB_CONFIG,
+  th_split: float | None = None, th_grow: float | None = None,
+  z_scale: float | None = None,
 ) -> np.ndarray:
-  """Detect line segments in one sub-region. Returns (2, 3, M)."""
+  """Detect line segments in one sub-region. Returns (2, 3, M).
+
+  The three keyword overrides win over ``cfg``; they predate it and
+  keep the older call sites working.
+  """
   if x.shape[0] == 0:
     return np.zeros((2, 3, 0))
-  labels = split_into_linear_components(x, th_split, z_scale)
-  e = grow_segments(x, labels, th_grow)
-  return refine_endpoints(x, e, th_grow)
+  th_split = cfg.th_split if th_split is None else th_split
+  th_grow = cfg.th_grow if th_grow is None else th_grow
+  z_scale = cfg.z_scale if z_scale is None else z_scale
+  labels = split_into_linear_components(x, th_split, z_scale, cfg)
+  e = grow_segments(x, labels, th_grow, cfg)
+  return refine_endpoints(x, e, th_grow, cfg)
 
 
 def iter_regions(

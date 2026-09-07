@@ -14,18 +14,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from .geom import MATLAB_Z_SCALE, min_distance_to_polyline, scale_z
-
-# Perpendicular distance (px) within which a hit counts as touching a
-# polyline at all.
-_ATTACH_MAX_DIST_PX = 1.5
-# A hit is "on the body" of a polyline if it is at least this far from
-# either end, and "at an end" if it is within this of one.
-_END_MARGIN_PX = 5.0
-# How far past an end a hit may still be counted as attached to it.
-# Much larger than the margin: a track that stops short of the vertex
-# still has to reach it.
-_END_REACH_PX = 25.0
+from .config import MATLAB_CONFIG, DetectorConfig
+from .geom import min_distance_to_polyline, scale_z
 
 _CODE_BODY = 1
 _CODE_END = 2
@@ -35,14 +25,10 @@ _CODE_END = 2
 # crossing (1 + 1) is just a crossing, not a branch.
 _MIN_JUNCTION_CODE_SUM = 2
 
-# Shared-hit centroids closer than this (in isotropic px) describe the
-# same vertex. Kept well below the 25 px reach above so that two real
-# vertices a few pixels apart are not merged.
-_VERTEX_MERGE_PX = 10.0
-
 
 def attachment_codes(
   polylines: list[np.ndarray], x: np.ndarray,
+  cfg: DetectorConfig = MATLAB_CONFIG,
 ) -> np.ndarray:
   """(N, M) uint8 matrix: how each hit attaches to each polyline.
 
@@ -53,11 +39,12 @@ def attachment_codes(
   codes = np.zeros((n, m), dtype=np.uint8)
   for i, poly in enumerate(polylines):
     ell, err, _, lpoly = min_distance_to_polyline(poly, x)
-    near = err < _ATTACH_MAX_DIST_PX
-    body = near & (ell >= _END_MARGIN_PX) & (ell <= lpoly - _END_MARGIN_PX)
+    near = err < cfg.attach_max_dist
+    body = (near & (ell >= cfg.end_margin)
+            & (ell <= lpoly - cfg.end_margin))
     ends = near & (
-      ((ell < _END_MARGIN_PX) & (ell > -_END_REACH_PX))
-      | ((ell > lpoly - _END_MARGIN_PX) & (ell < lpoly + _END_REACH_PX)))
+      ((ell < cfg.end_margin) & (ell > -cfg.end_reach))
+      | ((ell > lpoly - cfg.end_margin) & (ell < lpoly + cfg.end_reach)))
     codes[body, i] = _CODE_BODY
     codes[ends, i] = _CODE_END  # wins where both matched
   return codes
@@ -98,10 +85,11 @@ def _components(adjacency: np.ndarray) -> np.ndarray:
 
 
 def branch_adjacency(polylines: list[np.ndarray], x: np.ndarray,
-                     codes: np.ndarray | None = None) -> np.ndarray:
+                     codes: np.ndarray | None = None,
+                     cfg: DetectorConfig = MATLAB_CONFIG) -> np.ndarray:
   """(M, M) boolean: do these two polylines share a junction hit?"""
   if codes is None:
-    codes = attachment_codes(polylines, x)
+    codes = attachment_codes(polylines, x, cfg)
   sub = codes[junction_hits(codes)].astype(np.float64)
   adjacency = (sub.T @ sub) > 0
   np.fill_diagonal(adjacency, False)
@@ -111,6 +99,7 @@ def branch_adjacency(polylines: list[np.ndarray], x: np.ndarray,
 def detect_branches(
   polylines: list[np.ndarray], x: np.ndarray,
   codes: np.ndarray | None = None,
+  cfg: DetectorConfig = MATLAB_CONFIG,
 ) -> tuple[list[np.ndarray], np.ndarray]:
   """Port of detectbunki.m.
 
@@ -120,8 +109,8 @@ def detect_branches(
   if not polylines:
     return [], np.zeros(0, dtype=np.int64)
   if codes is None:
-    codes = attachment_codes(polylines, x)
-  labels = _components(branch_adjacency(polylines, x, codes))
+    codes = attachment_codes(polylines, x, cfg)
+  labels = _components(branch_adjacency(polylines, x, codes, cfg))
   sizes = np.bincount(labels)
   regrouped: list[np.ndarray] = []
   ids: list[int] = []
@@ -134,7 +123,8 @@ def detect_branches(
 
 def branch_points(
   polylines: list[np.ndarray], x: np.ndarray,
-  codes: np.ndarray | None = None, z_scale: float = MATLAB_Z_SCALE,
+  codes: np.ndarray | None = None,
+  cfg: DetectorConfig = MATLAB_CONFIG,
 ) -> tuple[np.ndarray, np.ndarray]:
   """Vertex coordinates implied by the grouping (NOT in the original).
 
@@ -145,7 +135,7 @@ def branch_points(
   branch points recorded in ``simdata8.mat``'s ``Summary``.
   """
   if codes is None:
-    codes = attachment_codes(polylines, x)
+    codes = attachment_codes(polylines, x, cfg)
   idx = junction_hits(codes)
   if idx.size == 0:
     return np.zeros((0, 3)), np.zeros(0, dtype=np.int64)
@@ -164,8 +154,9 @@ def branch_points(
   centroids = np.array(centroids)
   labels = _components(
     np.linalg.norm(
-      scale_z(centroids[:, None, :] - centroids[None, :, :], z_scale),
-      axis=2) < _VERTEX_MERGE_PX)
+      scale_z(centroids[:, None, :] - centroids[None, :, :],
+              cfg.z_scale),
+      axis=2) < cfg.vertex_merge)
   out, mult = [], []
   for lab in range(labels.max() + 1):
     sel = np.flatnonzero(labels == lab)

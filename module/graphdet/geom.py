@@ -17,18 +17,11 @@ from __future__ import annotations
 
 import numpy as np
 
-# distfun1.m scales the slice axis so that one z step is comparable to
-# an x/y pixel: the simulation the detector was tuned on has 3 um
-# slices at 0.29 um/px. E07 full-scan data is 1.5 um/slice, so this
-# default is wrong for real data by a factor of two -- it is kept only
-# to reproduce the reference run, and callers should pass their own.
-MATLAB_Z_SCALE = 3.0 / 0.29
-
-# isaline5.m: two single-point components join if they are this close.
-_SINGLE_POINT_MAX_DIST = 20.0
+from .config import MATLAB_CONFIG, MATLAB_Z_SCALE, DetectorConfig
 
 # isaline5.m: a gap wider than this many times the mean point spacing
-# means the two components are separate tracks.
+# means the two components are separate tracks. Scale-free by
+# construction, so it stays out of DetectorConfig.
 _GAP_FACTOR = 15.0
 
 
@@ -66,6 +59,7 @@ def is_a_line(x: np.ndarray, th: float) -> bool:
 
 def is_same_track(
   x1: np.ndarray, x2: np.ndarray, th: float, z_scale: float,
+  cfg: DetectorConfig = MATLAB_CONFIG,
 ) -> int:
   """Port of isaline5.m: are two components one track?
 
@@ -74,7 +68,7 @@ def is_same_track(
   """
   if x1.shape[0] == 1 and x2.shape[0] == 1:
     d = np.linalg.norm(scale_z(x1 - x2, z_scale))
-    return 3 if d < _SINGLE_POINT_MAX_DIST else 0
+    return 3 if d < cfg.single_point_max_dist else 0
 
   x = np.concatenate([x1, x2], axis=0)
   mu = x.mean(axis=0)
@@ -203,18 +197,10 @@ def membership_from_segments(
   return lab, e, d
 
 
-# isaline3.m / isaline3a.m: largest perpendicular residual (px) still
-# accepted as "the two segments lie on one straight line".
-_JOIN_MAX_RESIDUAL = 2.0
-# isaline3.m weights the along-axis gap by this before taking the norm,
-# so a long collinear gap costs a tenth of the same lateral offset.
+# isaline3.m weights the along-axis gap by this before taking the
+# norm, so a long collinear gap costs a tenth of the same lateral
+# offset. A ratio, so it does not belong in DetectorConfig.
 _JOIN_ALONG_WEIGHT = 0.1
-# isaline3a.m: how far two polylines may overlap along their common
-# axis (px) before the join is rejected.
-_JOIN_MAX_OVERLAP_PX = 5.0
-# isaline3a.m: summed kink at the junction (px) above which the two
-# polylines are judged not to meet.
-_JOIN_MAX_KINK_PX = 5.0
 
 
 def _colmajor_argmin(d: np.ndarray) -> tuple[int, int]:
@@ -227,7 +213,8 @@ def _colmajor_argmin(d: np.ndarray) -> tuple[int, int]:
   return flat % d.shape[0], flat // d.shape[0]
 
 
-def is_a_line3(lseg1: np.ndarray, lseg2: np.ndarray) -> float:
+def is_a_line3(lseg1: np.ndarray, lseg2: np.ndarray,
+               cfg: DetectorConfig = MATLAB_CONFIG) -> float:
   """Port of isaline3.m: may lseg2 be joined onto lseg1's first point?
 
   Both segments are given "focus point first". Returns the (weighted)
@@ -251,7 +238,7 @@ def is_a_line3(lseg1: np.ndarray, lseg2: np.ndarray) -> float:
   mu = lseg.mean(axis=0)
   _, _, vt = np.linalg.svd(lseg - mu, full_matrices=True)
   y = (lseg - mu) @ vt.T
-  if norma(y[:, 1:], 1).max() > _JOIN_MAX_RESIDUAL:
+  if norma(y[:, 1:], 1).max() > cfg.join_max_residual:
     return np.inf
 
   order = np.argsort(y[:, 0], kind="stable")
@@ -269,7 +256,8 @@ def is_a_line3(lseg1: np.ndarray, lseg2: np.ndarray) -> float:
   return float(np.linalg.norm(gap * weights))
 
 
-def is_a_line3a(lseg1: np.ndarray, lseg2: np.ndarray) -> float:
+def is_a_line3a(lseg1: np.ndarray, lseg2: np.ndarray,
+                cfg: DetectorConfig = MATLAB_CONFIG) -> float:
   """Port of isaline3a.m: may two polylines be joined end to end?
 
   Each argument is the two-point stub at the end being joined, focus
@@ -295,7 +283,7 @@ def is_a_line3a(lseg1: np.ndarray, lseg2: np.ndarray) -> float:
   y = (lseg - mu) @ vt[0]
   if y[0] > y[-1]:
     y = y[::-1]
-  if y[2] - y[1] < -_JOIN_MAX_OVERLAP_PX:
+  if y[2] - y[1] < -cfg.join_max_overlap:
     return np.inf
 
   # Bend both stubs to the midpoint of the two focus endpoints and ask
@@ -305,7 +293,7 @@ def is_a_line3a(lseg1: np.ndarray, lseg2: np.ndarray) -> float:
     np.stack([mid, lseg1[1]]), lseg1[None, 0])
   _, er2, _ = min_distance_to_lineseg(
     np.stack([mid, lseg2[1]]), lseg2[None, 0])
-  if er1[0] + er2[0] > _JOIN_MAX_KINK_PX:
+  if er1[0] + er2[0] > cfg.join_max_kink:
     return np.inf
 
   u1, u2 = mid - lseg1[1], mid - lseg2[1]
@@ -352,14 +340,16 @@ def min_distance_to_polyline(
     el[:, i], er[:, i] = e, r
 
   # MATLAB's min skips NaN, which a zero-length segment produces.
+  # An all-inf row then makes the tie test inf - inf; the NaN that
+  # falls out compares false, which is the answer we want anyway.
   with np.errstate(invalid="ignore"):
     er_cmp = np.where(np.isnan(er), np.inf, er)
-  c = er_cmp.argmin(axis=1)
-  err = er_cmp[np.arange(n), c]
-  # Among segments the point is equally far from, prefer the one it
-  # does not overshoot -- otherwise a shared vertex would be credited
-  # to whichever segment happened to come first.
-  tied = (np.abs(er_cmp - err[:, None]) < _POLY_TIE_TOL).sum(axis=1) > 1
+    c = er_cmp.argmin(axis=1)
+    err = er_cmp[np.arange(n), c]
+    # Among segments the point is equally far from, prefer the one it
+    # does not overshoot -- otherwise a shared vertex would be
+    # credited to whichever segment happened to come first.
+    tied = (np.abs(er_cmp - err[:, None]) < _POLY_TIE_TOL).sum(axis=1) > 1
   if tied.any():
     c[tied] = elover[tied].argmin(axis=1)
   ell = (el + el0[:-1])[np.arange(n), c]
