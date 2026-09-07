@@ -1,6 +1,6 @@
 # STATUS — 現在の状態（e07-fullscan）
 
-**最終更新: 2026-08-22**
+**最終更新: 2026-09-07**
 
 このファイルは「**今どうなっているか**」だけを書く。**追記ではなく
 上書き**する（変遷は `git log -p STATUS.md` で追える）。
@@ -19,7 +19,7 @@
 | Method | 内容 | ML | 状態 |
 |---|---|---|---|
 | **A** | Pure Python（`find_tracks`→`find_vertices`→`merge_vertex_slices`） | 不使用 | **主軸**。③は一通り最適化済み、④に未解決の重大問題 |
-| **B'** | グラフ検出器（`export_hits_grid`→`detectlseg`→`integrate_smallregions`→`detectbunki`） | 不使用 | **Python 移植中**。Phase 1-1（`detectlseg`）完了・参照と完全一致 |
+| **B'** | グラフ検出器（`export_hits_grid`→`detectlseg`→`integrate_smallregions`→`detectbunki`） | 不使用 | **Python 移植中**。Phase 1-1/1-2 完了。生 hit → 軌跡が 24.5 秒/view |
 | **C** | CNN 生画素セグメンテーション（別リポジトリ `e07-binary-segmentation`） | 使用 | **注力対象。弱い判別力が出た段階**（LOTO・セグメント単位で AUC 0.59、precision 49.5% > 基準率 43.6%）。実用には遠い |
 | **D** | 教師なしクラスタリング（KMeans/GMM） | 使用 | **失敗確定・打ち切り**（precision 46〜50%＝ほぼチャンス） |
 
@@ -40,16 +40,28 @@ numpy + scipy のみ。
 
 | 段 | MATLAB | 状態 |
 |---|---|---|
-| 1 | `detectlseg_smallregion` | **完了**（2026-08-22） |
-| 2 | `integrate_smallregions` + `pixellist2poly` | 次 |
-| 3 | `detectbunki` | 未 |
+| 1 | `detectlseg_smallregion` | **完了**（2026-08-22）14.0 秒/view |
+| 2 | `integrate_smallregions` + `pixellist2poly` | **完了**（2026-09-07）10.5 秒/view |
+| 3 | `detectbunki` | 次 |
 
 **検証に MATLAB は要らない。** `e07/matlab/work1.mat` が入出力の対を
 持っている（シミュレーション事象1の 41,609点 → `lseg` 1,239線分 →
-`polylines` 149本）。Phase 1-1 は **1,239 セグメント全一致・最大端点
-誤差 2.5e-13 px**、所要 14.0 秒/view。照合は
-`python scripts/check_lseg_reference.py` か
-`pytest -m slow tests/test_graphdet.py`。
+`polylines` 149本）。照合は
+`python scripts/check_lseg_reference.py`（段1）、
+`python scripts/check_polylines_reference.py`（段2）、
+`pytest -m slow tests/test_graphdet.py`（両方）。
+
+- **段1**: 1,239 セグメント**全一致**、最大端点誤差 2.5e-13 px。
+- **段2**: polylines **149本ちょうど**、全長 118,270 px（参照 118,033、
+  差 0.2%）、全ての折れ線が参照から **16 px 以内**（うち約半数はビット
+  一致）。**段2は原理的にビット再現できない**——折れ線の端の頂点は
+  定義上その折れ線の一番外の hit の射影なので、`resamplingpoly` の
+  `ell>=0` 判定でその hit が厳密に境界に乗り、±1e-13 の丸めで採否が
+  裏返る（chain 1本につき始点・終点で計2個、実測 175本全てで発生）。
+  移植側は「境界 hit は常に含める」（`_ELL_SLACK_PX`、厳密演算での
+  `>=0` の意味）を採り決定性を確保した。MATLAB 逐語（`>=0`）だと
+  150本・最悪 76 px、「常に除く」だと hit ゼロの折れ線が出て落ちる。
+  詳細は analysis-note.md 2026-09-07。
 
 `simdata8.mat` の `Summary` から**真の分岐点14個**を復元できるので、
 Phase 1-3 でこのパイプラインの efficiency/purity を初めて測れる。
@@ -220,10 +232,10 @@ hough_mg=40, grain_radius=15, px_scale_um=0.29`
 
 ## 次にやる候補
 
-- **Phase 1-2: `integrate_smallregions` + `pixellist2poly` の移植**
-  （現在の最優先）。`work1.mat` の `polylines`（149本）と照合する。
-  続いて Phase 1-3 で `detectbunki` と、真の分岐点14個に対する
-  efficiency/purity の初測定。
+- **Phase 1-3: `detectbunki` の移植**（現在の最優先）。
+  `simdata8.mat` の `Summary` から**真の分岐点14個**（多重度 最大6）を
+  復元できるので、**このパイプラインの efficiency/purity をここで
+  初めて測れる**。段1・段2 だけでは「MATLAB と同じか」しか言えない。
 - **Phase 2: 定数を E07 に較正**。z_step 1.5µm、`_GRID_CELL_PX`、
   直線性の TH。目的関数は既知 vertex での分岐グループ数と順位。
   ここで要る人手は **GT vertex のクリックだけ**（T004_3body /

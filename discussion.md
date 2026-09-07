@@ -1126,3 +1126,37 @@ Changed: `module/server/labeling.py`, `module/track_classifier.py`,
 `src/score_candidates.py` and `--all-candidates`/`--hough` in
 `src/dump_segments.py` in the ML repo. 52 fast tests pass. Server for
 review: `python -m module.server.app --port 8123`. Still uncommitted.
+
+**Result (same day)**: done. Fed the reference `lseg`, the port returns
+**exactly 149 polylines**, total length 118,270 px (reference 118,033,
+0.2% apart), every polyline within 16 px of a reference one. From raw
+hits: 24.5 s/view (stage 1 14.0 + stage 2 10.5). 63 fast tests pass,
+2 slow tests pass.
+
+**Unlike Phase 1-1, bit-exactness is unreachable** -- and was shown to
+be. `resamplingpoly` selects hits with `ell>=0`, but a polyline's end
+vertex is by construction the projection of its own outermost hit, so
+that hit sits exactly on the boundary. Measured: **all 175 chains carry
+one such hit (`|ell|<1e-8`) at each end**. MATLAB's and NumPy's BLAS
+disagree in the last bit there, moving the endpoint by ~1 px. Swapping
+`np.linalg.norm` for `dnrm2` only moved the match count 97 -> 99, so it
+is ulp-level noise, not one formula. The port always includes those
+hits (`_ELL_SLACK_PX = 1e-9`). The literal version gives 150 polylines
+and a 76 px worst case; always excluding them starves a polyline of
+hits and raises. The chosen variant matches the reference count and
+caps the worst case at 16 px.
+
+**The measure changed too**: Hausdorff distance between the curves
+after 1 px resampling, not vertex-list equality -- otherwise an
+identical track whose corner vertex sits a few hits over counts as a
+mismatch.
+
+**Three defects found in the MATLAB source** (detailed in
+analysis-note.md 2026-09-07): the `kousinflag`/`koushinflag` spelling
+split, a final assignment that errors if any polyline is dropped, and
+the flag=2/3 branches building an all-pairs distance matrix that cannot
+scale to a view.
+
+Changed: `module/graphdet/{integrate,polyfit,geom,__init__}.py`,
+`scripts/check_polylines_reference.py`, `tests/test_graphdet.py`,
+`README.md`, `STATUS.md`, `analysis-note.md`. Still uncommitted.

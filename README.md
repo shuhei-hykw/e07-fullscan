@@ -48,7 +48,9 @@ module/
 │   └── diag_*.py          # Diagnostics (python -m module.pipeline.diag_X)
 ├── graphdet/        # Python port of the MATLAB graph detector
 │   ├── geom.py            # norma/isaline*/mindistance*/L2lseg/lseg2L
-│   └── detectlseg.py      # detect_lseg_smallregion(), detect_lseg_view()
+│   ├── detectlseg.py      # detect_lseg_smallregion(), detect_lseg_view()
+│   ├── polyfit.py         # pixellist_to_poly(), inflection_nodes()
+│   └── integrate.py       # integrate_smallregions()
 └── server/          # Web viewer (flask)
 ```
 
@@ -197,29 +199,50 @@ A Python port of the detector in `e07/matlab`, so the graph stages can
 run on kekcc (no MATLAB is installed there) and so their constants can
 be retuned against E07 data. Depends only on numpy and scipy.
 
-Stage 1 is ported: `detect_lseg_smallregion()` (from
-`detectlseg_smallregion.m`) turns one 128×128×80 sub-region of hits into
-3-D line segments, and `detect_lseg_view()` walks the 16×16 grid of a
-full view. `integrate_smallregions` and `detectbunki` follow.
+Stages 1 and 2 are ported; `detectbunki` (branch grouping) follows.
+
+`detect_lseg_smallregion()` (from `detectlseg_smallregion.m`) turns one
+128×128×80 sub-region of hits into 3-D line segments, and
+`detect_lseg_view()` walks the 16×16 grid of a full view.
+`integrate_smallregions()` then stitches those per-region segments into
+whole tracks — chaining them end to end, re-fitting each chain against
+the hits it owns (`pixellist_to_poly()`, from `pixellist2poly.m`), and
+finally joining polylines across the gaps that chaining cannot bridge.
 
 ```python
-from module.graphdet import detect_lseg_view
+from module.graphdet import detect_lseg_view, integrate_smallregions
 segments, per_region = detect_lseg_view(hits)   # (2, 3, M) endpoints
+tracks = integrate_smallregions(hits, segments) # list of (K+1, 3)
 ```
 
 ### Checking the port
 
-`e07/matlab/work1.mat` stores a complete input/output pair — the 41,609
-hits of simulation event 1 and the 1,239 segments MATLAB produced from
-them — so fidelity can be checked with no MATLAB installation:
+`e07/matlab/work1.mat` stores a complete input/output chain — the 41,609
+hits of simulation event 1, the 1,239 segments MATLAB's stage 1 produced
+from them, and the 149 polylines its stage 2 produced from those — so
+each stage can be checked in isolation with no MATLAB installation:
 
 ```bash
-python scripts/check_lseg_reference.py        # or: pytest -m slow tests/test_graphdet.py
+python scripts/check_lseg_reference.py        # stage 1
+python scripts/check_polylines_reference.py   # stage 2, from ref segments
+pytest -m slow tests/test_graphdet.py         # both, as tests
 ```
 
-The port currently reproduces all 1,239 segments with a worst endpoint
-error of 2.5e-13 px, in 14 s for the whole view against roughly 9 h for
-the MATLAB original (see analysis-note.md, 2026-08-22).
+Stage 1 reproduces all 1,239 segments with a worst endpoint error of
+2.5e-13 px, in 14 s for the whole view against roughly 9 h for the
+MATLAB original (analysis-note.md, 2026-08-22).
+
+Stage 2 returns the same 149 polylines with the same total track length
+to 0.2%, and every polyline lies within 16 px of a reference one (half
+of them bit-exact). It is **not** bit-reproducible, and cannot be: each
+polyline's end vertex is by construction the projection of its own
+outermost hit, so that hit sits at arc length exactly zero in the
+"is this hit inside my extent?" test and falls on either side of it at
+the 1e-13 level, differently under MATLAB's BLAS and NumPy's. The port
+includes those hits deterministically (`_ELL_SLACK_PX`), which is what
+the comparison means in exact arithmetic; taking MATLAB's literal `>= 0`
+instead shrinks a fit by ~1 px per pass and can starve a short polyline
+of hits entirely (analysis-note.md, 2026-09-07).
 
 ### Constants
 

@@ -1040,3 +1040,47 @@ UI を作る価値が十分ある厚みだと確認してから実装した。
 `src/dump_segments.py` に `--all-candidates` / `--hough` 追加。
 fast tests 52 passed。レビュー起動は
 `python -m module.server.app --port 8123`。git は未コミット。
+
+## 2026-09-07 — Phase 1-2 着手: `integrate_smallregions` + `pixellist2poly` の移植
+
+**入力（読むだけ）**: `e07/matlab/{integrate_smallregions,pixellist2poly,
+isaline3,isaline3a,mindistance_to_polyline,mindistance_tolineseg}.m`、
+`e07/matlab/work1.mat`（`x` 41,609点 / `lseg` 1,239線分 / `polylines` 149本）。
+
+**出力（新規・当リポジトリ所有）**: `module/graphdet/polyfit.py`、
+`module/graphdet/integrate.py`、`scripts/check_polylines_reference.py`。
+`module/graphdet/geom.py` と `__init__.py`、`tests/test_graphdet.py` に追記。
+
+**検証方法**: `work1.mat` の `lseg`（MATLAB 出力）を入力に与えて
+`polylines` 149本と照合する。Phase 1-1 と同じく MATLAB 実行は不要。
+
+**移植方針**: Phase 1-1 と同じく、驚くべき MATLAB 挙動（NaN 比較、
+first-of-equals な min、round の half-away-from-zero、列優先の find 順）は
+そのまま再現しコメントで明示する。定数の再調整は Phase 2 で行う。
+
+**結果（同日）**: 完了。`work1.mat` の `lseg` を入力に polylines を
+**149本ちょうど**返し、全長 118,270 px（参照 118,033、差 0.2%）、
+全折れ線が参照から 16 px 以内。生 hit からは 24.5 秒/view
+（段1 14.0 + 段2 10.5）。fast tests 63 passed、slow 2 passed。
+
+**Phase 1-1 と違い、ビット一致は達成できない**（できないと確認した）。
+`resamplingpoly` の hit 選択 `ell>=0` は、折れ線の端の頂点が定義上
+その折れ線の一番外の hit の射影であるため厳密に境界に乗る。実測で
+**175 chain すべてが始点・終点に `|ell|<1e-8` の hit を1個ずつ持つ**。
+MATLAB と NumPy の BLAS の最終 bit の違いで採否が裏返り、端点が約1px
+動く。`np.linalg.norm`→`dnrm2` の差し替えでは 97→99 本しか改善せず、
+単一の式の違いではないと確認した。方針は「境界 hit は常に含める」
+（`_ELL_SLACK_PX = 1e-9`）。逐語版は 150本・最悪 76 px、「常に除く」は
+hit ゼロの折れ線が出て例外。採用版は本数が参照と一致し最悪 16 px。
+
+**評価尺度も変えた**: 頂点リスト一致ではなく、1px 再サンプリング後の
+曲線 Hausdorff 距離。曲がり角の頂点が hit 数個ずれただけで不一致に
+なるのを避けるため。
+
+**MATLAB 側の不具合3件**（analysis-note.md 2026-09-07 に詳述）:
+`kousinflag`/`koushinflag` の綴り違い、最終行の要素数不一致で落ちうる
+代入、flag=2/3 分岐が全点間距離行列で view 規模に載らないこと。
+
+変更: `module/graphdet/{integrate,polyfit,geom,__init__}.py`、
+`scripts/check_polylines_reference.py`、`tests/test_graphdet.py`、
+`README.md`、`STATUS.md`、`analysis-note.md`。git は未コミット。

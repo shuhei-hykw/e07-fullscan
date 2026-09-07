@@ -197,3 +197,157 @@ def membership_from_segments(
   lab = np.argmin(d, axis=1) + 1
   lab[d.min(axis=1) > th] = 0
   return lab, e, d
+
+
+# isaline3.m / isaline3a.m: largest perpendicular residual (px) still
+# accepted as "the two segments lie on one straight line".
+_JOIN_MAX_RESIDUAL = 2.0
+# isaline3.m weights the along-axis gap by this before taking the norm,
+# so a long collinear gap costs a tenth of the same lateral offset.
+_JOIN_ALONG_WEIGHT = 0.1
+# isaline3a.m: how far two polylines may overlap along their common
+# axis (px) before the join is rejected.
+_JOIN_MAX_OVERLAP_PX = 5.0
+# isaline3a.m: summed kink at the junction (px) above which the two
+# polylines are judged not to meet.
+_JOIN_MAX_KINK_PX = 5.0
+
+
+def _colmajor_argmin(d: np.ndarray) -> tuple[int, int]:
+  """(row, col) of the minimum, MATLAB's first-of-equals order.
+
+  ``min(d,[],'all')`` scans column-major, so a tie is broken by the
+  lower column first, then the lower row -- the opposite of NumPy.
+  """
+  flat = int(np.argmin(d.ravel(order="F")))
+  return flat % d.shape[0], flat // d.shape[0]
+
+
+def is_a_line3(lseg1: np.ndarray, lseg2: np.ndarray) -> float:
+  """Port of isaline3.m: may lseg2 be joined onto lseg1's first point?
+
+  Both segments are given "focus point first". Returns the (weighted)
+  endpoint gap, or inf if the pair does not form one straight line.
+  """
+  v1 = np.diff(lseg1, axis=0)[0]
+  v1 = v1 / np.linalg.norm(v1)
+  v2 = np.diff(lseg2, axis=0)[0]
+  v2 = v2 / np.linalg.norm(v2)
+  if v1 @ v2 > 0:  # pointing the same way: they cannot meet head to head
+    return np.inf
+
+  # Rows 1 and 2 are the two focus endpoints; rows 0 and 3 the far ones.
+  lseg = np.concatenate([lseg1[::-1], lseg2], axis=0)
+  mu = lseg.mean(axis=0)
+  _, _, vt = np.linalg.svd(lseg - mu, full_matrices=True)
+  y = (lseg - mu) @ vt.T
+  if norma(y[:, 1:], 1).max() > _JOIN_MAX_RESIDUAL:
+    return np.inf
+
+  order = np.argsort(y[:, 0], kind="stable")
+  y = y[order]
+  if order[0] in (1, 2) or order[-1] in (1, 2):
+    return np.inf  # a focus endpoint sticks out past a far endpoint
+  ordered = (np.array_equal(order, [0, 1, 2, 3])
+             or np.array_equal(order, [3, 2, 1, 0]))
+  overlapping = (np.array_equal(order, [0, 2, 1, 3])
+                 or np.array_equal(order, [3, 1, 2, 0]))
+  if not (ordered or overlapping):
+    return np.inf
+  gap = np.diff(y[1:3], axis=0)[0]
+  weights = np.array([_JOIN_ALONG_WEIGHT] + [1.0] * (gap.size - 1))
+  return float(np.linalg.norm(gap * weights))
+
+
+def is_a_line3a(lseg1: np.ndarray, lseg2: np.ndarray) -> float:
+  """Port of isaline3a.m: may two polylines be joined end to end?
+
+  Each argument is the two-point stub at the end being joined, focus
+  point first. Unlike isaline3 the return value is the kink ANGLE in
+  degrees, not a distance -- integrate_smallregions thresholds the two
+  differently.
+  """
+  d = np.linalg.norm(lseg1[:, None, :] - lseg2[None, :, :], axis=2)
+  if _colmajor_argmin(d) != (0, 0):
+    return np.inf  # some other endpoint pair is closer
+
+  v1 = np.diff(lseg1, axis=0)[0]
+  v1 = v1 / np.linalg.norm(v1)
+  v2 = np.diff(lseg2, axis=0)[0]
+  v2 = v2 / np.linalg.norm(v2)
+  if v1 @ v2 > 0:
+    return np.inf
+
+  lseg = np.concatenate([lseg1[::-1], lseg2], axis=0)
+  mu = lseg.mean(axis=0)
+  _, _, vt = np.linalg.svd(lseg - mu, full_matrices=True)
+  y = (lseg - mu) @ vt[0]
+  if y[0] > y[-1]:
+    y = y[::-1]
+  if y[2] - y[1] < -_JOIN_MAX_OVERLAP_PX:
+    return np.inf
+
+  # Bend both stubs to the midpoint of the two focus endpoints and ask
+  # how far each had to move; a real junction moves neither much.
+  mid = 0.5 * (lseg1[0] + lseg2[0])
+  _, er1, _ = min_distance_to_lineseg(
+    np.stack([mid, lseg1[1]]), lseg1[None, 0])
+  _, er2, _ = min_distance_to_lineseg(
+    np.stack([mid, lseg2[1]]), lseg2[None, 0])
+  if er1[0] + er2[0] > _JOIN_MAX_KINK_PX:
+    return np.inf
+
+  u1 = mid - lseg1[1]
+  u1 = u1 / np.linalg.norm(u1)
+  u2 = mid - lseg2[1]
+  u2 = u2 / np.linalg.norm(u2)
+  return float(np.degrees(np.arccos(np.clip(-(u1 @ u2), -1.0, 1.0))))
+
+
+# mindistance_to_polyline.m calls two segments equidistant within this.
+_POLY_TIE_TOL = 1e-6
+
+
+def min_distance_to_polyline(
+  polyline: np.ndarray, x: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+  """Port of mindistance_to_polyline.m.
+
+  Returns, per point: the arc length along the polyline measured from
+  its start, the perpendicular distance, the 0-based index of the
+  closest segment, and the polyline's total length. Points beyond
+  either end are measured against the extension of the first/last
+  segment, so the arc length may be negative or exceed the length.
+  """
+  dim = polyline.shape[1]
+  n, k = x.shape[0], polyline.shape[0] - 1
+  el0 = np.concatenate([[0.0], np.cumsum(norma(np.diff(polyline, axis=0), 1))])
+  lpoly = float(el0[-1])
+  el = np.zeros((n, k))
+  er = np.zeros((n, k))
+  elover = np.zeros((n, k))
+  for i in range(k):
+    e, r, seg_len = min_distance_to_lineseg(polyline[i:i + 2], x[:, :dim])
+    elover[:, i] = np.abs(e - np.clip(e, 0.0, seg_len))
+    if i > 0:  # only the first segment may be extended backwards
+      m = e < 0
+      r = np.where(m, np.hypot(r, e), r)
+      e = np.where(m, 0.0, e)
+    if i < k - 1:  # only the last segment may be extended forwards
+      m = e > seg_len
+      r = np.where(m, np.hypot(r, e - seg_len), r)
+      e = np.where(m, seg_len, e)
+    el[:, i], er[:, i] = e, r
+
+  # MATLAB's min skips NaN, which a zero-length segment produces.
+  er_cmp = np.where(np.isnan(er), np.inf, er)
+  c = er_cmp.argmin(axis=1)
+  err = er_cmp[np.arange(n), c]
+  # Among segments the point is equally far from, prefer the one it
+  # does not overshoot -- otherwise a shared vertex would be credited
+  # to whichever segment happened to come first.
+  tied = (np.abs(er_cmp - err[:, None]) < _POLY_TIE_TOL).sum(axis=1) > 1
+  if tied.any():
+    c[tied] = elover[tied].argmin(axis=1)
+  ell = (el + el0[:-1])[np.arange(n), c]
+  return ell, err, c, lpoly
