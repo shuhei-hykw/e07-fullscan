@@ -1,6 +1,6 @@
 # STATUS — 現在の状態（e07-fullscan）
 
-**最終更新: 2026-09-08**
+**最終更新: 2026-09-09**
 
 このファイルは「**今どうなっているか**」だけを書く。**追記ではなく
 上書き**する（変遷は `git log -p STATUS.md` で追える）。
@@ -18,7 +18,7 @@
 
 | Method | 内容 | ML | 状態 |
 |---|---|---|---|
-| **A** | Pure Python（`find_tracks`→`find_vertices`→`merge_vertex_slices`） | 不使用 | **主軸**。③は一通り最適化済み、④に未解決の重大問題 |
+| **A** | Pure Python（`find_tracks`→`find_vertices`→`merge_vertex_slices`） | 不使用 | **主軸。全域再解析 完了（2026-09-09）**。12.4億トラック → 反応点 1,516,569 個。④の precision が未解決 |
 | **B'** | グラフ検出器（`export_hits_grid`→`detectlseg`→`integrate_smallregions`→`detectbunki`） | 不使用 | **移植完了・実 E07 で走る**。cell=30 は45分/view だが purity が出ない。**cell=6＋分類器フィルタで約3時間/view**（未 end-to-end、LSF 向き）|
 | **C** | CNN 生画素セグメンテーション（別リポジトリ `e07-binary-segmentation`） | 使用 | **注力対象。弱い判別力が出た段階**（LOTO・セグメント単位で AUC 0.59、precision 49.5% > 基準率 43.6%）。実用には遠い |
 | **D** | 教師なしクラスタリング（KMeans/GMM） | 使用 | **失敗確定・打ち切り**（precision 46〜50%＝ほぼチャンス） |
@@ -309,10 +309,20 @@ hough_mg=40, grain_radius=15, px_scale_um=0.29`
    63 本＝0.26%。しかも上位100位以内（track 率 71%）と 1000位超
    （track 率 4%）の二峰性。報告時は層別を併記すること。
 
-6. **`results/` は 2026-05-14 で止まっており、旧パラメータ産物。**
-   現在の vertex カタログ（v6/v7 pairs、ΛΛ 候補、目視ラベル）は
-   すべて `hough_mg=5` 時代＝実飛跡ピクセルの 45.8% しか拾えていない
-   トラックカタログの上に乗っている。**下流の物理結果は要再生成。**
+6. **全域カタログは再生成済み（2026-09-09、この制約は解除）。**
+   本番パラメータ（mg=40）での全 2,025 view:
+
+   | 段 | 場所 | 件数 | サイズ |
+   |---|---|---|---|
+   | ③ トラック | `results/fullscan_v7/chunk_*.parquet` | **1,244,606,615** | 26 GB |
+   | ④ 反応点（スライス毎）| `results/vertex_v7/vertex_*.parquet` | **16,728,649** | 572 MB |
+   | ④ マージ後 | `results/vertex_v7/vertices_merged.parquet` | **1,516,569** | 62 MB |
+
+   所要 約1.5時間（LSF queue `p`、同時120本）。実測 ③ 1 view = 125〜134
+   秒 CPU / **1.2 GB**、④ 1 chunk = 約20秒 / **0.7 GB**。
+   旧 `results/`（2026-05-14、mg=5）は残してあるが**もう使わない**。
+   **1.52M という数はそのまま④の precision 問題である**——物理ベース
+   フィルタ（PID、頂点運動学）が必須であることの再確認。
 
 7. **mg=40 の④への影響を測った（2026-09-08、この制約は解除）。**
    実 view 1枚、mg=5 との比較:
@@ -420,6 +430,14 @@ hough_mg=40, grain_radius=15, px_scale_um=0.29`
   紛らわしい。`ps` の `%CPU` は生涯平均なので瞬時値は `top` で見ること。
   → **重い計算は必ず LSF へ。** ベンチマーク前に
   `cat /proc/self/cgroup` で `restricted_user` に入っていないか確認。
+- **LSF 投入は `queue: auto` で（2026-09-09）。** キュー混雑は時間単位で
+  変わる（2026-09-08 夜は `h` が PEND 0、翌朝 2,820）。
+  `module/pipeline/lsf_queue.py` が `bqueues -u <user>` から投入可能な
+  キューを取り、CPU/wall/メモリ/**TASKLIMIT** で足切りして
+  「いま起動できるジョブ数」と待ち行列の短さで選ぶ。
+  **罠2つ**: queue `p` は `TASKLIMIT 2 4 64` で `-n 1` を拒否する
+  （表形式の `bqueues` には出ない）。`MAX_JOB_ARRAY_SIZE = 1000` なので
+  2,025 要素の配列は投げられない（自動分割する）。
 - **全域再解析（Method A）は LSF に投げられる（2026-09-08、7月の
   結論を撤回）。** メモリは**チャンクあたりの view 数**に比例する:
   実測 1 view **1.55 GB**、2 view 4.35 GB、4 view 7.10 GB。
@@ -434,6 +452,11 @@ hough_mg=40, grain_radius=15, px_scale_um=0.29`
   `n_jobs: 135` がメモリ超過。出力先も `results/fullscan_v7` に分けた
   （`results/` の 2026-05-14 産物と chunk 名が衝突するため）。
   ジョブスクリプトは conda 無しノードでも `myenv` を使い、既存ファイルが
-  あれば上書きせず落ちる。`--dry-run` で確認済み。**未投入。**
+  あれば上書きせず落ちる。**2026-09-09 に投入・完走した。**
+  同種の腐りが `scripts/kekcc_vertex.sh` にもあった（存在しない
+  `scripts/find_vertices.py` を呼んでいた）ので修正済み。
+  **必ずパイロット（`--array 1-20`）を先に投げること**——上記の
+  不具合はどれも実行しないと分からず、2,025 ジョブなら 2,025 回
+  失敗していた。
 - **gitlab.com のリポジトリは kekcc から fetch 不可**（公開鍵未設定）:
   `pyescan` / `kinema` / `kinema.ibuki`。github 側は問題なし。

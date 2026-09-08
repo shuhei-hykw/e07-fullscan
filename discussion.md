@@ -1341,3 +1341,18 @@ have been moved to `logs/kekcc/archive_2026-05/`.
 → Submitting the remaining 2,005 views (`--array 21-2025`). Full-run
 estimate: ~73 CPU-hours, ~28 GB output, ~40 min wall on queue `p` at
 120 concurrent.
+
+**Full run complete (2026-09-09 01:43)**:
+stage 3 `results/fullscan_v7/` = **1,244,606,615 tracks** (2,025 chunks,
+no gaps, no empty files, 26 GB); stage 4
+`results/vertex_v7/vertex_*.parquet` = **16,728,649 candidates**
+(572 MB), merged into `vertices.parquet` (464 MB) and
+`vertices_merged.parquet` = **1,516,569 vertices** (`--min-slices 2
+--min-tracks 8`, 62 MB). **About 1.5 hours from submission to the
+finished catalogues.** The LL pair search
+(`module/pipeline/pairs.py`) was retired on 2026-05-14, so the current
+pipeline ends here.
+**1.52M merged vertices is the stage-4 precision problem at full
+scale** -- confirmation that a physics-based filter (PID, vertex
+kinematics) is required rather than optional. The old `results/`
+(2026-05-14, mg=5) is left in place.

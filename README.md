@@ -377,6 +377,45 @@ E07 is 1.5 µm/slice, and `config.E07_Z_SCALE` holds the right value.
 The simulation cannot validate that switch, since 3.0 / 0.29 is correct
 there.
 
+## Batch Submission (KEKCC / LSF)
+
+```bash
+python -m module.pipeline.cli_submit_kekcc --array 1-20   # pilot first
+python -m module.pipeline.cli_submit_kekcc --array 21-2025
+python -m module.pipeline.cli_submit_vertex_kekcc \
+    --chunk-dir results/fullscan_v7 --vertex-dir results/vertex_v7
+```
+
+`queue: auto` in `config/kekcc.yaml` picks the queue at submission
+time. Which queue is best changes by the hour — on the evening of
+2026-09-08 queue `h` had nothing pending, and by the next morning it
+had 2,820 while `p` was empty — so a queue named in a config file is
+stale before it is ever used. `module/pipeline/lsf_queue.py` asks
+`bqueues` which queues this user may submit to, drops any whose CPU,
+wall, memory or **task** limits cannot hold one job, and ranks the rest
+by how many jobs could start immediately and then by backlog.
+
+Two limits are invisible in the table form of `bqueues` and both
+rejected a submission outright:
+
+- Queue `p` has `TASKLIMIT 2 4 64` and refuses `-n 1` with "Too few
+  tasks requested". Vertex finding is single-threaded, but asking for
+  two slots is what makes `p` usable, and `p` runs 120 of our jobs at
+  once against queue `a`'s 4.
+- `MAX_JOB_ARRAY_SIZE` is 1000, so a 2,025-element array cannot be
+  submitted. The submitters split it automatically.
+
+**Always run a pilot first.** `--array 1-20` submits a real slice of
+the same partition, so nothing is wasted, and it finishes in three
+minutes. The 2026-09-09 pilot caught a job script calling a module that
+had been renamed away in May, a vertex submitter asking for 8 GB on a
+4 GB queue, and stale May error logs that read as failures. Each would
+otherwise have failed 2,025 times.
+
+Measured per job on a batch node (2026-09-09): tracks 125–134 s CPU and
+1.2 GB, vertices ~20 s and 0.7 GB — both comfortably inside the 4 GB
+cap that applies to every kekcc queue.
+
 ## Web Viewer
 
 ```bash

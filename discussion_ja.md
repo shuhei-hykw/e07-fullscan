@@ -1255,3 +1255,15 @@ CPU 125〜134 秒/job（ワークサーバの 277 秒より速い＝throttle が
 `cli_submit_vertex_kekcc.py` も自動キュー選択・配列分割・`--array` に対応させ、
 既定メモリを 8000（4 GB 制限超）→ 4000 に修正。
 実測 1 chunk あたり **22 秒・705 MB**、候補 7,902 個/view。
+
+**全域完走（2026-09-09 01:43）**:
+③ `results/fullscan_v7/` = **1,244,606,615 tracks**（2,025 chunk、欠番・空ゼロ、26 GB）、
+④ `results/vertex_v7/vertex_*.parquet` = **16,728,649 候補**（572 MB）、
+`vertices.parquet`（マージ、464 MB）、
+`vertices_merged.parquet` = **1,516,569 反応点**（`--min-slices 2
+--min-tracks 8`、62 MB）。**投入から全カタログ完成まで約1.5時間。**
+ΛΛ ペア探索（`module/pipeline/pairs.py`）は 2026-05-14 に廃止済みなので
+現行パイプラインはここで終端。
+**1.52M という数はそのまま④の precision 問題**であり、物理ベース
+フィルタ（PID、頂点運動学）が必須であることの再確認になった。
+旧 `results/`（2026-05-14、mg=5）は残置。
