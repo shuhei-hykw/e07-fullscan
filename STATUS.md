@@ -403,12 +403,10 @@ hough_mg=40, grain_radius=15, px_scale_um=0.29`
   シンボリックリンク）。E07 データは
   `/gpfs/group/had/sks/E07/tohoku/fullscan/E07/MOD108/PL12/tohoku-v1/
   AREA00/IMAGE00_AREA00`（2025 タイル / 259 GB）。
-  Method C のリポジトリは **ローカルでは `e07-binary-segmentation`**
-  だが、**GitHub 側は `e07-ml-binary-segmentation` に改名されている**
-  （2026-09-09 の push で判明。リダイレクトが効くので push/pull は
-  通るが、`git remote set-url origin
-  git@github.com:shuhei-hykw/e07-ml-binary-segmentation.git` で
-  直しておくのが望ましい。当セッションでは実行権限が無く未実施）。
+  Method C のリポジトリは **ローカルのディレクトリ名が
+  `e07-binary-segmentation`**、**GitHub 側は
+  `e07-ml-binary-segmentation`**（2026-09-09 の push で改名が判明し、
+  remote URL は新名に更新済み。ディレクトリ名はそのまま）。
 - **kekcc の Python**: conda `myenv`
   （`/home/had/hayashu/.conda/envs/myenv/bin/python`、py3.9）が
   プロジェクト環境。既定の py3.12 ではない。cv2 4.12.0 / scipy /

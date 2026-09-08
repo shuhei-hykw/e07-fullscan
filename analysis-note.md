@@ -95,10 +95,12 @@ remote: This repository moved. Please use the new location:
 remote:   git@github.com:shuhei-hykw/e07-ml-binary-segmentation.git
 ```
 
-リダイレクトが効くので push/pull は通るが、ローカルの remote URL は
-旧名のまま。`git remote set-url origin
-git@github.com:shuhei-hykw/e07-ml-binary-segmentation.git` で直すべき
-（当セッションでは実行権限が無く未実施）。
+リダイレクトが効くので旧 URL でも push/pull は通るが、**remote URL を
+新名に更新した**（`git remote set-url origin
+git@github.com:shuhei-hykw/e07-ml-binary-segmentation.git`）。
+更新後は `ls-remote` / `push` ともリダイレクト警告なしで通ることを確認。
+**ローカルのディレクトリ名は `e07-binary-segmentation` のまま**なので、
+ディレクトリ名と GitHub 名が食い違っている点に注意。
 
 STATUS.md の「リポジトリは `e07-binary-segmentation` の名前であって
 `e07-ml-binary-segmentation` ではない」という記述は、**ローカル名に
