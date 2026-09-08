@@ -20,7 +20,7 @@
 |---|---|---|---|
 | **A** | Pure Python（`find_tracks`→`find_vertices`→`merge_vertex_slices`） | 不使用 | **主軸。全域再解析 完了（2026-09-09）**。12.4億トラック → 反応点 1,516,569 個。④の precision が未解決 |
 | **B'** | グラフ検出器（`export_hits_grid`→`detectlseg`→`integrate_smallregions`→`detectbunki`） | 不使用 | **移植完了・実 E07 で走る**。cell=30 は45分/view だが purity が出ない。**cell=6＋分類器フィルタで約3時間/view**（未 end-to-end、LSF 向き）|
-| **C** | CNN 生画素セグメンテーション（別リポジトリ `e07-binary-segmentation`） | 使用 | **注力対象。弱い判別力が出た段階**（LOTO・セグメント単位で AUC 0.59、precision 49.5% > 基準率 43.6%）。実用には遠い |
+| **C** | CNN 生画素セグメンテーション（別リポジトリ `e07-ml-binary-segmentation`） | 使用 | **注力対象。弱い判別力が出た段階**（LOTO・セグメント単位で AUC 0.59、precision 49.5% > 基準率 43.6%）。実用には遠い |
 | **D** | 教師なしクラスタリング（KMeans/GMM） | 使用 | **失敗確定・打ち切り**（precision 46〜50%＝ほぼチャンス） |
 
 Method A/B が共用する補助部品として、手作り特徴量分類器
@@ -403,10 +403,11 @@ hough_mg=40, grain_radius=15, px_scale_um=0.29`
   シンボリックリンク）。E07 データは
   `/gpfs/group/had/sks/E07/tohoku/fullscan/E07/MOD108/PL12/tohoku-v1/
   AREA00/IMAGE00_AREA00`（2025 タイル / 259 GB）。
-  Method C のリポジトリは **ローカルのディレクトリ名が
-  `e07-binary-segmentation`**、**GitHub 側は
-  `e07-ml-binary-segmentation`**（2026-09-09 の push で改名が判明し、
-  remote URL は新名に更新済み。ディレクトリ名はそのまま）。
+  Method C のリポジトリは **`e07-ml-binary-segmentation`**（2026-09-09
+  に GitHub の改名が判明し、remote URL・kekcc のディレクトリ名とも
+  新名へ揃えた。旧名は `e07-binary-segmentation`）。
+  **macOS 側は元から `e07-ml-binary-segmentation`** だったので、
+  これで三者（macOS / kekcc / GitHub）の名前が揃った。
 - **kekcc の Python**: conda `myenv`
   （`/home/had/hayashu/.conda/envs/myenv/bin/python`、py3.9）が
   プロジェクト環境。既定の py3.12 ではない。cv2 4.12.0 / scipy /

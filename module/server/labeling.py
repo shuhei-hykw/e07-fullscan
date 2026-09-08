@@ -100,7 +100,7 @@ _MULTI_TILE_SOURCES = [
 # share a process without deadlocking torch's backward pass.
 _CNN_SCORES_PATH = (
   Path(__file__).resolve().parents[2].parent
-  / "e07-binary-segmentation" / "data" / "cnn_scores.json")
+  / "e07-ml-binary-segmentation" / "data" / "cnn_scores.json")
 
 
 _FEATURE_CACHE: dict = {}
@@ -310,7 +310,7 @@ def register_labeling_routes(app: Flask, safe_resolve, labels_dir: Path):
 
     CNN probabilities are read from a file rather than computed here,
     because importing torch into this process alongside OpenCV
-    deadlocks (see e07-binary-segmentation/src/model_defaults.py).
+    deadlocks (see e07-ml-binary-segmentation/src/model_defaults.py).
     Regenerate with, in that repo:
       python src/dump_segments.py --all-candidates --hough 35,30,40 \\
         --out-dir data/segments_all

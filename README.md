@@ -452,7 +452,7 @@ and OpenCV deadlock in one process. Regenerate them in the sibling ML
 repo after changing the model:
 
 ```bash
-cd ../e07-binary-segmentation/src
+cd ../e07-ml-binary-segmentation/src
 python dump_segments.py --all-candidates --hough 35,30,40 \
   --out-dir ../data/segments_all
 python score_candidates.py --checkpoint ../results/<run>.pt

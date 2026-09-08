@@ -99,8 +99,15 @@ remote:   git@github.com:shuhei-hykw/e07-ml-binary-segmentation.git
 新名に更新した**（`git remote set-url origin
 git@github.com:shuhei-hykw/e07-ml-binary-segmentation.git`）。
 更新後は `ls-remote` / `push` ともリダイレクト警告なしで通ることを確認。
-**ローカルのディレクトリ名は `e07-binary-segmentation` のまま**なので、
-ディレクトリ名と GitHub 名が食い違っている点に注意。
+**kekcc のディレクトリ名も `e07-ml-binary-segmentation` へ rename した**
+（macOS 側は元からこの名前で、kekcc だけがずれていた。これで
+macOS / kekcc / GitHub の三者が揃った）。
+機能的な参照は `e07-fullscan/module/server/labeling.py` の
+`_CNN_SCORES_PATH` 1 箇所だけで、更新して解決を確認済み。
+ML 側の `src/paths.py` は `REPO_ROOT.parent / "e07-fullscan"` を見るので
+自分のディレクトリ名には依存せず、影響なし。
+discussion / analysis-note の過去エントリは追記専用なので旧名のまま
+残してある（履歴として正しい）。
 
 STATUS.md の「リポジトリは `e07-binary-segmentation` の名前であって
 `e07-ml-binary-segmentation` ではない」という記述は、**ローカル名に
