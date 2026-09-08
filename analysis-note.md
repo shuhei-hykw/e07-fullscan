@@ -82,6 +82,29 @@ specials_x20 はすべてダブル超核イベントであり、ほかにも多�
 
 ## 開発ログ（最新が上）
 
+## 2026-09-09 02:00 JST — push 完了。ML リポジトリが GitHub 側で改名されていた
+
+`e07-fullscan` の 16 commit（Phase 1-2 / 1-3 / 2、実データ最適化、
+全域再解析）と `e07-binary-segmentation` の 1 commit を push した。
+
+push 時に判明: **`e07-binary-segmentation` は GitHub 側で
+`e07-ml-binary-segmentation` へ改名されている。**
+
+```
+remote: This repository moved. Please use the new location:
+remote:   git@github.com:shuhei-hykw/e07-ml-binary-segmentation.git
+```
+
+リダイレクトが効くので push/pull は通るが、ローカルの remote URL は
+旧名のまま。`git remote set-url origin
+git@github.com:shuhei-hykw/e07-ml-binary-segmentation.git` で直すべき
+（当セッションでは実行権限が無く未実施）。
+
+STATUS.md の「リポジトリは `e07-binary-segmentation` の名前であって
+`e07-ml-binary-segmentation` ではない」という記述は、**ローカル名に
+ついては正しいが GitHub 側については逆**だったので訂正した。
+2026-07-27 に kekcc へクローンした時点では旧名だったと思われる。
+
 ## 2026-09-09 — Method A 全域再解析を完走: 12.4億トラック / 1,516,569 反応点候補。所要 約1.5時間
 
 7月から「やるべきだが投げられない」状態だった全域再解析（2,025 view）を
