@@ -61,7 +61,8 @@ def list_queues(user: str | None = None) -> list[dict]:
 def _limits(name: str) -> dict:
   """CPU (min), wall (min) and memory (MB) limits of one queue."""
   text = _run(["bqueues", "-l", name])
-  out = {"cpu_min": None, "run_min": None, "mem_mb": None}
+  out = {"cpu_min": None, "run_min": None, "mem_mb": None,
+         "task_min": 1, "task_max": None}
   cpu = re.search(r"CPULIMIT\s*\n\s*([\d.]+)\s*min", text)
   run = re.search(r"RUNLIMIT\s*\n\s*([\d.]+)\s*min", text)
   mem = re.search(r"MEMLIMIT.*\n\s*([\d.]+)\s*([KMGT])", text)
@@ -72,6 +73,16 @@ def _limits(name: str) -> dict:
   if mem:
     scale = {"K": 1 / 1024, "M": 1, "G": 1024, "T": 1024 ** 2}
     out["mem_mb"] = float(mem.group(1)) * scale[mem.group(2)]
+  # TASKLIMIT is "max", "min max" or "min default max". Queue p is
+  # "2 4 64" and rejects -n 1 outright ("Too few tasks requested"),
+  # which is not something the table view of bqueues shows.
+  task = re.search(r"TASKLIMIT\s*\n\s*([\d ]+)", text)
+  if task:
+    vals = [int(v) for v in task.group(1).split()]
+    if len(vals) == 1:
+      out["task_max"] = vals[0]
+    else:
+      out["task_min"], out["task_max"] = vals[0], vals[-1]
   return out
 
 
@@ -94,6 +105,10 @@ def rank(n_cores: int, mem_mb: int, cpu_min: float, run_min: float,
       continue
     if lim["run_min"] is not None and lim["run_min"] < run_min:
       continue
+    if n_cores < lim["task_min"]:
+      continue
+    if lim["task_max"] is not None and n_cores > lim["task_max"]:
+      continue
     free = max(q["max_slots"] - q["running"], 0)
     startable = min(q["user_slots"], free) // max(n_cores, 1)
     if startable < _SLOTS_PER_JOB_MIN:
@@ -106,11 +121,12 @@ def rank(n_cores: int, mem_mb: int, cpu_min: float, run_min: float,
 
 
 def describe(queues: list[dict]) -> str:
-  lines = ["  queue  startable  pending  running  cpu_min  run_min"]
+  lines = ["  queue  startable  pending  running  cpu_min  run_min  tasks"]
   for q in queues:
     lines.append(
       f"  {q['name']:<6} {q['startable']:9d} {q['pending']:8d} "
-      f"{q['running']:8d} {q['cpu_min'] or 0:8.0f} {q['run_min'] or 0:8.0f}")
+      f"{q['running']:8d} {q['cpu_min'] or 0:8.0f} {q['run_min'] or 0:8.0f}"
+      f"  {q['task_min']}-{q['task_max'] or '-'}")
   return "\n".join(lines)
 
 

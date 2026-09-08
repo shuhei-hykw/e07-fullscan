@@ -1240,3 +1240,18 @@ CPU 125〜134 秒/job（ワークサーバの 277 秒より速い＝throttle が
 `logs/kekcc/archive_2026-05/` へ退避した）。
 → 残り 2,005 view（`--array 21-2025`）を投入する。
 全域の見込み: CPU 約73時間、出力 約28 GB、queue `p` の同時120本で約40分。
+
+**トラックカタログ完成（2026-09-09 01:40）**: 2,025 chunk、欠番ゼロ・空ゼロ、
+**1,244,606,615 tracks**（min 366,806 / median 617,823 / max 665,501 per view）、
+**26 GB**、`results/fullscan_v7/`。投入から完了まで**約1時間**（queue `p`、
+同時120本、配列は1000要素上限のため3分割）。旧 mg=5 カタログ（約11,842本/view）
+の**52倍**。
+
+**次に④（反応点探索）を投入する。** 出力先 `results/vertex_v7/`
+（`vertex_NNNN.parquet`）、ログ `logs/kekcc/vertex_*.{log,err}`。
+`scripts/kekcc_vertex.sh` にも同種の腐りがあった——存在しない
+`scripts/find_vertices.py` を呼んでいたので `module.pipeline.cli_find_vertices`
+に修正し、conda 無しノードのフォールバックと上書き拒否も入れた。
+`cli_submit_vertex_kekcc.py` も自動キュー選択・配列分割・`--array` に対応させ、
+既定メモリを 8000（4 GB 制限超）→ 4000 に修正。
+実測 1 chunk あたり **22 秒・705 MB**、候補 7,902 個/view。

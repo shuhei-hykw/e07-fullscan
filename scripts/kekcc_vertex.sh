@@ -16,9 +16,22 @@ LOG_FILE="${PROJECT_DIR}/logs/kekcc/vertex_${CHUNK_PAD}.log"
 
 cd "$PROJECT_DIR"
 
+# Same environment dance as kekcc_job.sh: the project env is conda
+# `myenv`, and a batch node without conda must still find it.
+PY=python
 if command -v conda &>/dev/null; then
     source "$(conda info --base)/etc/profile.d/conda.sh"
     conda activate myenv 2>/dev/null || true
+fi
+if ! "$PY" -c "import pandas" 2>/dev/null; then
+    PY="$HOME/.conda/envs/myenv/bin/python"
+fi
+"$PY" -c "import pandas, numpy, scipy" || {
+    echo "no usable python (need pandas/numpy/scipy)" >&2; exit 1; }
+
+if [ -e "$OUT_FILE" ]; then
+    echo "refusing to overwrite $OUT_FILE" >&2
+    exit 1
 fi
 
 echo "=== vertex ${LSB_JOBINDEX}/${N_JOBS} ===" | tee "$LOG_FILE"
@@ -27,7 +40,7 @@ echo "Output: $OUT_FILE" | tee -a "$LOG_FILE"
 echo "Start : $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
 echo "---" | tee -a "$LOG_FILE"
 
-python scripts/find_vertices.py \
+"$PY" -m module.pipeline.cli_find_vertices \
     --input  "$IN_FILE" \
     --output "$OUT_FILE" \
     --min-tracks     3 \
