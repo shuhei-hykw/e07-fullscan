@@ -1305,3 +1305,39 @@ stage 1 peaking at 0.3 GB. Simulated purity there is **75.9%** against
 17.5% at 30 px. Reference checks unchanged (1,239/1,239 at 2.5e-13 px).
 The 6 px end-to-end run has NOT been done -- it belongs on LSF queue
 `h`. Commit e763a36.
+
+## 2026-09-09 — Method A full re-analysis: 20-view pilot submitted
+
+**Inputs (read-only)**: `/gpfs/group/had/sks/E07/tohoku/fullscan/E07/MOD108/
+PL12/tohoku-v1/AREA00/IMAGE00_AREA00` (2025 views).
+**Outputs (new, owned by this session)**:
+`results/fullscan_v7/chunk_0001..0020.parquet`,
+`logs/kekcc/job_{1..20}.{log,err}`, `logs/kekcc/analyze_00{01..20}.log`.
+**Changed (owned by this repo)**: `module/pipeline/lsf_queue.py` (new),
+`module/pipeline/cli_submit_kekcc.py`, `config/kekcc.yaml`.
+
+**The queue is chosen at submission time** (`queue: auto`). KEKCC queue
+load changes by the hour: on the evening of 2026-09-08 queue `h` had
+nothing pending; by 2026-09-09 it had 2,820. The selector takes only
+queues `bqueues -u <user>` says are submittable, drops any whose CPU,
+wall or memory limit cannot hold one job, and ranks by how many jobs
+could start now (the smaller of the per-user slot limit and the free
+slots, over n_cores) then by backlog. This time it picked **`p`**
+(120 startable, 0 pending).
+
+**20-view pilot first** (`--array 1-20`; `--chunk-total` stays 2025, so
+the pilot is a real slice of the same partition and its output is not
+wasted). The rest follows once it checks out.
+
+Output goes to a separate directory from the 2026-05-14 mg=5 products.
+
+**Pilot result (2026-09-09 00:35, job 94622705, queue `p`): 20/20 clean.**
+125-134 s CPU per job (faster than the work server's 277 s, which was
+throttled), **MAX MEM 1.2 GB** against the 4 GB cap, 13.4-14.3 MB output
+per view. Submitted 00:32, all finished 00:35. `chunk_0001` matches the
+local run of view 0 exactly at 634,577 tracks. No stderr -- the errors
+visible in `logs/kekcc/job_*.err` were leftovers from 2026-05-09 and
+have been moved to `logs/kekcc/archive_2026-05/`.
+→ Submitting the remaining 2,005 views (`--array 21-2025`). Full-run
+estimate: ~73 CPU-hours, ~28 GB output, ~40 min wall on queue `p` at
+120 concurrent.

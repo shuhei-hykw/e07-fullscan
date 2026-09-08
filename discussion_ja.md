@@ -1209,3 +1209,34 @@ dd393d1 / それ以降。
 シミュレーションでの purity は cell=30 の 17.5% に対し **75.9%**。
 参照照合は不変（段1 1,239本 全一致 2.5e-13 px）。
 **cell=6 の end-to-end は未実施**——LSF queue `h` 向き。commit e763a36。
+
+## 2026-09-09 — Method A 全域再解析: パイロット20 view を投入
+
+**入力（読むだけ）**: `/gpfs/group/had/sks/E07/tohoku/fullscan/E07/MOD108/
+PL12/tohoku-v1/AREA00/IMAGE00_AREA00`（2025 view）。
+**出力（当セッション所有・新規）**: `results/fullscan_v7/chunk_0001..0020.parquet`、
+`logs/kekcc/job_{1..20}.{log,err}`、`logs/kekcc/analyze_00{01..20}.log`。
+**変更（当リポジトリ所有）**: `module/pipeline/lsf_queue.py`（新規）、
+`module/pipeline/cli_submit_kekcc.py`、`config/kekcc.yaml`。
+
+**キューは投入時に自動選択する**（`queue: auto`）。KEKCC のキュー混雑は
+時間単位で変わる——2026-09-08 夜は `h` が PEND 0 だったが、翌 2026-09-09 には
+PEND 2,820 になっていた。`bqueues -u <user>` で投入可能なキューだけを取り、
+CPU/wall/メモリ制限で足切りし、「いま起動できるジョブ数」（ユーザ slot 上限と
+空き slot の小さい方 ÷ n_cores）と待ち行列の短さで順位付けする。
+今回の選択は **`p`**（startable 120、PEND 0）。
+
+**まずパイロット20 view**（`--array 1-20`。`--chunk-total` は 2025 のままなので
+本番と同じ分割の実スライスで、出力は捨てにならない）。確認したら残りを投げる。
+
+`results/` の 2026-05-14 産物（mg=5）とは出力先を分けてある。
+
+**パイロット結果（2026-09-09 00:35、job 94622705、queue `p`）: 20/20 成功。**
+CPU 125〜134 秒/job（ワークサーバの 277 秒より速い＝throttle が無いため）、
+**MAX MEM 1.2 GB**（4 GB 制限に対し十分）、出力 13.4〜14.3 MB/view。
+投入 00:32 → 全完了 00:35。`chunk_0001` は手元で回した view 0 と
+**634,577 tracks で完全一致**。stderr は空
+（`logs/kekcc/job_*.err` に見えたエラーは 2026-05-09 の残骸だったので
+`logs/kekcc/archive_2026-05/` へ退避した）。
+→ 残り 2,005 view（`--array 21-2025`）を投入する。
+全域の見込み: CPU 約73時間、出力 約28 GB、queue `p` の同時120本で約40分。

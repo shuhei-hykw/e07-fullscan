@@ -5,16 +5,35 @@ Usage:
   python scripts/submit_kekcc.py
   python scripts/submit_kekcc.py --config config/kekcc.yaml
   python scripts/submit_kekcc.py --dry-run   # print bsub command only
+  python scripts/submit_kekcc.py --array 1-20   # pilot, first 20 views
+
+`queue: auto` in the config picks the queue that can start the most
+jobs right now (see module.pipeline.lsf_queue). Which queue that is
+changes by the hour, so it is worth asking rather than hard-coding.
+
+`--array` restricts which array indices are submitted WITHOUT changing
+--chunk-total, so a pilot covers a real slice of the same partition
+the full run will use and its output is not thrown away.
 """
 from __future__ import annotations
 
 import argparse
+import getpass
 import re
 import subprocess
 import sys
 from pathlib import Path
 
 import yaml
+
+from module.pipeline import lsf_queue
+
+# Per-view cost measured on a real E07 tile, 2026-09-08: 128 s wall,
+# 277 s CPU, 1.55 GB. Used to reject queues whose limits cannot hold
+# one job, with room for denser views.
+_CPU_MIN_PER_VIEW = 277 / 60.0
+_SAFETY = 3.0
+_AUTO = "auto"
 
 
 def _load(cfg_path: Path) -> dict:
@@ -28,6 +47,9 @@ def main() -> None:
                     help="Job config YAML (default: config/kekcc.yaml)")
     ap.add_argument("--dry-run", action="store_true",
                     help="Print bsub command without submitting")
+    ap.add_argument("--array", default=None, metavar="LO-HI",
+                    help="Submit only these array indices (e.g. 1-20); "
+                         "--chunk-total is unchanged")
     args = ap.parse_args()
 
     if not args.config.exists():
@@ -59,10 +81,30 @@ def main() -> None:
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     views_per_job = (total + n_jobs - 1) // n_jobs
+    array = args.array or f"1-{n_jobs}"
+    lo, _, hi = array.partition("-")
+    lo, hi = int(lo), int(hi or lo)
+    batches = lsf_queue.split_array(lo, hi, lsf_queue.max_array_size())
+    n_submitted = hi - lo + 1
+
+    if queue == _AUTO:
+        cpu_min = _CPU_MIN_PER_VIEW * views_per_job * _SAFETY
+        run_min = int(walltime.split(":")[0]) * 60 + int(
+            walltime.split(":")[1])
+        ranked = lsf_queue.rank(n_cores, mem_mb, cpu_min, run_min,
+                                user=getpass.getuser())
+        if not ranked:
+            print("ERROR: no queue can hold this job", file=sys.stderr)
+            sys.exit(1)
+        print("Queue selection (best first):")
+        print(lsf_queue.describe(ranked))
+        queue = ranked[0]["name"]
+        print(f"  -> {queue}\n")
 
     print("=== E07 KEKCC job submission ===")
     print(f"  Config     : {args.config}")
-    print(f"  Job name   : {name}[1-{n_jobs}]")
+    print(f"  Job name   : {name}[{array}]  ({n_submitted} jobs "
+          f"in {len(batches)} array(s))")
     print(f"  Queue      : {queue}")
     print(f"  Cores/job  : {n_cores}")
     print(f"  Memory     : {mem_mb} MB")
@@ -73,9 +115,10 @@ def main() -> None:
     print(f"  Log dir    : {log_dir}")
     print()
 
-    cmd = [
+    def build(lo_i: int, hi_i: int) -> list[str]:
+        return [
         "bsub",
-        "-J", f"{name}[1-{n_jobs}]",
+        "-J", f"{name}[{lo_i}-{hi_i}]",
         "-q", queue,
         "-n", str(n_cores),
         "-M", str(mem_mb),
@@ -88,22 +131,23 @@ def main() -> None:
         str(workers),
         output_dir,
         str(project_dir),
-    ]
+        ]
 
     if args.dry_run:
         print("bsub command (dry-run):")
-        print("  " + " \\\n    ".join(cmd))
+        print("  " + " \\\n    ".join(build(*batches[0])))
+        if len(batches) > 1:
+            print(f"  ... and {len(batches) - 1} more array(s): "
+                  + ", ".join(f"{a}-{b}" for a, b in batches[1:]))
         return
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    print(result.stdout.strip())
-    if result.returncode != 0:
-        print(result.stderr.strip(), file=sys.stderr)
-        sys.exit(result.returncode)
-
-    # extract job ID from "Job <NNN> is submitted..."
-    m = re.search(r"Job <(\d+)>", result.stdout)
-    job_id = m.group(1) if m else "?"
+    for lo_i, hi_i in batches:
+        result = subprocess.run(build(lo_i, hi_i), capture_output=True,
+                                text=True)
+        print(result.stdout.strip())
+        if result.returncode != 0:
+            print(result.stderr.strip(), file=sys.stderr)
+            sys.exit(result.returncode)
 
     print()
     print("Monitor:")

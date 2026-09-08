@@ -1,6 +1,8 @@
 job:
   name:     e07full     # LSF job name (array index appended automatically)
-  queue:    s            # s: 300 min walltime, 150 min CPU; l has a backlog
+  queue:    auto       # "auto" = pick the least-loaded usable queue at
+                       # submission time (module.pipeline.lsf_queue).
+                       # Which one that is changes by the hour.
   n_cores:  2            # CPU slots per job (-n); used by OpenCV threading
   mem_mb:   4000         # memory limit per job in MB (-M). This is also the
                          # HARD cap on every kekcc queue -- asking for more
