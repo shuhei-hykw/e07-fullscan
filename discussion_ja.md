@@ -1267,3 +1267,35 @@ CPU 125〜134 秒/job（ワークサーバの 277 秒より速い＝throttle が
 **1.52M という数はそのまま④の precision 問題**であり、物理ベース
 フィルタ（PID、頂点運動学）が必須であることの再確認になった。
 旧 `results/`（2026-05-14、mg=5）は残置。
+
+## 2026-09-09 — 既知 vertex の「順位」測定（recall ではなく precision を測る）
+
+**入力（読むだけ）**: `specials_x20/<event>/image.json`（9事象、うち7つが E07）、
+`tests/specials_gt.json`（2026-05-12 のクリック済み真値、200px XY / 30µm Z）。
+**出力（新規・当リポジトリ所有）**: `scripts/rank_specials.py`、
+`results/rank_specials.json`。
+
+**なぜ**: これまでの specials 測定は「見つかるか」だけを見ており
+（`test_specials.py` 35/35 通過）、それは recall であって問題ではなかった。
+全域カタログが 1,516,569 候補になった今、**真の vertex が候補リストの
+何位に来るか**が唯一意味のある指標である。真値は5月にクリック済みなので
+**人手ラベルは不要**。
+
+production カット（`results/vertex_v7` を作ったもの）と relaxed カット
+（beam-angle と angle-spread を外したもの）の両方を出す。前者は運用上の
+数字、後者との差で「カットが捨てたのか、順位に埋もれたのか」を分離できる。
+
+**B' 側も同じ既知 vertex で測る（2026-09-09）**:
+**入力（読むだけ）**: `specials_x20/<event>/image.json` 9事象、
+`tests/specials_gt.json`、`results/manual_labels`（分類器の学習に既存512ラベル）。
+**出力（新規・当セッション所有）**: `results/graphdet_specials/<event>.json`、
+`logs/kekcc/graphdet_*.{log,err}`。
+**変更**: `scripts/graphdet_specials.py`（新規）、
+`scripts/kekcc_graphdet_specials.sh`（新規）、`module/matlab_export.py`
+（`z_range` 引数を追加）。
+
+**z 窓が要る**: specials は最大200スライスだが graphdet の小領域は
+`REGION_Z = 80` で、それを超える hit は**黙って捨てられる**。真の vertex の
+スライスを中心に80スライス窓を取る。古典側の比較も同じ窓で行う必要がある。
+設定は 2026-09-08 の測定で決めた **cell=6 + 分類器デノイズ**。
+まず IBUKI（60スライスで最小）1事象をパイロットとして投げる。

@@ -161,6 +161,7 @@ def export_hits(
   noise_amax: int = _NOISE_AMAX,
   noise_cmp: int = _NOISE_CMP,
   noise_amax_upper: int = _NOISE_AMAX_UPPER,
+  z_range: tuple[int, int] | None = None,
 ) -> np.ndarray:
   """Build the MATLAB hit pixel list ``pl`` (N x 6) for one tile.
 
@@ -170,8 +171,12 @@ def export_hits(
   ``export_hits_grid``. Kept for comparison; not the default CLI mode.
   """
   reader = load_spng(json_path)
+  # graphdet's sub-regions are 80 slices deep (REGION_Z), and hits
+  # outside that are silently dropped, so a 200-slice specials stack
+  # has to be windowed before it is exported rather than after.
+  lo, hi = z_range or (0, len(reader))
   cols = []
-  for z in range(len(reader)):
+  for z in range(max(lo, 0), min(hi, len(reader))):
     fog, binary = _binarize_slice(
       reader, z, fog_ksize, noise_amin, noise_amax, noise_cmp,
       noise_amax_upper,
@@ -183,7 +188,7 @@ def export_hits(
     block = np.empty((xs.size, len(_PL_VARNAMES)), dtype=np.float64)
     block[:, 0] = xs + _ORIGIN_OFFSET            # x = col
     block[:, 1] = ys + _ORIGIN_OFFSET            # y = row
-    block[:, 2] = z + _ORIGIN_OFFSET             # z = slice index
+    block[:, 2] = (z - lo) + _ORIGIN_OFFSET      # z within the window
     block[:, 3] = n                              # intensity proxy
     block[:, 4] = _SHEET_PLACEHOLDER
     block[:, 5] = _ID_PLACEHOLDER
@@ -449,6 +454,7 @@ def export_hits_grid(
   noise_cell: int = _GRID_CELL_PX,
   denoise_method: str = "legacy",
   classifier=None,
+  z_range: tuple[int, int] | None = None,
 ) -> np.ndarray:
   """Build the MATLAB hit pixel list ``pl`` (N x 6) via component-grouped
   grid binning (see ``weighted_grid_hits``).
@@ -480,8 +486,12 @@ def export_hits_grid(
       "denoise_method='classifier' requires a fitted classifier "
       "(see track_classifier.train_classifier)")
   reader = load_spng(json_path)
+  # graphdet's sub-regions are 80 slices deep (REGION_Z), and hits
+  # outside that are silently dropped, so a 200-slice specials stack
+  # has to be windowed before it is exported rather than after.
+  lo, hi = z_range or (0, len(reader))
   cols = []
-  for z in range(len(reader)):
+  for z in range(max(lo, 0), min(hi, len(reader))):
     fog, binary = _binarize_slice(
       reader, z, fog_ksize, noise_amin, noise_amax, noise_cmp,
       noise_amax_upper,
@@ -500,7 +510,7 @@ def export_hits_grid(
     block = np.empty((len(hits), len(_PL_VARNAMES)), dtype=np.float64)
     block[:, 0] = hits[:, 0] + _ORIGIN_OFFSET    # x = col
     block[:, 1] = hits[:, 1] + _ORIGIN_OFFSET    # y = row
-    block[:, 2] = z + _ORIGIN_OFFSET             # z = slice index
+    block[:, 2] = (z - lo) + _ORIGIN_OFFSET      # z within the window
     block[:, 3] = hits[:, 2]                     # occupied px count
     block[:, 4] = _SHEET_PLACEHOLDER
     block[:, 5] = _ID_PLACEHOLDER

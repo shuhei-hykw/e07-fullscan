@@ -20,6 +20,7 @@ block stays broken until here.
 from __future__ import annotations
 
 import numpy as np
+from scipy.sparse import coo_matrix
 from scipy.spatial import cKDTree
 
 from .config import MATLAB_CONFIG, DetectorConfig
@@ -152,7 +153,13 @@ def _resample(
   th = cfg.resample_th
   n, m = x.shape[0], len(polylines)
   lengths = np.zeros(m)
-  owned = np.zeros((n, m), dtype=bool)
+  # Sparse ownership: a polyline claims a few hundred hits out of a
+  # whole view, so the dense (N, M) matrix is almost all zeros -- and
+  # on a real tile it is 241,000 x 29,000, which is 7 GB and more than
+  # any kekcc queue allows. This is what killed the first specials
+  # batch job.
+  own_rows: list[np.ndarray] = []
+  own_cols: list[np.ndarray] = []
   tree = cKDTree(x)
   refit = []
   for i, poly in enumerate(polylines):
@@ -163,8 +170,9 @@ def _resample(
     ell, err, _, lpoly = min_distance_to_polyline(poly, x[cand])
     sel = ((ell >= -_ELL_SLACK_PX) & (ell <= lpoly + _ELL_SLACK_PX)
            & (err < th))
-    owned[cand[sel], i] = True
     idx = cand[sel]
+    own_rows.append(idx)
+    own_cols.append(np.full(idx.size, i, dtype=np.int64))
     if idx.size == 0:
       # Nothing to re-fit; leave it at zero length and the next pass
       # will skip it.
@@ -175,14 +183,19 @@ def _resample(
     refit.append(fit[0])
     lengths[i] = fit[5]
 
-  # float32 counts stay exact well past any plausible hit count and
-  # keep this a single BLAS call instead of a 100s-of-MB int matmul.
-  e = owned.astype(np.float32)
-  shared = e.T @ e
-  own_counts = np.diag(shared).copy()
-  np.fill_diagonal(shared, 0.0)
+  rows = (np.concatenate(own_rows) if own_rows
+          else np.zeros(0, dtype=np.int64))
+  cols = (np.concatenate(own_cols) if own_cols
+          else np.zeros(0, dtype=np.int64))
+  owned = coo_matrix(
+    (np.ones(rows.size, dtype=np.float32), (rows, cols)),
+    shape=(n, m), dtype=np.float32).tocsr()
+  shared = (owned.T @ owned).tocsr()
+  own_counts = shared.diagonal().copy()
+  shared.setdiag(0.0)
+  shared.eliminate_zeros()
   with np.errstate(invalid="ignore", divide="ignore"):
-    ratio = shared.sum(axis=1) / own_counts
+    ratio = np.asarray(shared.sum(axis=1)).ravel() / own_counts
   # NaN (a polyline that owns nothing) compares false and is kept,
   # matching MATLAB.
   keep = ~(ratio > _MAX_SHARED_FRACTION)
