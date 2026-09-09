@@ -184,11 +184,23 @@ def branch_points(
   keys = sorted(shared)
   centroids = np.array([x[shared[k]].mean(axis=0) for k in keys])
   members = [set(k) for k in keys]
-  labels = _components(
-    np.linalg.norm(
-      scale_z(centroids[:, None, :] - centroids[None, :, :],
-              cfg.z_scale),
-      axis=2) < cfg.vertex_merge)
+  # Merging by an all-pairs distance matrix needs a (P, P, 3)
+  # intermediate, which on a dense tile is tens of GB and killed a
+  # batch job at the 4 GB cap. A radius query builds the same graph.
+  scaled = scale_z(centroids, cfg.z_scale)
+  tree = cKDTree(scaled)
+  pairs = np.asarray(sorted(tree.query_pairs(cfg.vertex_merge)),
+                     dtype=np.int64).reshape(-1, 2)
+  if pairs.size:
+    pairs = pairs[np.linalg.norm(
+      scaled[pairs[:, 0]] - scaled[pairs[:, 1]], axis=1)
+      < cfg.vertex_merge]
+  n_c = centroids.shape[0]
+  labels = _components(coo_matrix(
+    (np.ones(pairs.shape[0] * 2, dtype=np.uint8),
+     (np.concatenate([pairs[:, 0], pairs[:, 1]]),
+      np.concatenate([pairs[:, 1], pairs[:, 0]]))),
+    shape=(n_c, n_c)).tocsr())
   out, mult = [], []
   for lab in range(labels.max() + 1):
     sel = np.flatnonzero(labels == lab)
