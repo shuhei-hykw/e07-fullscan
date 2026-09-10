@@ -46,6 +46,20 @@ _Z_WINDOW = 80
 # The truth itself is only good to 200 px XY (expert click session), so
 # a tighter radius would be measuring the clicks, not the detector.
 _MATCH_PX = 200.0
+# Hits per sub-region the detector is affordable at. Stage 1 costs
+# roughly N^2 in the hits of one 128x128x80 region: ~40 s at 3,000 and
+# over 32 minutes at 6,700, which is 140 h per view. specials events
+# differ eightfold in density, so a fixed cell size cannot serve them
+# all -- the cell is widened until a region holds about this many.
+_TARGET_PER_REGION = 3500
+_N_REGIONS = 256
+_CELL_STEPS = (6, 8, 10, 12, 16, 20, 24, 30)
+# Hit count against cell size, measured on a full-scan tile: 1,667,324
+# at 6 px and 240,824 at 30 px, so hits ~ cell^-1.2. Used to jump
+# straight to a workable cell instead of re-exporting at each step,
+# since one export is ~20 minutes.
+_HIT_DENSITY_EXPONENT = 1.2
+_MAX_EXPORT_TRIES = 3
 
 
 def z_window(n_slices: int, centre: int) -> tuple[int, int]:
@@ -54,7 +68,8 @@ def z_window(n_slices: int, centre: int) -> tuple[int, int]:
   return max(lo, 0), min(lo + _Z_WINDOW, n_slices)
 
 
-def run(event: str, specials: Path, out_dir: Path) -> dict:
+def run(event: str, specials: Path, out_dir: Path,
+        cell_min: int = _GRAPH_CELL_PX) -> dict:
   gt_all = json.loads(_GT_PATH.read_text())
   gt = gt_all["events"][event]
   path = specials / event / "image.json"
@@ -64,14 +79,27 @@ def run(event: str, specials: Path, out_dir: Path) -> dict:
   t0 = time.time()
   clf = train_classifier(*build_training_set(_LABELS))
   method = "classifier" if clf is not None else "legacy"
-  pl = export_hits_grid(path, cell=_GRAPH_CELL_PX, denoise_method=method,
-                        classifier=clf, z_range=(lo, hi))
+  cell = cell_min
+  for attempt in range(_MAX_EXPORT_TRIES):
+    pl = export_hits_grid(path, cell=cell, denoise_method=method,
+                          classifier=clf, z_range=(lo, hi))
+    per_region = pl.shape[0] / _N_REGIONS
+    print(f"{event}: slices {lo}-{hi} of {n_slices}, cell {cell} px -> "
+          f"{pl.shape[0]} hits ({per_region:.0f}/region)", flush=True)
+    if per_region <= _TARGET_PER_REGION:
+      break
+    want = cell * (per_region / _TARGET_PER_REGION) ** (
+      1.0 / _HIT_DENSITY_EXPONENT)
+    nxt = next((c for c in _CELL_STEPS if c >= want), _CELL_STEPS[-1])
+    if nxt <= cell:
+      break
+    print(f"  too dense; retrying at {nxt} px", flush=True)
+    cell = nxt
   t1 = time.time()
-  print(f"{event}: slices {lo}-{hi} of {n_slices}, {pl.shape[0]} hits "
-        f"({method}) in {t1 - t0:.0f} s", flush=True)
+  print(f"  export ({method}) in {t1 - t0:.0f} s", flush=True)
 
   x = pl[:, :3]
-  cfg = MATLAB_CONFIG.for_spacing(float(_GRAPH_CELL_PX))
+  cfg = MATLAB_CONFIG.for_spacing(float(cell))
   seg, _ = detect_lseg_view(x, cfg=cfg)
   t2 = time.time()
   print(f"  stage 1: {seg.shape[2]} segments in {t2 - t1:.0f} s", flush=True)
@@ -84,7 +112,8 @@ def run(event: str, specials: Path, out_dir: Path) -> dict:
   print(f"  stage 3: {len(pts)} branch points in {time.time() - t3:.0f} s",
         flush=True)
 
-  res = {"event": event, "z_lo": lo, "z_hi": hi, "n_hits": int(x.shape[0]),
+  res = {"event": event, "cell_px": int(cell),
+         "z_lo": lo, "z_hi": hi, "n_hits": int(x.shape[0]),
          "n_segments": int(seg.shape[2]), "n_polylines": len(polys),
          "n_branch_points": int(len(pts)), "denoise": method,
          "rank": None, "mult": None, "dist_px": None,
@@ -112,8 +141,10 @@ def main() -> int:
   ap.add_argument("--specials", type=Path, default=_SPECIALS)
   ap.add_argument("--out", type=Path,
                   default=Path("results/graphdet_specials"))
+  ap.add_argument("--cell-min", type=int, default=_GRAPH_CELL_PX,
+                  help="smallest export cell to try (px)")
   args = ap.parse_args()
-  run(args.event, args.specials, args.out)
+  run(args.event, args.specials, args.out, args.cell_min)
   return 0
 
 

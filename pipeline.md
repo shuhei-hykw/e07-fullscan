@@ -216,6 +216,12 @@ bsub ... scripts/kekcc_graphdet_specials.sh "<event,list>" OUT_DIR PROJECT_DIR
 （`denoise_method="classifier"`、既存512ラベルで学習）。
 30 px は purity を 78.8%→17.5% に落とすので使わない。
 
+**ただしセル幅は密度に合わせる**（`scripts/graphdet_specials.py`）。
+段1 のコストは 1 小領域の hit 数のほぼ2乗で、3,000点で約40秒、
+6,700点で32分超（＝140時間/view）。specials 事象は密度が8倍違うので
+固定セルでは賄えない。**1 小領域あたり約3,500 hit** に収まるまでセルを
+広げる（hits ~ cell^-1.2 の実測から必要なセルを推定して1回で跳ぶ）。
+
 ### 実力
 
 - **シミュレーション真値**（10事象・130 分岐点）: `scripts/eval_branches.py`
