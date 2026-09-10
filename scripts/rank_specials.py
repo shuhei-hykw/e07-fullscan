@@ -100,6 +100,10 @@ def main() -> int:
   ap.add_argument("--events", default=None,
                   help="comma-separated subset (default: all with truth)")
   ap.add_argument("--out", type=Path, default=None)
+  ap.add_argument("--dump-merged", type=Path, default=None,
+                  help="also write each event's merged vertex table, so "
+                       "alternative rankings can be tried without "
+                       "re-running the pipeline")
   args = ap.parse_args()
 
   gt_all = json.loads(_GT_PATH.read_text())
@@ -129,6 +133,10 @@ def main() -> int:
         merged = (merge_vertex_slices(vdf, eps_xy=_MERGE_EPS_XY,
                                       min_slices=_MERGE_MIN_SLICES)
                   if not vdf.empty else pd.DataFrame())
+      if args.dump_merged is not None and not merged.empty:
+        args.dump_merged.mkdir(parents=True, exist_ok=True)
+        merged.to_parquet(
+          args.dump_merged / f"{event}__{label}.parquet", index=False)
       r = rank_of_truth(merged, gt_all["events"][event], tol_xy, tol_z)
       plate = "E07" if event in _E07 else "E373"
       dist = ("-" if r["dist_px"] is None else f"{r['dist_px']:.0f}")
