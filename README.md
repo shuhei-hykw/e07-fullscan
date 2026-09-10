@@ -60,6 +60,11 @@ module/
 
 ## Preprocessing Pipeline (Steps 1–5)
 
+See **`pipeline.md`** for the current end-to-end picture — the four
+stages, the entry point that runs each, where its output lands, and the
+production parameters. It is kept current in the same commit as any
+pipeline change.
+
 Steps 1–5 produce binary images passed to downstream graph analysis.
 
 | # | Step | Key Parameters |

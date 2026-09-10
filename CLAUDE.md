@@ -41,6 +41,15 @@ claude --resume 702bbb20-294e-43e3-969e-f2c19dd02c06 # macos
   free from `git log -p STATUS.md`). Keep it short. **Update it in the
   same commit as any change that invalidates it** — a stale STATUS.md is
   worse than none, since sessions act on it directly.
+- **`pipeline.md` answers "how does the data flow right now"**: the four
+  stages, which entry point runs each, where its output lands, and the
+  production parameters. Like `STATUS.md` it is **overwritten in place,
+  never appended**. **Update it in the same commit as any change to the
+  pipeline** — a new or removed stage, a changed input/output shape, a
+  moved entry point, or a new production parameter value. It is the
+  first thing to read when you need to know what the code actually
+  does, before `STATUS.md` (how well it works) or `analysis-note.md`
+  (why it is that way).
 - `analysis-note.md` and `STATUS.md` have different jobs and both stay:
   the note is append-only history (including superseded conclusions and
   dead ends), STATUS.md is only what is true now. If they disagree, the
