@@ -29,6 +29,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
+from scipy.spatial import Delaunay, QhullError
 from scipy.spatial.distance import pdist, squareform
 
 from .config import MATLAB_CONFIG, MATLAB_Z_SCALE, DetectorConfig
@@ -98,6 +99,43 @@ def _conncomp(
   return lab, len(seen)
 
 
+# Below this many hits the all-pairs graph is cheaper than building a
+# triangulation, and Delaunay is degenerate for very few points.
+_DELAUNAY_MIN_POINTS = 16
+
+
+def _mst_graph(x: np.ndarray, z_scale: float):
+  """Sparse graph whose minimum spanning tree equals the Euclidean one.
+
+  The Euclidean MST is a subgraph of the Delaunay triangulation, so
+  triangulating and keeping only those edges gives the identical tree
+  at O(N) memory instead of the O(N^2) all-pairs matrix. That matrix
+  is what put a dense real sub-region over the 4 GB kekcc cap.
+
+  Falls back to all-pairs when the point set is small or degenerate --
+  hits confined to a single slice are coplanar and Qhull refuses them.
+  Coincident hits are dropped by the caller, since a duplicate adds no
+  edge a spanning tree can use.
+  """
+  pts = scale_z(x, z_scale)
+  n = pts.shape[0]
+  if n >= _DELAUNAY_MIN_POINTS:
+    try:
+      simplices = Delaunay(pts).simplices
+    except QhullError:
+      simplices = None
+    if simplices is not None:
+      a, b = np.triu_indices(simplices.shape[1], 1)
+      eu = simplices[:, a].ravel()
+      ev = simplices[:, b].ravel()
+      lo = np.minimum(eu, ev)
+      hi = np.maximum(eu, ev)
+      pair = np.unique(np.column_stack([lo, hi]), axis=0)
+      w = norma(pts[pair[:, 0]] - pts[pair[:, 1]], 1)
+      return csr_matrix((w, (pair[:, 0], pair[:, 1])), shape=(n, n))
+  return csr_matrix(squareform(pdist(pts)))
+
+
 def split_into_linear_components(
   x: np.ndarray, th: float = TH_SPLIT,
   z_scale: float = MATLAB_Z_SCALE,
@@ -112,12 +150,7 @@ def split_into_linear_components(
   if n == 1:
     return np.ones(1, dtype=np.int64)
 
-  dm = squareform(pdist(scale_z(x, z_scale)))
-  if np.any(dm[np.triu_indices(n, 1)] == 0.0):
-    raise ValueError(
-      "coincident hits: MATLAB's graph() drops zero-weight edges, so "
-      "the spanning tree would not be comparable")
-  coo = minimum_spanning_tree(csr_matrix(dm)).tocoo()
+  coo = minimum_spanning_tree(_mst_graph(x, z_scale)).tocoo()
   eu = np.minimum(coo.row, coo.col)
   ev = np.maximum(coo.row, coo.col)
   # MATLAB keeps a graph's Edges table sorted by node pair; the cut
@@ -132,18 +165,27 @@ def split_into_linear_components(
   while True:
     lab, m = _conncomp(n, edges, alive)
     cut = False
+    # Group nodes and edges by component once per pass instead of
+    # scanning both per component. A stable sort keeps node indices
+    # ascending inside each group, and an alive edge always joins two
+    # nodes of the same component, so its component is just the label
+    # of either endpoint. MATLAB rescans, which is O(N * components)
+    # per pass and the reason a dense real region took hours.
+    node_order = np.argsort(lab, kind="stable")
+    node_at = np.searchsorted(lab[node_order], np.arange(1, m + 2))
+    edge_lab = np.where(alive, lab[edges[:, 0]], 0)
+    edge_order = np.argsort(edge_lab, kind="stable")
+    edge_at = np.searchsorted(edge_lab[edge_order], np.arange(0, m + 2))
     # One cut per component per pass, all judged against the labels
     # from the top of the pass, exactly as the MATLAB loop does.
     for i in range(1, m + 1):
-      nodes = np.flatnonzero(lab == i)
+      nodes = node_order[node_at[i - 1]:node_at[i]]
       key = nodes.tobytes()
       if key not in linear:
         linear[key] = is_a_line(x[nodes], th)
       if linear[key]:
         continue
-      inside = np.flatnonzero(
-        alive & np.isin(edges[:, 0], nodes)
-        & np.isin(edges[:, 1], nodes))
+      inside = edge_order[edge_at[i]:edge_at[i + 1]]
       pick = int(inside[np.argmax(weights[inside])])
       alive[pick] = False
       removed.append(pick)
@@ -323,6 +365,14 @@ def detect_lseg_smallregion(
   """
   if x.shape[0] == 0:
     return np.zeros((2, 3, 0))
+  # A duplicate hit carries no information a spanning tree can use,
+  # and MATLAB's graph() drops the zero-weight edge it would create.
+  # Gridding real data does produce them, so drop the later copies
+  # while keeping the original order (a no-op when there are none, so
+  # the reference run is untouched).
+  _, first = np.unique(x, axis=0, return_index=True)
+  if first.size != x.shape[0]:
+    x = x[np.sort(first)]
   th_split = cfg.th_split if th_split is None else th_split
   th_grow = cfg.th_grow if th_grow is None else th_grow
   z_scale = cfg.z_scale if z_scale is None else z_scale

@@ -1,6 +1,6 @@
 # パイプライン — 今どうなっているか
 
-**最終更新: 2026-09-10**
+**最終更新: 2026-09-11**
 
 このファイルは「**データがどう流れているか**」だけを書く。**追記ではなく
 上書き**する。数値の根拠・失敗した試み・議論は `analysis-note.md`
@@ -174,7 +174,8 @@ max_impact=30, eps=25, beam_angle_cut=15, min_angle_spread=20
   │ 連結成分 → 細線化 → 6px セルごとに 1 hit
   ▼                     module/matlab_export.py : export_hits_grid()
 3D hit 点群
-  │ 128×128×80 の小領域ごとに最小全域木 → 直線でなくなるまで切る
+  │ 128×128×80 の小領域ごとに最小全域木（Delaunay 辺上で構成）
+  │ → 直線でなくなるまで枝を切る
   ▼                     module/graphdet/detectlseg.py : detect_lseg_view()
 線分（3D）
   │ 小領域をまたいで端点をつなぐ → hit に再フィット → 折れ線同士も接続
@@ -283,5 +284,6 @@ pytest -m slow tests/test_graphdet.py         # 両方
 - **ワークサーバ（cw07）は 1 ユーザ 4 コア**（cgroup）。重い計算は LSF へ。
 - **GPU は使えない**。CNN 学習も CPU。
 - **cv2 と torch を同一プロセスに載せない**（backward がデッドロック）。
-- B' の残課題: 密な事象で段1 の全点間距離行列が 4 GB を超える／
-  グリッド化で重複点が生じると `coincident hits` ガードに当たる。
+- B' の残課題: **密な specials 事象は 1 region 1万点規模**になり、
+  段1 が queue の wall limit（p は 40 時間）に収まらないことがある。
+  cell を粗くするか、より長い queue（h は 8 日）へ。
