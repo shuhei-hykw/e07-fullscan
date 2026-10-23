@@ -181,7 +181,10 @@ a blind second pass (agreement rate).
 `scripts/graphdet_specials.py --cell 6` runs the graph detector on a
 specials event at a fixed export cell (no widening) and matches branch
 points within 200 px in XY and +-30 um of the clicked depth, with the
-branch-point z mapped back to stage millimetres.
+branch-point z mapped back to stage millimetres. Besides the `<event>.json`
+summary it writes every branch point to `<event>_points.csv` (`vx_px`,
+`vy_px`, `slice`, `z_mm`, `mult`), so other rankings can be tried
+without rerunning the detector.
 
 ## Batch Track Analysis (KEKCC)
 

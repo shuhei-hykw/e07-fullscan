@@ -1536,3 +1536,27 @@ Requested by e07-g4-hypernuclei. Run Method A with the pseudo-image settings (ra
 ## 2026-10-23 23:20 JST — Claude (e07-srv): done — autonomous evaluation closed; waiting on the user
 
 Method A (8 v3 datasets + background control) and B' (nagara5 x2, replay 10 events each) finished. No jobs running. Next: the 40-candidate human audit and the user decisions.
+
+## 2026-10-24 00:25 JST — Claude (e07-srv): intent — Method A on v4 synthetic; B' on 20 more embedded events
+
+Requested by e07-g4-hypernuclei. (1) Method A (production / relaxed, with z_best) on v4_synth_nagara5_dz3.0 (5 ev), v4_synth_nagara_replay_dz3.0 and v4_synth_ibuki_replay_dz3.0 (10 ev each) -> `results/sim_eval/<ds>_methodA_{production,relaxed}.csv`. (2) Then B' (cell 6, 12 workers) on v3_embed_nagara_dz3.0 ev0000-0019 -> `results/sim_eval/v3_embed_nagara_dz3.0_bprime.csv` plus `.done` at the end (~2 h). Scripts in scratch; no repo code changes.
+
+## 2026-10-24 02:35 JST — Claude (e07-srv): done — v4 Method A; B' 20 embedded events
+
+Method A on the three v4 synthetic datasets finished (production ~795 candidates/view, relaxed ~900, vs ~40 for v3 synthetic and ~770 real). B' on v3_embed_nagara_dz3.0 ev0000-0019 finished (~29k branch points/event, 250-880 s/event); `.done` written. Evaluation is with e07-g4-hypernuclei.
+
+## 2026-10-24 JST — Claude (e07-srv): intent — Method A on v11 synthetic
+
+Requested by e07-g4-hypernuclei. Method A (production / relaxed, with z_best) on v11_synth_nagara10_dz3.0, v11_synth_nagara_replay_dz3.0, v11_synth_ibuki_replay_dz3.0 (10 ev each) -> `results/sim_eval/<ds>_methodA_{production,relaxed}.csv`. Scratch scripts; no repo code changes.
+
+## 2026-10-24 04:16 JST — Claude (e07-srv): done — Method A on v11 synthetic
+
+All three v11 datasets finished (10 ev each): production ~905 candidates/view, relaxed ~973 (v4 ~795 / ~900, real ~770). Evaluation is with e07-g4-hypernuclei.
+
+## 2026-10-24 04:32 JST — Claude (e07-srv): intent — dump B' branch points for specials (darkness-ranking check)
+
+e07-g4-hypernuclei found that ranking B' branch points by local image darkness beats Method A on pseudo images. To test it on real known events, `scripts/graphdet_specials.py` (owned by me for this change) will also write `<event>_points.csv` (vx_px, vy_px, slice, z_mm, mult). Rerun the 9 specials with `--cell 6` into `results/graphdet_specials_e07srv/` (~1-2 h); the JSON summaries should come out unchanged.
+
+## 2026-10-24 05:54 JST — Claude (e07-srv): done — specials B' branch points dumped
+
+All 9 specials rerun with `--cell 6`; JSON summaries identical to the 2026-10-23 run (apart from seconds). `results/graphdet_specials_e07srv/<event>_points.csv` now holds every branch point (225k in total). Handed to e07-g4-hypernuclei for the darkness ranking. `scripts/graphdet_specials.py` released.

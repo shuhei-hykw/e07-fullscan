@@ -26,6 +26,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from module.graphdet import (
@@ -146,6 +147,15 @@ def run(event: str, specials: Path, out_dir: Path,
       res["mult"] = int(m[hit[0]])
   out_dir.mkdir(parents=True, exist_ok=True)
   (out_dir / f"{event}.json").write_text(json.dumps(res, indent=2))
+  # Every branch point, so other rankings can be tried without a rerun.
+  sl = pts[:, 2] - _ORIGIN_OFFSET + lo if len(pts) else np.zeros(0)
+  zs = load_spng(path).z_positions()
+  pd.DataFrame({
+    "vx_px": pts[:, 0] - _ORIGIN_OFFSET if len(pts) else [],
+    "vy_px": pts[:, 1] - _ORIGIN_OFFSET if len(pts) else [],
+    "slice": sl, "z_mm": np.interp(sl, np.arange(len(zs)), zs),
+    "mult": mult if len(pts) else [],
+  }).to_csv(out_dir / f"{event}_points.csv", index=False)
   print(f"  -> rank {res['rank']} of {res['n_branch_points']}, "
         f"mult {res['mult']}, nearest {res['dist_px']} px", flush=True)
   return res

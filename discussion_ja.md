@@ -1464,3 +1464,27 @@ e07-g4-hypernuclei の依頼。v3 埋め込みの元 view 98 枚（`background_v
 ## 2026-10-23 23:20 JST — Claude (e07-srv): 完了 — 自律評価を締め、人の判断待ち
 
 手法 A（v3 8 データセット＋背景対照）と B'（nagara5 2 版、replay 各 10 事象）が完了。実行中のジョブなし。次は予備監査 40 件（人）とユーザー判断。
+
+## 2026-10-24 00:25 JST — Claude (e07-srv): 作業意図 — v4 完全疑似版で手法 A、埋め込み版で B' を 20 事象追加
+
+e07-g4-hypernuclei の依頼。(1) v4_synth_nagara5_dz3.0（5 事象）、v4_synth_nagara_replay_dz3.0・v4_synth_ibuki_replay_dz3.0（各 10 事象）で手法 A（production / relaxed、z_best 入り）→ `results/sim_eval/<名前>_methodA_{production,relaxed}.csv`。(2) その後 v3_embed_nagara_dz3.0 の ev0000〜0019 で B'（cell 6、12 並列）→ `results/sim_eval/v3_embed_nagara_dz3.0_bprime.csv`、終了時に `.done`（約 2 時間）。スクリプトは scratch、リポジトリのコード変更なし。
+
+## 2026-10-24 02:35 JST — Claude (e07-srv): 完了 — v4 で手法 A、埋め込み版で B' 20 事象
+
+v4 完全疑似 3 データセットの手法 A が完了（候補は production 約 795 件/view、relaxed 約 900 件。v3 完全疑似は約 40 件、実データは約 770 件）。v3_embed_nagara_dz3.0 ev0000〜0019 の B' も完了（約 2.9 万分岐点/事象、1 事象 250〜880 秒）、`.done` 作成済み。評価は e07-g4-hypernuclei 側。
+
+## 2026-10-24 04:12 JST — Claude (e07-srv): 作業意図 — v11 完全疑似版で手法 A
+
+e07-g4-hypernuclei の依頼。v11_synth_nagara10_dz3.0、v11_synth_nagara_replay_dz3.0、v11_synth_ibuki_replay_dz3.0（各 10 事象）で手法 A（production / relaxed、z_best 入り）→ `results/sim_eval/<名前>_methodA_{production,relaxed}.csv`。scratch のスクリプト、リポジトリのコード変更なし。
+
+## 2026-10-24 04:16 JST — Claude (e07-srv): 完了 — v11 完全疑似版で手法 A
+
+v11 の 3 データセット（各 10 事象）が完了。候補は production 約 905 件/view、relaxed 約 973 件（v4 は約 795 / 900、実データは約 770）。評価は e07-g4-hypernuclei 側。
+
+## 2026-10-24 04:32 JST — Claude (e07-srv): 作業意図 — specials の B' 分岐点を書き出す（暗さ順位付けの確認）
+
+e07-g4-hypernuclei が、疑似画像では B' の分岐点を画像の暗さで並べると手法 A を上回ることを示した。実データの既知事象で確かめるため、`scripts/graphdet_specials.py`（この変更の間は私が担当）に `<event>_points.csv`（vx_px, vy_px, slice, z_mm, mult）の書き出しを足す。specials 9 事象を `--cell 6` で `results/graphdet_specials_e07srv/` に流し直す（1〜2 時間）。JSON の要約は変わらないはず。
+
+## 2026-10-24 05:54 JST — Claude (e07-srv): 完了 — specials の B' 分岐点を書き出した
+
+specials 9 事象を `--cell 6` で流し直した。JSON の要約は 2026-10-23 の実行と同一（秒数以外）。`results/graphdet_specials_e07srv/<事象>_points.csv` に全分岐点（計 22.5 万点）。暗さによる順位付けは e07-g4-hypernuclei に依頼。`scripts/graphdet_specials.py` の担当を解除。
