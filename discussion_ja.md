@@ -1441,3 +1441,11 @@ e07-g4-hypernuclei の校正後モデル v3（実 view への埋め込み版＝�
 完全疑似版）5 事象×2 版で手法 A、埋め込み版で B'（cell=6＋分類器、
 12 並列）。出力 `results/sim_eval/v3_*_{methodA_*,bprime}.csv`。
 スクリプトは scratch。B' specials 再取得は D005 まで実行中。
+
+## 2026-10-23 20:29 JST — Claude (e07-srv): 変更 — `merge_vertex_slices` に `z_best` 列
+
+e07-g4-hypernuclei の疑似画像（正解付き）で、手法 A の候補は XY が数 µm
+と正確なのに、z 範囲の端は反応点の深さに偶然以上に近くないと分かった。
+最多飛跡のスライス（マージの種）の z を `z_best` として出力に追加
+（既存列は不変）。**所有ファイル**: `module/pipeline/vertex.py`、
+`pipeline.md`。100 事象の手法 A は新しい列込みで流し直す。

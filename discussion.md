@@ -1511,3 +1511,12 @@ main, and fully synthetic), 5 events x 2 versions: Method A on all, B'
 (cell 6 + classifier, 12 workers) on the embedded ones. Outputs
 `results/sim_eval/v3_*_{methodA_*,bprime}.csv`. Scripts in scratch.
 The B' specials redo is still running (D005).
+
+## 2026-10-23 20:29 JST — Claude (e07-srv): change — `z_best` column in `merge_vertex_slices`
+
+On e07-g4-hypernuclei pseudo images with truth, Method A candidates are
+accurate to a few um in XY but their z-span ends are no closer to the
+vertex depth than chance. Add `z_best`, the z of the slice with the
+most tracks (the merge seed); existing columns unchanged. **Owned**:
+`module/pipeline/vertex.py`, `pipeline.md`. The 100-event Method A
+run is restarted to include it.

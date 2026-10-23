@@ -255,6 +255,11 @@ def merge_vertex_slices(
     n_slices      — number of distinct slice_idx that voted for it
     z_mean        — weighted mean z
     z_min, z_max  — z depth range of contributing slices
+    z_best        — z of the slice with the most tracks (the seed). A
+                    star's crossing shows on one side of its vertex
+                    only, so z_mean and the span ends miss the vertex
+                    depth; on pseudo images with truth the span end was
+                    no closer to it than chance (2026-10-23)
   """
   has_spread = 'angle_spread' in df.columns
   records: list[dict] = []
@@ -298,6 +303,7 @@ def merge_vertex_slices(
         'z_mean':            zm,
         'z_min':             float(zv[near].min()),
         'z_max':             float(zv[near].max()),
+        'z_best':            float(zv[oi]),
         'mean_intens':       float(mi[near].mean()),
         'view_x_mm':         float(grp['view_x_mm'].iloc[0]),
         'view_y_mm':         float(grp['view_y_mm'].iloc[0]),

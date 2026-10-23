@@ -151,7 +151,10 @@ min_tracks=3, max_ep=150, max_ep_frac=0.5, min_intens=10, min_len=50,
 max_impact=30, eps=25, beam_angle_cut=15, min_angle_spread=20
 ```
 
-マージ: `eps_xy=50, min_slices=2, min_tracks=8`。
+マージ: `eps_xy=50, min_slices=2, min_tracks=8`。出力列は vx_px, vy_px,
+n_tracks_max, n_slices, z_mean, z_min, z_max, **z_best**（最多飛跡の
+スライスの z、2026-10-23 追加。既存カタログ `vertex_v7` には無い）、
+mean_intens, angle_spread_best/max。
 
 ### 実力（2026-10-23、既知 vertex 7 事象）
 
