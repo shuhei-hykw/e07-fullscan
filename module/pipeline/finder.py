@@ -65,8 +65,26 @@ _FOOTPRINT_MAX_SEARCH_PX = 15  # max perpendicular search for
 # GPU screen to the exact CPU test; far above float64 rounding, far
 # below any physical scale.
 _GRAIN_SCREEN_SLACK_PX = 1e-3
-# Elements of one (segments x grains) distance block on the GPU.
-_GRAIN_SCREEN_BLOCK = 1 << 25
+# Elements of one (segments x grains) distance block on the GPU. Small
+# enough that many worker processes can share one card.
+_GRAIN_SCREEN_BLOCK = 1 << 22
+
+
+def _gpu_oom() -> type:
+  """torch's out-of-memory error, or a class nothing raises."""
+  try:
+    import torch
+  except ImportError:
+    return type("NoTorch", (Exception,), {})
+  return torch.OutOfMemoryError
+
+
+def _release_gpu(err) -> None:
+  import torch
+  torch.cuda.empty_cache()
+  import logging
+  logging.getLogger(__name__).warning("GPU out of memory, using CPU: %s",
+                                      str(err).splitlines()[0])
 
 
 def _near_grain_pairs(c: np.ndarray, lines: np.ndarray, radius: float,
@@ -171,8 +189,13 @@ def _measure_tracks(
 
   C = np.column_stack([cx_list, cy_list]) if cx_list else None
   if device is not None and len(lines):
-    return _measure_tracks_batched(fog_img, np.asarray(lines), C,
-                                   grain_radius, device)
+    try:
+      return _measure_tracks_batched(fog_img, np.asarray(lines), C,
+                                     grain_radius, device)
+    except _gpu_oom() as e:
+      # Out of GPU memory (shared card): the CPU loop below gives the
+      # same numbers
+      _release_gpu(e)
 
   for x1, y1, x2, y2 in lines:
     dx = float(x2 - x1)
@@ -264,6 +287,18 @@ _FOOTPRINT_MAX_WIDTH = 2 * _FOOTPRINT_MAX_SEARCH_PX - 1
 
 def footprint_widths(tracks, binary: np.ndarray,
                      device=None) -> np.ndarray:
+  """``_footprint_width`` for every segment at once (on ``device`` when
+  given, falling back to numpy if the GPU is out of memory)."""
+  if device is not None:
+    try:
+      return _footprint_widths(tracks, binary, device)
+    except _gpu_oom() as e:
+      _release_gpu(e)
+  return _footprint_widths(tracks, binary, None)
+
+
+def _footprint_widths(tracks, binary: np.ndarray,
+                      device=None) -> np.ndarray:
   """``_footprint_width`` for every segment at once.
 
   The sample points of all segments are laid end to end, so each
