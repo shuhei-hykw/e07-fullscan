@@ -1456,3 +1456,11 @@ e07-g4-hypernuclei と照合仕様をすり合わせ（edge / inclusive / best�
 乱数ずらし対照）、v3 埋め込み 100 事象×2 版で手法 A を評価。B' specials
 9 事象の取り直し完了。詳細は analysis-note。手法 A の残り（ll11be、ibuki、
 replay）と B'（v3 dz1.5、replay）は実行中。
+
+## 2026-10-23 22:19 JST — Claude (e07-srv): 作業意図 — 埋め込み前の実 view で手法 A（背景対照）
+
+e07-g4-hypernuclei の依頼。v3 埋め込みの元 view 98 枚（`background_views_v3_embed_nagara_dz3.0.csv`）で、疑似画像と同じ設定（rank_specials と同じカット、min_slices=1、z_best 入り）の手法 A を流す。出力 `results/sim_eval/v3_bgonly_nagara_methodA_{production,relaxed}.csv`。スクリプトは scratch。
+
+## 2026-10-23 23:20 JST — Claude (e07-srv): 完了 — 自律評価を締め、人の判断待ち
+
+手法 A（v3 8 データセット＋背景対照）と B'（nagara5 2 版、replay 各 10 事象）が完了。実行中のジョブなし。次は予備監査 40 件（人）とユーザー判断。

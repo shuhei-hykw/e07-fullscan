@@ -1528,3 +1528,11 @@ best, one-to-one, random-shift chance control) and evaluated Method A on
 v3 embedded 100 events x 2 versions. B' specials redo (9 events) done.
 Details in analysis-note. Remaining Method A (ll11be, ibuki, replay) and
 B' (v3 dz1.5, replay) still running.
+
+## 2026-10-23 22:19 JST — Claude (e07-srv): intent — Method A on the unmodified background views (control)
+
+Requested by e07-g4-hypernuclei. Run Method A with the pseudo-image settings (rank_specials cuts, min_slices=1, with z_best) on the 98 source views of the v3 embedding (`background_views_v3_embed_nagara_dz3.0.csv`). Output `results/sim_eval/v3_bgonly_nagara_methodA_{production,relaxed}.csv`. Scripts in scratch.
+
+## 2026-10-23 23:20 JST — Claude (e07-srv): done — autonomous evaluation closed; waiting on the user
+
+Method A (8 v3 datasets + background control) and B' (nagara5 x2, replay 10 events each) finished. No jobs running. Next: the 40-candidate human audit and the user decisions.
