@@ -233,7 +233,8 @@ bsub ... scripts/kekcc_graphdet_specials.sh "<event,list>" OUT_DIR PROJECT_DIR
 - 所要（kekcc）: 60 スライスで約18分、200 スライス級で 0.5〜3.3 時間。
 - 所要（e07-srv、2026-10-23）: tohoku-v1 1 view（58 スライス、cell=6＋
   分類器）でエクスポート約100 s（GPU）、段1 106 s
-  （`detect_lseg_view(..., workers=12)`）。段2・3 は未計測。
+  （`detect_lseg_view(..., workers=12)`）、段2 120 s、段3 11 s。
+  合計約 5.6 分/view。
 
 ### 参照との照合（MATLAB 無しでできる）
 

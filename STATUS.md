@@ -23,7 +23,7 @@
 | Method | 内容 | ML | 状態 |
 |---|---|---|---|
 | **A** | Pure Python（`find_tracks`→`find_vertices`→`merge_vertex_slices`） | 不使用 | **主軸。全域再解析 完了（2026-09-09）**。12.4億トラック → 反応点 1,516,569 個。④の precision が未解決 |
-| **B'** | グラフ検出器（`export_hits_grid`→`detectlseg`→`integrate_smallregions`→`detectbunki`） | 不使用 | **移植完了・実 E07 で走る**。cell=30 は45分/view だが purity が出ない。**cell=6＋分類器フィルタは e07-srv で エクスポート約100 s＋段1 106 s/view**（2026-10-23、出力はビット一致。段2〜3 は未計測、未 end-to-end）|
+| **B'** | グラフ検出器（`export_hits_grid`→`detectlseg`→`integrate_smallregions`→`detectbunki`） | 不使用 | **移植完了・実 E07 で走る**。cell=30 は45分/view だが purity が出ない。**cell=6＋分類器フィルタは e07-srv で 1 view 約 5.6 分**（エクスポート約100 s＋段1 106 s＋段2 120 s＋段3 11 s、2026-10-23）。ただし 1 view で branch point 30,308 個＝**段3 の purity 問題が全域規模で残る**ので全域実行は保留 |
 | **C** | CNN 生画素セグメンテーション（別リポジトリ `e07-ml-binary-segmentation`） | 使用 | **注力対象。弱い判別力が出た段階**（LOTO・セグメント単位で AUC 0.59、precision 49.5% > 基準率 43.6%）。実用には遠い |
 | **D** | 教師なしクラスタリング（KMeans/GMM） | 使用 | **失敗確定・打ち切り**（precision 46〜50%＝ほぼチャンス） |
 
@@ -177,7 +177,10 @@ V00000991、754,765 hits、出力はすべてビット一致・MATLAB 参照テ�
 （12 並列で 451 s → 差分化後 106 s）。エクスポート: `_footprint_width`
 を全線分一括（GPU、torch）、`_measure_tracks` の線分×粒子の距離を GPU
 で候補抽出→CPU で元の式で判定。GPU が無ければ numpy（`E07_DEVICE` で
-指定可）。**cell=6 の end-to-end（段2・3 を含む）はまだ通していない。**
+指定可）。段2 120 s（折れ線 32,341 本）、段3 11 s（branch point
+30,308 個）。**1 view 約 5.6 分、全域 2,025 view は単純計算で約 8 日。**
+ただし branch point が 1 view 3 万個では全域で 6 千万個になり、段3 の
+purity が解決するまで全域実行の意味は薄い。
 
 **定数スケーリングの分類（2026-09-08 に測り直した）**: `for_spacing()`
 は**間隔スケール群だけ**を直す。全部スケールすると cell=30 で端点探索箱が
