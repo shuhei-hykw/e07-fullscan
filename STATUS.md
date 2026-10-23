@@ -1,6 +1,6 @@
 # STATUS — 現在の状態（e07-fullscan）
 
-**最終更新: 2026-09-09**
+**最終更新: 2026-10-23**
 
 このファイルは「**今どうなっているか**」だけを書く。**追記ではなく
 上書き**する（変遷は `git log -p STATUS.md` で追える）。
@@ -229,34 +229,52 @@ leave-one-tile-out：
 
 **④ vertex 検出** — `specials_x20` の既知 ΛΛ ハイパー核 9 事象で
 `tests/test_specials.py` が 35/35 通過（recall）。
-**順位を初めて測った（2026-09-09、`scripts/rank_specials.py`）**:
-本番カット（`results/vertex_v7` を作った設定）で E07 7 事象すべて検出、
-`n_tracks_max` 降順の**順位は中央値 6、最悪 48**。
+**既知 vertex の順位（2026-10-23 測り直し、`scripts/rank_specials.py`）**:
+本番カットで E07 7 事象すべて検出、`n_tracks_max` 降順の
+**順位は中央値 13、最悪 64**（2026-09-09 の「中央値 6、最悪 48」は
+z 判定が実質無効だった版。下記）。
 
-| 事象 | 候補数 | 順位 | | 事象 | 候補数 | 順位 |
-|---|---|---|---|---|---|---|
-| D005 | 752 | **1** | | T004 | 732 | 14 |
-| IBUKI | 688 | **2** | | T011 | 125 | 32 |
-| D013 | 404 | **3** | | MINO | 691 | 48 |
-| IRRAWADY | 223 | **6** | | （E373: KISO 22, NAGARA 196）| | |
+| 事象 | 候補数 | 本番 | relaxed | | 事象 | 候補数 | 本番 | relaxed |
+|---|---|---|---|---|---|---|---|---|
+| D005 | 751 | **1** | 2 | | T004 | 733 | 13 | 25 |
+| D013 | 404 | **3** | 5 | | MINO | 691 | 50 | 30 |
+| IRRAWADY | 223 | **4** | 7 | | T011 | 123 | 59 | 19 |
+| IBUKI | 687 | 64 | 34 | | （E373: KISO 22, NAGARA 198）| | | |
 
-旧記録「196〜380 候補、正解は 7〜25 位」（mg=5 時代）と比べ、
-**候補数は 2〜3 倍なのに順位は改善**した。beam-angle と angle-spread を
-外した relaxed カットでも順位はほぼ変わらないので、**本番カットは
-真値を捨てていない**。
-→ view ごとに**上位50件**を見れば 2,025×50 ＝ 約10万件で 7/7 に届く
-（上位15で5/7、上位6で4/7）。1.52M を直接見るのとは15倍違う。
+**z 判定の不具合（2026-10-23 修正）**: z はステージ座標 mm（刻み
+0.0030）なのに、真値ファイルの `z_um`（実は mm を 0.1 mm に丸めた値）と
+`tolerance_z_um = 30` を直接比べており「30 mm 以内」＝無制限だった。
+今は真値 z をクリックしたスライス `z_slice` から取り、**クリック深さが
+候補の `z_min`〜`z_max`（±30 µm）に入るか**で判定する（`z_mean` は星の
+片側にずれるため使わない）。`rank_specials.py`、`rank_features.py`、
+`tests/test_specials.py` が同じ判定。物理的な z 刻み（ステージ 3.0 µm か
+乳剤中 1.5 µm か）は**ユーザーに確認中**。
+→ view ごとに上位50件では 5/7、7/7 には上位64件が要る。relaxed カットの
+方が IBUKI・MINO・T011 で順位が良く、「本番カットは真値を捨てていない」
+とは言い切れなくなった。
 
-**既存の特徴量では順位は上がらない（2026-09-11、`scripts/rank_features.py`）。**
-マージ段が出す特徴量を1つずつ試すと、E07 7事象での順位の中央値は
-`n_tracks_max` **3** に対し `z_extent` 57 / `n_slices` 41 /
-`mean_intens` 71 / `angle_spread_max` 150 / `angle_spread_best` 204。
-上位10入りは `n_tracks_max` が 4/7、他は 0〜1/7。
-`angle_spread` は「本物の星は方向が散る」という期待に反して最悪クラス。
-→ **重み付けの問題ではなく情報が足りない。物理フィルタ（dE/dx PID、
-頂点運動学）が要るという判断が初めて実測で裏付けられた。**
-なお `merge_vertex_slices` の出力は **member track を持っていない**ので、
-dE/dx を使うにはそこを持ち回る改修が先。
+**単一特徴量での順位（2026-10-23 測り直し、`scripts/rank_features.py`）**:
+旧版は 200 px 内で **n_tracks_max 最大の候補を真値に選んでから**比較して
+おり n_tracks_max に有利だった。真値を XY 最近傍で決め直すと、中央値は
+`n_tracks_max` 13 / `n_slices` 60 / `mean_intens` 82 /
+`angle_spread_max` 132 / `angle_spread_best` 172 / `z_extent` 153。
+一致候補のどれかの最良順位（全特徴量に等しく甘い）では `z_extent` 10
+（上位10に 4/7）、`n_tracks_max` 12（3/7）、`angle_spread_best` 22。
+**7 事象では特徴量の優劣は決められない。** 2026-09-11 の「n_tracks_max が
+桁違いに強く他は全滅 → 物理フィルタ必須」は真値選択の偏りに依存して
+いたので撤回（物理フィルタが要らないという意味ではない）。
+`merge_vertex_slices` の出力が member track を持たない点は変わらない。
+
+**④ precision の監査を準備（2026-10-23、`scripts/vertex_audit.py`）**:
+v7 全候補を、view 内 `n_tracks_max` 上位20 と `angle_spread_best ×
+n_slices` 上位20（同順位は乱数で崩し、どちらも view あたりちょうど20）
+で 4 層（両方 4,191 / n_tracks のみ 36,309 / sp×nsl のみ 36,309 /
+どちらでもない 1,439,760）に分け、各100件を無作為抽出。うち各層10件の
+**予備監査 40 件**の画像（概観＋z 範囲の全スライス、判定画面でスライス
+送り）を作成済み（`results/vertex_audit_v7/`）。判定（vertex / crossing /
+track / junk / unclear）は未着手、ユーザー判断待ち。過去の監査:
+v6 の n_tracks_max 上位は 204/204 bad、sp×nsl 上位 200 件は good 70 /
+bad 46 / unclear 84。
 
 ---
 
@@ -436,6 +454,15 @@ hough_mg=40, grain_radius=15, px_scale_um=0.29`
   新名へ揃えた。旧名は `e07-binary-segmentation`）。
   **macOS 側は元から `e07-ml-binary-segmentation`** だったので、
   これで三者（macOS / kekcc / GitHub）の名前が揃った。
+- **主作業機は e07-srv（2026-10-23〜）**: Ryzen 9 9900X 12C/24T、
+  122 GB、RTX 5070 Ti 16 GB。④ まで kekcc ではなくここで行う方針
+  （ユーザー判断）。tohoku-v1 全 2,025 view（307 GB）がローカル
+  （`fullscan-image` → `~/microscope-image/tohoku/fullscan`）。
+  Python は `~/work/.venv`（3.12、OpenCV 5、numpy 2）。kekcc とは
+  候補数が ±1〜2 ずれる事象がある（OpenCV/numpy の版差と推定）。
+  `vertex_v7` カタログと specials 成果物は kekcc からコピー済み。
+  **実装はなるべく GPU に切り替える**（ユーザー方針。kekcc 用に CPU
+  経路は残す）。
 - **kekcc の Python**: conda `myenv`
   （`/home/had/hayashu/.conda/envs/myenv/bin/python`、py3.9）が
   プロジェクト環境。既定の py3.12 ではない。cv2 4.12.0 / scipy /

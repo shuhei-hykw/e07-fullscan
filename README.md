@@ -121,12 +121,43 @@ python run.py submit-tracking     # KEKCC LSF batch submit
 python run.py submit-vertices     # KEKCC vertex submit
 python run.py matlab-export ...   # export 3-D hit list (.mat) for MATLAB
 python run.py crops ...           # crop vertices for inspection
-python run.py review              # web vertex review
+python run.py review              # web vertex review (--categories a,b,c)
 python run.py map ...             # spatial vertex distribution map
 python run.py click ...           # click ground-truth vertices
 ```
 
 Each command delegates to `python -m module.<target>` with the same arguments.
+
+### Measuring stage 4
+
+```bash
+python scripts/rank_specials.py --out results/rank_specials.json
+python scripts/rank_features.py
+python scripts/vertex_audit.py sample     # stratified random sample
+python scripts/vertex_audit.py render     # z montage per candidate
+python run.py review --crops results/vertex_audit_v7/crops \
+  --labels results/vertex_audit_v7/labels.csv \
+  --categories vertex,crossing,track,junk,unclear
+```
+
+`rank_specials.py` asks where each known vertex ranks in its view's
+candidate list; `rank_features.py` repeats that for each single
+feature. A candidate matches the truth when it is within 200 px in XY
+and the clicked depth lies inside its `z_min`..`z_max` span (+-30 um).
+Z is compared in stage millimetres taken from the clicked slice
+(`z_slice`): the truth file's `z_um` is that value rounded to 0.1 mm,
+and a star's `z_mean` sits off its vertex by about half its span.
+
+`vertex_audit.py` draws 100 candidates at random from each of four
+exclusive strata of the full catalogue (within each view: top 20 by
+`n_tracks_max`, top 20 by `angle_spread_best x n_slices`, both,
+neither; ties broken at random so each ranking spends exactly 20 per
+view), keeps the inclusion probabilities in `key.csv`, and renders each
+candidate under a blind id as an overview (1024 px around it, shrunk,
+and a minimum-intensity projection over its z range) plus every slice
+of the range at full resolution. `render --pilot N` renders the first N
+of each stratum only. The review page steps through the slices (W/S,
+P to play) when a directory of per-slice PNGs sits beside a crop.
 
 ## Batch Track Analysis (KEKCC)
 

@@ -8,7 +8,9 @@ decides whether it is usable is where the true one sits in the list.
 
 Ground truth is the expert click session of 2026-05-12
 (tests/specials_gt.json, 200 px XY / 30 um Z tolerance), so this needs
-no new human input.
+no new human input. Z is compared in stage millimetres: the true z is
+the clicked slice's stage position, because the file's z_um field is
+that position rounded to 0.1 mm, far coarser than the tolerance.
 
 Two cut settings are reported, because they answer different
 questions. "production" is what built results/vertex_v7, so its rank is
@@ -53,6 +55,7 @@ _MERGE_EPS_XY = 50.0
 _MERGE_MIN_SLICES = 1
 # Column the catalogue is ranked by when a human triages it.
 _RANK_BY = "n_tracks_max"
+_UM_PER_MM = 1000.0
 
 
 def tracks_of(json_path: Path) -> pd.DataFrame:
@@ -69,8 +72,15 @@ def tracks_of(json_path: Path) -> pd.DataFrame:
   return pd.DataFrame(rows)
 
 
+def true_z_mm(json_path: Path, gt: dict) -> float | None:
+  """Stage z (mm) of the slice the expert clicked, or None."""
+  if gt.get("z_slice") is None:
+    return None
+  return float(load_spng(json_path).z_positions()[int(gt["z_slice"])])
+
+
 def rank_of_truth(merged: pd.DataFrame, gt: dict, tol_xy: float,
-                  tol_z_um: float) -> dict:
+                  tol_z_um: float, true_z_mm: float | None) -> dict:
   """Rank (1-based) of the best candidate matching the true vertex."""
   if merged.empty:
     return {"n_cand": 0, "rank": None, "n_tracks": None, "dist_px": None}
@@ -79,11 +89,12 @@ def rank_of_truth(merged: pd.DataFrame, gt: dict, tol_xy: float,
   dy = df["vy_px"] - gt["vy"]
   dist = (dx ** 2 + dy ** 2) ** 0.5
   near = dist <= tol_xy
-  if "z_mean" in df and gt.get("z_um") is not None:
-    # For specials, z_mean is already in um -- the same comparison
-    # test_special_vertex_position makes. (The full-scan catalogue
-    # carries z_mean in mm; the two readers differ.)
-    near &= (df["z_mean"] - gt["z_um"]).abs() <= tol_z_um
+  if true_z_mm is not None:
+    # Stage mm, like the image JSON. The clicked depth must lie in the
+    # candidate's z span: a star's crossing shows only on one side of
+    # the vertex, so z_mean is off it by about half the span.
+    tol = tol_z_um / _UM_PER_MM
+    near &= (df["z_min"] - tol <= true_z_mm) & (true_z_mm <= df["z_max"] + tol)
   hits = df.index[near]
   if len(hits) == 0:
     return {"n_cand": len(df), "rank": None, "n_tracks": None,
@@ -137,7 +148,8 @@ def main() -> int:
         args.dump_merged.mkdir(parents=True, exist_ok=True)
         merged.to_parquet(
           args.dump_merged / f"{event}__{label}.parquet", index=False)
-      r = rank_of_truth(merged, gt_all["events"][event], tol_xy, tol_z)
+      gt = gt_all["events"][event]
+      r = rank_of_truth(merged, gt, tol_xy, tol_z, true_z_mm(path, gt))
       plate = "E07" if event in _E07 else "E373"
       dist = ("-" if r["dist_px"] is None else f"{r['dist_px']:.0f}")
       print(f"{event:<12} {plate:<5} {label:<10} {r['n_cand']:6d} "

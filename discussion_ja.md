@@ -1299,3 +1299,72 @@ production カット（`results/vertex_v7` を作ったもの）と relaxed カ�
 スライスを中心に80スライス窓を取る。古典側の比較も同じ窓で行う必要がある。
 設定は 2026-09-08 の測定で決めた **cell=6 + 分類器デノイズ**。
 まず IBUKI（60スライスで最小）1事象をパイロットとして投げる。
+
+## 2026-10-23 15:10 JST — Claude (e07-srv): 作業意図 — specials 照合の z 判定修正、e07-srv への移行
+
+**背景**: ユーザーが GPU 機 e07-srv（Ryzen 9 9900X / 122 GB / RTX 5070 Ti）
+を購入し、④（反応点）まで kekcc ではなくここで行う方針。tohoku-v1 全
+2,025 view（307 GB）はローカルにある。kekcc の未 push 3 コミット
+（`ecd9570`〜`85678b5`）をローカル main に fast-forward で取り込み、
+`results/` の小さい成果物（`graphdet_specials/`、`rank_specials.json`、
+`specials_merged/`、`vertex_crops_v6*_labels.csv`、`vertex_v7/`）を
+kekcc からコピーした（kekcc 側は無変更）。
+
+**見つけた不具合（Codex の指摘を実データで確認）**: specials の z 判定が
+実質無効。画像 JSON の z はステージ座標 mm（刻み 0.0030）で、
+`z_mean` も mm。一方 `tests/specials_gt.json` の `z_um` は mm 値を
+0.1 mm 単位に丸めたもので、`tolerance_z_um = 30` と直接比べているため
+「30 mm 以内」＝無制限になっている。`rank_specials.py` と
+`tests/test_specials.py` が該当。
+
+**変更**: 真値の z をクリックしたスライス番号 `z_slice` から
+`reader.z_positions()` で引き、許容値を mm に換算（30 µm = 0.030 mm）
+して比較する。物理的な z 刻み（ステージ 3.0 µm か乳剤中 1.5 µm か）は
+ユーザーに確認中なので、ここではステージ座標どうしの比較に留める。
+**所有ファイル**: `scripts/rank_specials.py`、`tests/test_specials.py`、
+`tests/specials_gt.json`（コメントのみ）、出力 `results/rank_specials.json`。
+**ジョブ**: e07-srv で `rank_specials.py` を再実行（数分）。
+
+## 2026-10-23 15:34 JST — Claude (e07-srv): 追記 — `rank_features.py` も所有、z 判定は「z 範囲に含む」へ
+
+Codex 指摘により `scripts/rank_features.py` も修正対象に追加（所有）。
+同スクリプトは 200 px 内の候補から **n_tracks_max 最大のものを真値に
+選んでから**各特徴量の順位を測っており、n_tracks_max に有利だった。
+真値は「XY 最近傍」で特徴量と独立に決め、同順位は範囲で、全一致候補の
+最良順位（全特徴量に等しく甘い）も併記する。
+
+z 判定は `z_mean` ではなく「クリック深さが候補の `z_min`〜`z_max`
+（±30 µm）に入るか」に統一（3 ファイル）。星の飛跡は vertex から z の
+片側へ出るので交点はその側のスライスにしか出ず、`z_mean` は span の
+半分ほどずれる。`z_mean` ±30 µm では IBUKI が 95 位になるが、これは
+判定側の偏り。結果は analysis-note に記録する。
+
+## 2026-10-23 15:45 JST — Claude (e07-srv): 作業意図 — v7 反応点候補の層別無作為監査の準備（判定はまだ）
+
+Codex 提案（2026-10-23 相談）に沿って、④の precision を測る監査の
+**標本と判定画面を用意する**。判定作業（人手）を始めるかはユーザー判断。
+**入力（読むだけ）**: `results/vertex_v7/vertices_merged.parquet`
+（kekcc からコピー）、`fullscan-image/` の生画像。
+**層**: 各 view 内で `n_tracks_max` 上位20 と `angle_spread_best ×
+n_slices` 上位20（同順位は含める）の 2 つの集合から、排他的な 4 層
+（両方 / n_tracks のみ / sp×nsl のみ / どちらでもない）を作り、各100件を
+無作為抽出（seed 固定、抽出確率を保存）。
+**出力（新規・所有）**: `scripts/vertex_audit.py`（sample / render）、
+`results/vertex_audit_v7/`（`key.csv` = 層と順位、`blind.csv` = 判定用、
+`crops/` = z 方向に並べたスライスのモンタージュ PNG）。
+**変更（所有）**: `module/pipeline/cli_review_crops.py` に
+`--categories` を追加（既定は従来の good/bad/unclear のまま。監査は
+vertex/crossing/junk/unclear）。README、pipeline.md は変更があれば更新。
+
+## 2026-10-23 16:10 JST — Claude (e07-srv): 追記 — 監査を Codex レビューで修正、予備監査 40 件、GPU 方針
+
+`scripts/vertex_audit.py` を Codex レビューで修正（z 範囲の余白の向き、
+端の候補のマーカー位置、key 上書き・古い PNG 再利用の防止、同順位を
+乱数で崩して両ランキングの予算を揃える、全スライス出力）。
+`cli_review_crops.py` に**スライス送り**（`/slices/<name>`、W/S、P）と
+`/crop/` のパス逸脱防止を追加。各層10件の予備監査 40 件を描画済み
+（`results/vertex_audit_v7/crops/`）。判定は未着手。
+
+**ユーザー方針（2026-10-23）**: kekcc の使用は今後もありうるが、
+**なるべく GPU（e07-srv）を使った実装に切り替える**。B' 段1 の高速化は
+CPU 並列/LSF ではなく GPU 移植を第一に設計し、CPU 経路も残す。

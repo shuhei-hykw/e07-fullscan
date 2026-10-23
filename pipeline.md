@@ -153,11 +153,12 @@ max_impact=30, eps=25, beam_angle_cut=15, min_angle_spread=20
 
 マージ: `eps_xy=50, min_slices=2, min_tracks=8`。
 
-### 実力（2026-09-09、既知 vertex 7 事象）
+### 実力（2026-10-23、既知 vertex 7 事象）
 
 `python scripts/rank_specials.py` — **7/7 検出、`n_tracks_max` 降順の
-順位は中央値 6、最悪 48**（候補数 125〜752）。
-→ view ごとに上位50件を見れば 7/7 に届く（上位15で5/7、上位6で4/7）。
+順位は中央値 13、最悪 64**（候補数 123〜751）。真値との照合は XY 200 px
+かつクリック深さが候補の z 範囲 ±30 µm（ステージ座標 mm で比較）。
+→ view ごとに上位50件で 5/7、上位64件で 7/7。
 
 ---
 

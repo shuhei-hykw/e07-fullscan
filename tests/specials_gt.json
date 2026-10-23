@@ -1,5 +1,5 @@
 {
-  "_comment": "True reaction vertex positions from expert click session 2026-05-12. XY approximate (±50-100 px). Z from clicked slice via reader.z_positions(). All events have vertex near image centre (1024,1024) and z ≈ 0 μm. T004_3body/T004_center/T011_100/T011_200 not measured.",
+  "_comment": "True reaction vertex positions from expert click session 2026-05-12. XY approximate (±50-100 px). z_slice is the clicked slice (0-based). z_um is misnamed: it is that slice's stage z in mm rounded to 0.1 mm, too coarse for the Z tolerance, so matching uses reader.z_positions()[z_slice] in mm. All events have vertex near image centre (1024,1024). T004_3body/T004_center/T011_100/T011_200 not measured.",
   "tolerance_xy_px": 200,
   "tolerance_z_um": 30,
   "events": {

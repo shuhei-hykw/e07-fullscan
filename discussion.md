@@ -1356,3 +1356,77 @@ pipeline ends here.
 scale** -- confirmation that a physics-based filter (PID, vertex
 kinematics) is required rather than optional. The old `results/`
 (2026-05-14, mg=5) is left in place.
+
+## 2026-10-23 15:10 JST — Claude (e07-srv): intent — fix the z test in specials matching; move to e07-srv
+
+**Context**: the user bought the GPU host e07-srv (Ryzen 9 9900X /
+122 GB / RTX 5070 Ti) and wants stage 4 (vertices) done here rather
+than on kekcc. All 2,025 tohoku-v1 views (307 GB) are local. kekcc's 3
+unpushed commits (`ecd9570`..`85678b5`) were fast-forwarded into local
+main, and the small `results/` products (`graphdet_specials/`,
+`rank_specials.json`, `specials_merged/`, `vertex_crops_v6*_labels.csv`,
+`vertex_v7/`) were copied from kekcc (kekcc unchanged).
+
+**Bug (raised by Codex, confirmed on the data)**: the z test in specials
+matching is a no-op. Image JSON z is stage mm (step 0.0030) and so is
+`z_mean`, but `tests/specials_gt.json` `z_um` holds mm values rounded to
+0.1 mm and is compared with `tolerance_z_um = 30`, i.e. "within 30 mm".
+Affects `rank_specials.py` and `tests/test_specials.py`.
+
+**Change**: take the true z from the clicked slice `z_slice` via
+`reader.z_positions()` and compare in mm (30 um = 0.030 mm). The
+physical z step (3.0 um stage vs 1.5 um in emulsion) is being asked of
+the user, so this stays a stage-coordinate comparison.
+**Owned files**: `scripts/rank_specials.py`, `tests/test_specials.py`,
+`tests/specials_gt.json` (comment only), output
+`results/rank_specials.json`.
+**Job**: re-run `rank_specials.py` on e07-srv (minutes).
+
+## 2026-10-23 15:34 JST — Claude (e07-srv): addendum — also own `rank_features.py`; z test is "inside the z span"
+
+Per Codex, `scripts/rank_features.py` is added (owned). It picked the
+truth as **the max-n_tracks_max candidate** within 200 px before ranking
+each feature, favouring n_tracks_max. The truth is now the XY-nearest
+candidate, independent of the feature; ties are shown as a range, and
+the best rank of any matching candidate (equally generous to all
+features) is reported too.
+
+The z test in all three files is now "the clicked depth lies within the
+candidate's `z_min`..`z_max` (+-30 um)", not `z_mean`. A star's tracks
+leave the vertex towards one side in z, so z_mean is off by about half
+the span; `z_mean` +-30 um puts IBUKI at rank 95, a bias of the test.
+Results go to analysis-note.
+
+## 2026-10-23 15:45 JST — Claude (e07-srv): intent — prepare a stratified random audit of v7 vertex candidates (no labelling yet)
+
+Following Codex's proposal (2026-10-23), prepare **the sample and the
+review screen** for measuring stage-4 precision. Whether to start the
+human review is the user's call.
+**Inputs (read only)**: `results/vertex_v7/vertices_merged.parquet`
+(copied from kekcc), raw images under `fullscan-image/`.
+**Strata**: within each view, the top 20 by `n_tracks_max` and the top
+20 by `angle_spread_best x n_slices` (ties included) give four
+exclusive strata (both / n_tracks only / sp x nsl only / neither); 100
+drawn at random from each (fixed seed, inclusion probability stored).
+**Outputs (new, owned)**: `scripts/vertex_audit.py` (sample / render),
+`results/vertex_audit_v7/` (`key.csv` = stratum and ranks, `blind.csv`
+= what the reviewer sees, `crops/` = montage PNGs of slices across z).
+**Change (owned)**: `--categories` for
+`module/pipeline/cli_review_crops.py` (default stays good/bad/unclear;
+the audit uses vertex/crossing/junk/unclear). README and pipeline.md
+updated if affected.
+
+## 2026-10-23 16:10 JST — Claude (e07-srv): addendum — audit fixed after Codex review, 40-candidate pilot, GPU direction
+
+`scripts/vertex_audit.py` fixed after Codex's review (margin direction
+on the z range, marker position for edge candidates, no key overwrite
+or stale PNG reuse, ties broken at random so both rankings spend the
+same budget, every slice rendered). `cli_review_crops.py` gained
+**slice stepping** (`/slices/<name>`, W/S, P) and a path-escape guard
+on `/crop/`. A 40-candidate pilot (10 per stratum) is rendered in
+`results/vertex_audit_v7/crops/`. No labelling yet.
+
+**User direction (2026-10-23)**: kekcc may still be used, but **move to
+GPU (e07-srv) implementations where possible**. Speeding up B' stage 1
+is designed as a GPU port first, not CPU/LSF parallelism, keeping a CPU
+path.

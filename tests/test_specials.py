@@ -57,6 +57,7 @@ _MIN_N_TRACKS = 5
 
 
 _GT_PATH = Path(__file__).parent / "specials_gt.json"
+_UM_PER_MM = 1000.0
 _GT: dict = json.loads(_GT_PATH.read_text()) if _GT_PATH.exists() else {}
 _GT_EVENTS: list[str] = list(_GT.get("events", {}).keys())
 
@@ -155,24 +156,31 @@ def test_special_vertex_position(event: str) -> None:
   gt = _GT["events"][event]
   tol_xy = _GT["tolerance_xy_px"]
   tol_z = _GT["tolerance_z_um"]
-  tvx, tvy, tz = gt["vx"], gt["vy"], gt["z_um"]
+  tvx, tvy = gt["vx"], gt["vy"]
+  # z_um in the truth file is the stage z in mm rounded to 0.1 mm; use
+  # the clicked slice's stage position and compare in mm.
+  from module.reader import load_spng
+  tz = float(load_spng(json_path).z_positions()[int(gt["z_slice"])])
 
   mdf = _run_pipeline_merged(json_path)
   assert not mdf.empty, f"{event}: no merged vertices"
 
   mdf["dist_xy"] = ((mdf.vx_px - tvx)**2 + (mdf.vy_px - tvy)**2)**0.5
-  mdf["dist_z"] = (mdf.z_mean - tz).abs()
-  close = mdf[(mdf.dist_xy < tol_xy) & (mdf.dist_z < tol_z)]
+  # The clicked depth must lie in the vertex's z span (a star shows on
+  # one side of its vertex only, so z_mean is biased off it)
+  tol = tol_z / _UM_PER_MM
+  in_z = (mdf.z_min - tol <= tz) & (tz <= mdf.z_max + tol)
+  close = mdf[(mdf.dist_xy < tol_xy) & in_z]
 
   if close.empty:
     best_xy = mdf.nsmallest(1, "dist_xy").iloc[0]
     pytest.fail(
       f"{event}: no merged vertex within {tol_xy}px XY + {tol_z}μm Z "
-      f"of true ({tvx},{tvy},z={tz:.1f}μm). "
+      f"of true ({tvx},{tvy},z={tz:.4f}mm). "
       f"Closest XY: dist={best_xy.dist_xy:.0f}px "
       f"n={int(best_xy.n_tracks_max)} "
       f"at ({int(best_xy.vx_px)},{int(best_xy.vy_px)}) "
-      f"z_mean={best_xy.z_mean:.1f}μm"
+      f"z_mean={best_xy.z_mean:.4f}mm"
     )
 
   best = close.nlargest(1, "n_tracks_max").iloc[0]

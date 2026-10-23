@@ -5,6 +5,11 @@ Usage:
 
 Default crops dir : results/vertex_crops_v6/
 Default labels CSV: results/vertex_crops_v6_labels.csv
+
+--categories a,b,c replaces the default good/bad/unclear; keys are
+1, 2, 3, ... in the order given. If a directory named after a crop
+(e.g. 001/ beside 001.png) holds per-slice PNGs, the page shows them
+beside the crop: W/S or Up/Down step through the slices, P plays.
 """
 from __future__ import annotations
 
@@ -26,6 +31,15 @@ CATEGORIES = [
   ("bad",     "2", "#c44"),  # background / fake
   ("unclear", "3", "#888"),  # uncertain, revisit later
 ]
+# Colours handed out in order to categories given on the command line
+_PALETTE = ["#4a4", "#c44", "#c84", "#888", "#48c", "#a4a"]
+
+
+def parse_categories(spec: str) -> list[tuple[str, str, str]]:
+  names = [c.strip() for c in spec.split(",") if c.strip()]
+  if not names or len(names) > len(_PALETTE):
+    raise SystemExit(f"--categories needs 1-{len(_PALETTE)} names")
+  return [(n, str(i + 1), _PALETTE[i]) for i, n in enumerate(names)]
 
 _TMPL = """
 <!DOCTYPE html>
@@ -83,6 +97,11 @@ h3 { font-size:0.75em; color:#666; text-transform:uppercase;
        overflow:hidden; position:relative; }
 #crop-img  { max-width:100%; max-height:100%;
        object-fit:contain; transition:opacity .1s; }
+#slice-box { display:none; flex-direction:column; align-items:center;
+       height:100%; margin-left:8px; }
+#slice-img { max-height:calc(100% - 30px); object-fit:contain; }
+#slice-ctl { font-size:0.8em; color:#888; font-family:monospace; }
+#crop-area.with-slices #crop-img { max-width:50%; }
 #label-badge {
   position:absolute; top:10px; right:14px;
   font-size:1em; font-weight:bold; padding:4px 12px;
@@ -155,6 +174,14 @@ h3 { font-size:0.75em; color:#666; text-transform:uppercase;
 <div id="main">
   <div id="crop-area">
     <img id="crop-img" src="" alt="crop">
+    <div id="slice-box">
+      <img id="slice-img" src="" alt="slice">
+      <div id="slice-ctl">
+        <input id="slice-range" type="range" min="0" value="0"
+             oninput="showSlice(+this.value)">
+        <span id="slice-pos"></span> &nbsp;W/S step, P play
+      </div>
+    </div>
     <div id="label-badge"></div>
   </div>
   <div id="crop-title" id="crop-title">—</div>
@@ -177,6 +204,38 @@ function updateBadge(label) {
   badge.style.borderColor = cat ? cat[2] : '#555';
 }
 
+let slices = [], sliceIdx = 0, playTimer = null;
+const PLAY_MS = 150;
+
+function showSlice(i) {
+  if (!slices.length) return;
+  sliceIdx = (i + slices.length) % slices.length;
+  document.getElementById('slice-img').src =
+    '/crop/' + encodeURIComponent(slices[sliceIdx]).replace(/%2F/g, '/');
+  document.getElementById('slice-range').value = sliceIdx;
+  document.getElementById('slice-pos').textContent =
+    (sliceIdx + 1) + '/' + slices.length;
+}
+
+function togglePlay() {
+  if (playTimer) { clearInterval(playTimer); playTimer = null; return; }
+  playTimer = setInterval(() => showSlice(sliceIdx + 1), PLAY_MS);
+}
+
+function loadSlices(name) {
+  fetch('/slices/' + encodeURIComponent(name)).then(r => r.json())
+    .then(list => {
+      slices = list;
+      const area = document.getElementById('crop-area');
+      const box = document.getElementById('slice-box');
+      area.classList.toggle('with-slices', list.length > 0);
+      box.style.display = list.length ? 'flex' : 'none';
+      document.getElementById('slice-range').max =
+        Math.max(list.length - 1, 0);
+      showSlice(Math.floor(list.length / 2));
+    });
+}
+
 function load(idx) {
   if (idx < 0 || idx >= N) return;
   cur = idx;
@@ -188,6 +247,7 @@ function load(idx) {
   img.src    = '/crop/' + encodeURIComponent(name);
   document.getElementById('crop-title').textContent = name;
   updateBadge(LABELS[name] || null);
+  loadSlices(name);
 }
 
 function go(idx) {
@@ -238,6 +298,11 @@ window.addEventListener('keydown', (e) => {
   for (const [cat, key,] of CATEGORIES) {
     if (e.key === key) { setLabel(cat); return; }
   }
+  if (e.key === 'w' || e.key === 'ArrowUp') {
+    e.preventDefault(); showSlice(sliceIdx - 1); return; }
+  if (e.key === 's' || e.key === 'ArrowDown') {
+    e.preventDefault(); showSlice(sliceIdx + 1); return; }
+  if (e.key === 'p') { togglePlay(); return; }
   if (e.key === 'ArrowRight') go(cur+1);
   if (e.key === 'ArrowLeft')  go(cur-1);
 });
@@ -265,8 +330,10 @@ def _parse_filename(name: str) -> dict:
   }
 
 
-def create_app(crops_dir: Path, labels_path: Path) -> Flask:
+def create_app(crops_dir: Path, labels_path: Path,
+               categories=CATEGORIES) -> Flask:
   app = Flask(__name__)
+  allowed = {c[0] for c in categories}
 
   names: list[str] = sorted(
     p.name for p in crops_dir.glob("*.png")
@@ -321,8 +388,8 @@ def create_app(crops_dir: Path, labels_path: Path) -> Flask:
     st = _stats()
     return render_template_string(
       _TMPL,
-      categories=CATEGORIES,
-      cat_json=json.dumps(CATEGORIES),
+      categories=categories,
+      cat_json=json.dumps(categories),
       names_json=json.dumps(names),
       labels_json=json.dumps(labels),
       n_total=len(names),
@@ -334,18 +401,25 @@ def create_app(crops_dir: Path, labels_path: Path) -> Flask:
 
   @app.route("/crop/<path:name>")
   def serve_crop(name: str):
-    p = crops_dir / name
-    if not p.exists() or not p.is_file():
+    p = (crops_dir / name).resolve()
+    if crops_dir not in p.parents or not p.is_file():
       return "not found", 404
     return send_file(io.BytesIO(p.read_bytes()),
              mimetype="image/png")
+
+  @app.route("/slices/<name>")
+  def list_slices(name: str):
+    d = crops_dir / Path(name).stem
+    if name not in set(names) or not d.is_dir():
+      return jsonify([])
+    return jsonify([f"{d.name}/{p.name}" for p in sorted(d.glob("*.png"))])
 
   @app.route("/label", methods=["POST"])
   def set_label():
     data  = request.get_json(force=True)
     name  = data.get("name", "")
     label = data.get("label", "")
-    if name and label and name in set(names):
+    if name and label in allowed and name in set(names):
       labels[name] = label
       _save()
     st = _stats()
@@ -368,6 +442,9 @@ def main() -> None:
     default="results/vertex_crops_v6_labels.csv",
     help="Output CSV for labels",
   )
+  parser.add_argument("--categories", default=None,
+                      help="comma-separated labels, e.g. "
+                           "vertex,crossing,junk,unclear")
   parser.add_argument("--port", type=int, default=8010)
   parser.add_argument("--host", default="0.0.0.0")
   args = parser.parse_args()
@@ -386,7 +463,9 @@ def main() -> None:
     print(f"Resuming {n_lab} existing labels from {labels_path}")
   print(f"Open: http://localhost:{args.port}/review/")
 
-  create_app(crops_dir, labels_path).run(
+  cats = (parse_categories(args.categories) if args.categories
+          else CATEGORIES)
+  create_app(crops_dir, labels_path, cats).run(
     host=args.host, port=args.port,
     debug=False, threaded=True,
   )
