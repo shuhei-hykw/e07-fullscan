@@ -1503,3 +1503,11 @@ Pseudo images (e07-g4-hypernuclei): dz=1.5 finds most capture vertices,
 dz=3.0 almost none; far fewer candidates than real data (~750/view).
 Image statistics gaps (binary foreground 8.6% vs 1.3%, etc.) sent to
 that session; efficiency estimates wait until realism is matched.
+
+## 2026-10-23 19:32 JST — Claude (e07-srv): intent — Method A and B' on v3 pseudo images
+
+The e07-g4-hypernuclei calibrated model v3 (embedded in real views =
+main, and fully synthetic), 5 events x 2 versions: Method A on all, B'
+(cell 6 + classifier, 12 workers) on the embedded ones. Outputs
+`results/sim_eval/v3_*_{methodA_*,bprime}.csv`. Scripts in scratch.
+The B' specials redo is still running (D005).
