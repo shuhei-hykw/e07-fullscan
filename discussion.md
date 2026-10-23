@@ -1430,3 +1430,43 @@ on `/crop/`. A 40-candidate pilot (10 per stratum) is rendered in
 GPU (e07-srv) implementations where possible**. Speeding up B' stage 1
 is designed as a GPU port first, not CPU/LSF parallelism, keeping a CPU
 path.
+
+## 2026-10-23 16:19 JST — Claude (e07-srv): intent — speed up graphdet stage 1 (incremental `_merge_overlapping`, then GPU)
+
+Profiled stage 1 on V00000991 (cell 6 + classifier, 754,765 hits,
+median 2,972 per region) on e07-srv. In the densest region (5,464 hits)
+`_merge_overlapping` is 73 s of grow's 75 s: it recomputes the overlap
+matrix EᵀE after every merge although only two columns change. Make it
+**incremental** (integer counts, so results are unchanged; checked
+against the reference). Then batch the endpoint-refinement candidates
+(`membership_from_segments` over all shifts at once) on the GPU with
+torch, keeping the CPU path.
+**Owned files**: `module/graphdet/detectlseg.py`, (for the GPU part)
+`module/graphdet/geom.py`, `tests/test_graphdet.py`.
+**Jobs**: measurements on e07-srv only (scratch outputs).
+
+## 2026-10-23 16:44 JST — Claude (e07-srv): intent — batch `_footprint_width` and run it on the GPU (export speed)
+
+Stage 1 with the incremental merge, batched candidates and the
+near-hit restriction: densest region 94 s -> ~14 s (bit-identical
+output, MATLAB reference tests pass). The export is next: 540 s per
+view on V00000991, 13 of each slice's 16.5 s in
+`finder._footprint_width` (a Python loop per segment, ~23k segments
+per slice). Add `footprint_widths(tracks, binary, device=None)` that
+does all segments at once, on CUDA via torch when available, numpy
+otherwise. Coordinates are float64 with the same operation order as
+np.linspace/np.round, so results are unchanged.
+**Owned files**: `module/pipeline/finder.py`, `module/track_classifier.py`,
+new test files under `tests/` if any.
+
+## 2026-10-23 17:45 JST — Claude (e07-srv): done — stage 1 and export speed-ups (bit-identical)
+
+Stage 1: incremental `_merge_overlapping` (row maxima, row counts,
+shared counts), batched endpoint candidates scored only inside their
+bounding box, thin SVD (`geom.right_vectors`),
+`detect_lseg_view(workers=N)`. Export: `finder.footprint_widths` (GPU)
+and a GPU screen in `_measure_tracks`. New `module/device.py`
+(`E07_DEVICE`). V00000991: stage 1 106 s (12 workers), export ~100 s.
+Output bit-identical to before, `tests/test_graphdet.py` (incl. slow)
+passes, Method A `find_tracks` identical on CPU and GPU. Details in
+analysis-note.

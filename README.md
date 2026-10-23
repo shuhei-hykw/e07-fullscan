@@ -18,11 +18,23 @@ working directory; no package install is needed).
 Dependencies: numpy, scipy, opencv-python, matplotlib, PyYAML, pandas,
 pyarrow (+ flask for the web viewer, pytest/ruff for development)
 
+### GPU
+
+With torch installed and a CUDA GPU visible, the per-segment feature
+code (`footprint_widths`, the segment-to-grain screen in
+`_measure_tracks`) runs on the GPU; otherwise it runs in numpy, with
+identical results either way. `E07_DEVICE=cpu` forces numpy and
+`E07_DEVICE=cuda:1` picks a device (`module/device.py`). The graph
+detector's stage 1 is irregular and runs on the CPU, in parallel over
+its 256 sub-regions with `detect_lseg_view(x, workers=N)`; its output
+does not depend on N.
+
 ## Package Structure
 
 ```
 module/
 ├── reader.py        # SPNG format reader (SpngReader)
+├── device.py        # GPU/CPU choice for array helpers (E07_DEVICE)
 ├── preprocess.py    # Steps 1–5: zpj → fog removal → Otsu → noise removal
 ├── run_info.py      # Run traceability (run_id, parquet metadata)
 ├── job_monitor.py   # Live-job monitor

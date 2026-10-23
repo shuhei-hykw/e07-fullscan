@@ -34,8 +34,8 @@ from scipy.spatial.distance import pdist, squareform
 
 from .config import MATLAB_CONFIG, MATLAB_Z_SCALE, DetectorConfig
 from .geom import (
-  is_a_line, is_same_track, membership_from_segments, norma, scale_z,
-  segments_from_membership,
+  is_a_line, is_same_track, membership_from_segments, norma,
+  right_vectors, scale_z, segments_from_membership,
 )
 
 # Straightness tolerances, kept as names because callers pass them
@@ -216,34 +216,93 @@ def split_into_linear_components(
 
 
 def _merge_overlapping(e: np.ndarray) -> np.ndarray:
-  """Collapse segments describing the same hits (inner loop of subfunc2)."""
-  m = e.shape[1]
-  ef = e.astype(np.float64)
-  while True:
-    sizes = np.maximum(e.sum(axis=0), 1).astype(np.float64)
-    u = (ef.T @ ef) / sizes[:, None]
-    np.fill_diagonal(u, 0.0)
-    # MATLAB's max(U, [], 'all') returns the first maximum in
-    # column-major order.
-    flat = int(np.argmax(u.ravel(order="F")))
-    ui, uj = flat % m, flat // m
-    if u[ui, uj] > _MERGE_FRAC:
-      e[:, uj] = e[:, ui] | e[:, uj]
-      e[:, ui] = False
-      ef = e.astype(np.float64)
-      continue
+  """Collapse segments describing the same hits (inner loop of subfunc2).
 
-    # "is this hit claimed by any segment other than i" is the row
-    # count minus i's own bit, which answers it for every i at once.
-    # MATLAB rebuilds the (N, M-1) slice per segment, an O(N*M^2) pass
-    # that was 85% of stage 1 on a dense real region.
-    counts = e.sum(axis=1)
-    others_any = (counts[:, None] - e) > 0
-    shared = np.count_nonzero(e & others_any, axis=0) / sizes
-    k = int(np.argmax(shared))
-    if shared[k] > _DROP_FRAC:
-      e[:, k] = False
-      ef = e.astype(np.float64)
+  U[i, j] = |e_i & e_j| / |e_i|. MATLAB recomputes the whole overlap
+  matrix after every merge, an O(N*M^2) product that was 97% of stage 1
+  on a dense real region. A merge or drop changes at most two columns
+  of ``e``, and a segment holds few hits, so after the first product
+  only the changed columns' overlaps are rebuilt, from the rows of
+  their own hits. Every count is an exact integer, so the result is
+  identical; the point of touching only those rows is that a full
+  (N, M) pass per step is memory-bound and does not scale across
+  processes.
+  """
+  ef = e.astype(np.float64)
+  # Overlap counts and U are kept transposed, so a C-order argmax over
+  # them is MATLAB's column-major max(U, [], 'all') (first maximum).
+  g = ef.T @ ef
+  sizes = np.maximum(np.diag(g), 1.0)
+  ut = g / sizes[None, :]
+  np.fill_diagonal(ut, 0.0)
+  # Row maxima of U^T and where they first occur, so the global first
+  # maximum is found in O(M) instead of scanning all M^2 entries each
+  # step (that scan was the next memory-bound pass).
+  rowmax = ut.max(axis=1)
+  rowarg = ut.argmax(axis=1)
+  # A hit of segment i is claimed by another segment exactly when its
+  # row count is 2 or more; shared[i] counts such hits of i.
+  rowcnt = e.sum(axis=1)
+  shared = (e & (rowcnt >= 2)[:, None]).sum(axis=0)
+
+  def refresh(cols):
+    for c in cols:
+      col = e[np.flatnonzero(e[:, c])].sum(axis=0).astype(np.float64)
+      g[c, :] = col
+      g[:, c] = col
+      sizes[c] = max(col[c], 1.0)
+    for c in cols:
+      old = ut[:, c].copy()
+      ut[c, :] = g[c, :] / sizes
+      ut[:, c] = g[:, c] / sizes[c]
+      ut[c, c] = 0.0
+      new = ut[:, c]
+      # Column c changed in every row: a row whose maximum sat at c and
+      # fell is rescanned; elsewhere c takes over if it now ties
+      # earlier or beats the maximum.
+      lost = (rowarg == c) & (new < old)
+      gain = (new > rowmax) | ((new == rowmax) & (c < rowarg))
+      rowmax[gain] = new[gain]
+      rowarg[gain] = c
+      redo = np.flatnonzero(lost & ~gain)
+      if redo.size:
+        rowmax[redo] = ut[redo].max(axis=1)
+        rowarg[redo] = ut[redo].argmax(axis=1)
+      # Row c itself was rewritten
+      rowmax[c] = ut[c].max()
+      rowarg[c] = ut[c].argmax()
+
+  def change(cols, edit, *args):
+    """Apply ``edit(*args)`` to e, keeping rowcnt and shared current."""
+    nonlocal shared
+    rows = np.flatnonzero(e[:, list(cols)].any(axis=1))
+    old = e[rows]
+    shared = shared - (old & (rowcnt[rows] >= 2)[:, None]).sum(axis=0)
+    edit(*args)
+    new = e[rows]
+    rowcnt[rows] = new.sum(axis=1)
+    shared = shared + (new & (rowcnt[rows] >= 2)[:, None]).sum(axis=0)
+    refresh(cols)
+
+  def merge(ui, uj):
+    e[:, uj] = e[:, ui] | e[:, uj]
+    e[:, ui] = False
+
+  def drop(k):
+    e[:, k] = False
+
+  while True:
+    uj = int(np.argmax(rowmax))
+    ui = int(rowarg[uj])
+    if ut[uj, ui] > _MERGE_FRAC:
+      change((ui, uj), merge, ui, uj)
+      continue
+    # MATLAB rebuilds the (N, M-1) slice per segment for this test, an
+    # O(N*M^2) pass that was 85% of stage 1 on a dense real region.
+    frac = shared / sizes
+    k = int(np.argmax(frac))
+    if frac[k] > _DROP_FRAC:
+      change((k,), drop, k)
     else:
       return e
 
@@ -277,7 +336,7 @@ def grow_segments(
         continue
       x1 = x[ind]
       mu = x1.mean(axis=0)
-      _, _, vt = np.linalg.svd(x1 - mu, full_matrices=True)
+      vt = right_vectors(x1 - mu)
       y = (x - mu) @ vt.T
       along = np.sort(y[ind, 0])
       sel = ((along[0] - cfg.grow_margin < y[:, 0])
@@ -303,6 +362,7 @@ def refine_endpoints(
   """
   dl = np.arange(-cfg.refine_dl, cfg.refine_dl + cfg.refine_dl_step / 2,
                  cfg.refine_dl_step)
+  n_hits = x.shape[0]
   lseg = np.zeros((2, 3, 0))
   for _ in range(_REFINE_PASSES):
     lseg, _, _ = segments_from_membership(x, e, _REFINE_FIT_TH)
@@ -324,19 +384,30 @@ def refine_endpoints(
         dv = lseg[j, :, i] - lseg[1 - j, :, i]
         dv = dv / np.linalg.norm(dv)
         others = counts - inside[:, i]
-        one = lseg[:, :, i:i + 1].copy()
-        err = np.zeros(dl.size)
-        cols = []
-        for k in range(dl.size):
-          one[j, :, 0] = lseg[j, :, i] + dv * dl[k]
-          _, _, dk = membership_from_segments(x, one, th, _ALONG_TOL)
-          cols.append(dk[:, 0] < th)
-          err[k] = np.count_nonzero(others + cols[k] != 1)
+        # Every candidate shift as its own segment, scored in one call.
+        # A hit can only be claimed within th of a candidate (the
+        # distance never undercuts the true one), so only hits inside
+        # the candidates' bounding box widened by th are scored; the
+        # rest add their fixed share to every candidate's error.
+        cand = np.repeat(lseg[:, :, i:i + 1], dl.size, axis=2)
+        cand[j] = lseg[j, :, i][:, None] + dv[:, None] * dl[None, :]
+        lo = cand.min(axis=(0, 2)) - th
+        hi = cand.max(axis=(0, 2)) + th
+        near = np.flatnonzero(np.all((x >= lo) & (x <= hi), axis=1))
+        _, _, dk = membership_from_segments(x[near], cand, th, _ALONG_TOL)
+        near_cols = dk < th
+        o = others[near]
+        err = (np.count_nonzero(others != 1) - np.count_nonzero(o != 1)
+               + np.count_nonzero(o[:, None] + near_cols != 1, axis=0))
         k = int(np.argmin(err))
         lseg[j, :, i] = lseg[j, :, i] + dv * dl[k]
-        inside[:, i] = cols[k]
-        counts = others + cols[k]
-        last = (i, cols[-1])
+        col = np.zeros(n_hits, dtype=bool)
+        col[near] = near_cols[:, k]
+        inside[:, i] = col
+        counts = others + col
+        last_col = np.zeros(n_hits, dtype=bool)
+        last_col[near] = near_cols[:, -1]
+        last = (i, last_col)
         if dl[k] != 0:
           moved = True
     if last is not None:
@@ -400,19 +471,50 @@ def iter_regions(
     yield k, lb, x[sel] - lb
 
 
+def _region_worker(args):
+  x1, kwargs = args
+  return detect_lseg_smallregion(x1, **kwargs)
+
+
+def _single_blas_thread() -> None:
+  """Pool initializer: one BLAS thread per worker, or the workers
+  oversubscribe the cores between them."""
+  try:
+    from threadpoolctl import threadpool_limits
+  except ImportError:
+    return
+  threadpool_limits(1)
+
+
 def detect_lseg_view(
   x: np.ndarray, *, region_px: int = REGION_PX, region_z: int = REGION_Z,
-  n_regions: int = N_REGIONS, progress=None, **kwargs,
+  n_regions: int = N_REGIONS, progress=None, workers: int = 1, **kwargs,
 ) -> tuple[np.ndarray, np.ndarray]:
   """Run every sub-region of one view. Returns (segments, per-region count).
 
   Segments come back in region order and in view coordinates, matching
-  how detect_tracks.m concatenates its parfor results.
+  how detect_tracks.m concatenates its parfor results. ``workers`` > 1
+  runs the regions in that many processes (like the MATLAB parfor);
+  the output is the same.
   """
+  regions = list(iter_regions(
+    x, region_px=region_px, region_z=region_z, n_regions=n_regions))
+  if workers > 1:
+    import multiprocessing as mp
+    with mp.get_context("fork").Pool(
+        workers, initializer=_single_blas_thread) as pool:
+      # Densest first, so a big region does not start last
+      order = sorted(range(len(regions)),
+                     key=lambda i: -regions[i][2].shape[0])
+      done = pool.map(_region_worker,
+                      [(regions[i][2], kwargs) for i in order], chunksize=1)
+    segs = [None] * len(regions)
+    for i, seg in zip(order, done):
+      segs[i] = seg
+  else:
+    segs = (detect_lseg_smallregion(x1, **kwargs) for _, _, x1 in regions)
   out, counts = [], []
-  for k, lb, x1 in iter_regions(
-      x, region_px=region_px, region_z=region_z, n_regions=n_regions):
-    seg = detect_lseg_smallregion(x1, **kwargs)
+  for (k, lb, x1), seg in zip(regions, segs):
     counts.append(seg.shape[2])
     if seg.shape[2]:
       out.append(seg + lb[None, :, None])

@@ -31,10 +31,11 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from module.device import default_device
 from module.reader import load_spng
 from module.pipeline import find_tracks
 from module.pipeline.finder import (
-  _measure_tracks, _GRAIN_RADIUS, _footprint_width,
+  _measure_tracks, _GRAIN_RADIUS, footprint_widths,
 )
 from module.preprocess import preprocess
 
@@ -84,7 +85,8 @@ def detect_lite_tracks(
   if lines is None:
     return []
   line_arr = lines.reshape(-1, 4)
-  measurements = _measure_tracks(fog_img, binary, line_arr, grain_radius)
+  measurements = _measure_tracks(fog_img, binary, line_arr, grain_radius,
+                                 default_device())
   tracks = []
   for (x1, y1, x2, y2), (n_g, wid, intens) in zip(line_arr, measurements):
     length = float(np.hypot(x2 - x1, y2 - y1))
@@ -109,6 +111,9 @@ def extract_features(tracks: list, binary: np.ndarray) -> np.ndarray:
   dilated = _dilated_binary(binary) > 0
   h, w = binary.shape
   feats = np.zeros((len(tracks), len(FEATURE_NAMES)), dtype=np.float64)
+  # All segments at once (on the GPU when there is one): the per-segment
+  # loop was 13 of 16.5 s per slice in the graph-detector export.
+  footprint = footprint_widths(tracks, binary, default_device())
   for i, t in enumerate(tracks):
     n = max(int(t.length_px), 2)
     xs = np.clip(np.linspace(t.px1, t.px2, n).astype(int), 0, w - 1)
@@ -127,8 +132,7 @@ def extract_features(tracks: list, binary: np.ndarray) -> np.ndarray:
       gap_lengths.append(run)
     step_px = t.length_px / n
     max_gap = (max(gap_lengths) if gap_lengths else 0) * step_px
-    footprint_w = _footprint_width(t, binary)
-    feats[i] = [t.length_px, t.n_grains, footprint_w, t.mean_intens,
+    feats[i] = [t.length_px, t.n_grains, footprint[i], t.mean_intens,
                 cov_frac, max_gap]
   return feats
 

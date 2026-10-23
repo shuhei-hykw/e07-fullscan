@@ -23,7 +23,7 @@
 | Method | 内容 | ML | 状態 |
 |---|---|---|---|
 | **A** | Pure Python（`find_tracks`→`find_vertices`→`merge_vertex_slices`） | 不使用 | **主軸。全域再解析 完了（2026-09-09）**。12.4億トラック → 反応点 1,516,569 個。④の precision が未解決 |
-| **B'** | グラフ検出器（`export_hits_grid`→`detectlseg`→`integrate_smallregions`→`detectbunki`） | 不使用 | **移植完了・実 E07 で走る**。cell=30 は45分/view だが purity が出ない。**cell=6＋分類器フィルタで約3時間/view**（未 end-to-end、LSF 向き）|
+| **B'** | グラフ検出器（`export_hits_grid`→`detectlseg`→`integrate_smallregions`→`detectbunki`） | 不使用 | **移植完了・実 E07 で走る**。cell=30 は45分/view だが purity が出ない。**cell=6＋分類器フィルタは e07-srv で エクスポート約100 s＋段1 106 s/view**（2026-10-23、出力はビット一致。段2〜3 は未計測、未 end-to-end）|
 | **C** | CNN 生画素セグメンテーション（別リポジトリ `e07-ml-binary-segmentation`） | 使用 | **注力対象。弱い判別力が出た段階**（LOTO・セグメント単位で AUC 0.59、precision 49.5% > 基準率 43.6%）。実用には遠い |
 | **D** | 教師なしクラスタリング（KMeans/GMM） | 使用 | **失敗確定・打ち切り**（precision 46〜50%＝ほぼチャンス） |
 
@@ -160,10 +160,24 @@ cell=30 の出力は使えない（折れ線 28,988本＝シミュレーショ�
 | 段1 | 2,449 s | **約 2.77 h** |
 | シミュレーションでの purity | 17.5% | **75.9%** |
 
-**合計 約3時間/view、段1 のメモリ実測 0.3 GB。** LSF queue `h`
-（walltime 8日、4 GB）に 1 view/job で投げれば 2025 view は同時200本で
-約1.5日。**cell=6 の end-to-end はまだ通していない**（ワークサーバでは
-なく LSF 向き）。
+（上表は kekcc での値。）**e07-srv での高速化（2026-10-23、
+V00000991、754,765 hits、出力はすべてビット一致・MATLAB 参照テスト通過）**:
+
+| | 旧（e07-srv 実測） | 新 |
+|---|---|---|
+| エクスポート 1 スライス | 16.5 s | **1.7 s**（GPU） |
+| エクスポート 1 view（58 枚） | 540 s | **約 100 s** |
+| 段1 最密領域（5,464 hits） | 94 s | 約 10 s |
+| 段1 1 view | （kekcc 2.77 h、e07-srv 旧版は未計測） | **106 s**（12 プロセス） |
+
+段1: `_merge_overlapping` を変わった列だけ更新（重なり・行数・共有数・
+行最大を差分管理）、端点調整の候補 9 本を一括＋候補の外接箱内の hit
+だけ評価、SVD を thin に、`detect_lseg_view(workers=N)` で領域並列。
+全 (N, M) 走査が残っていると並列化がメモリ帯域で頭打ちになる
+（12 並列で 451 s → 差分化後 106 s）。エクスポート: `_footprint_width`
+を全線分一括（GPU、torch）、`_measure_tracks` の線分×粒子の距離を GPU
+で候補抽出→CPU で元の式で判定。GPU が無ければ numpy（`E07_DEVICE` で
+指定可）。**cell=6 の end-to-end（段2・3 を含む）はまだ通していない。**
 
 **定数スケーリングの分類（2026-09-08 に測り直した）**: `for_spacing()`
 は**間隔スケール群だけ**を直す。全部スケールすると cell=30 で端点探索箱が

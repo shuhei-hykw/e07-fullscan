@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 import yaml
 
+from module.device import default_device
 from .track import Track
 # Shared branch-neutral preprocessing. Re-exported so existing callers of
 # `from module.pipeline.finder import preprocess` keep working.
@@ -60,16 +61,99 @@ _FOOTPRINT_MAX_SEARCH_PX = 15  # max perpendicular search for
                                 # _footprint_width
 
 
+# Pairs closer than grain_radius plus this slack are passed from the
+# GPU screen to the exact CPU test; far above float64 rounding, far
+# below any physical scale.
+_GRAIN_SCREEN_SLACK_PX = 1e-3
+# Elements of one (segments x grains) distance block on the GPU.
+_GRAIN_SCREEN_BLOCK = 1 << 25
+
+
+def _near_grain_pairs(c: np.ndarray, lines: np.ndarray, radius: float,
+                      device) -> tuple[np.ndarray, np.ndarray]:
+  """(segment, grain) index pairs that may lie within ``radius``.
+
+  A superset of the exact answer, computed blockwise on ``device``;
+  the caller re-tests the pairs with the original formula.
+  """
+  import torch
+  cx = torch.as_tensor(c[:, 0], device=device)
+  cy = torch.as_tensor(c[:, 1], device=device)
+  ln = torch.as_tensor(lines.astype(np.float64), device=device)
+  x1, y1 = ln[:, 0:1], ln[:, 1:2]
+  dx, dy = ln[:, 2:3] - x1, ln[:, 3:4] - y1
+  len2 = dx * dx + dy * dy
+  rows = max(_GRAIN_SCREEN_BLOCK // max(c.shape[0], 1), 1)
+  segs, grains = [], []
+  for r0 in range(0, lines.shape[0], rows):
+    sl = slice(r0, r0 + rows)
+    t = torch.clamp(((cx - x1[sl]) * dx[sl] + (cy - y1[sl]) * dy[sl])
+                    / len2[sl], 0.0, 1.0)
+    d = torch.hypot(cx - (x1[sl] + t * dx[sl]), cy - (y1[sl] + t * dy[sl]))
+    s, g = torch.nonzero(d < radius + _GRAIN_SCREEN_SLACK_PX,
+                         as_tuple=True)
+    segs.append((s + r0).cpu().numpy())
+    grains.append(g.cpu().numpy())
+  return np.concatenate(segs), np.concatenate(grains)
+
+
+def _measure_tracks_batched(fog_img, lines, c, grain_radius, device):
+  """_measure_tracks with the segment-to-grain distances screened on
+  the GPU; every reported number comes from the original formulas."""
+  h, w = fog_img.shape[:2]
+  ln = lines.astype(np.float64)
+  x1, y1, x2, y2 = ln.T
+  dx, dy = x2 - x1, y2 - y1
+  len2 = dx * dx + dy * dy
+  seg_len = np.sqrt(len2)
+  pair_s, pair_g = (_near_grain_pairs(c, lines, grain_radius, device)
+                    if c is not None else (np.zeros(0, int),) * 2)
+  # Exact re-test of the screened pairs (elementwise, as the loop does)
+  ps, pg = pair_s, pair_g
+  t = np.clip(((c[pg, 0] - x1[ps]) * dx[ps] + (c[pg, 1] - y1[ps]) * dy[ps])
+              / len2[ps], 0.0, 1.0) if ps.size else np.zeros(0)
+  d = np.hypot(c[pg, 0] - (x1[ps] + t * dx[ps]),
+               c[pg, 1] - (y1[ps] + t * dy[ps])) if ps.size else t
+  keep = d < grain_radius
+  ps, pg = ps[keep], pg[keep]
+  order = np.argsort(ps, kind="stable")
+  ps, pg = ps[order], pg[order]
+  bounds = np.searchsorted(ps, np.arange(lines.shape[0] + 1))
+
+  results = []
+  for i, (a, b, cc, dd) in enumerate(lines):
+    n_pts = max(int(seg_len[i]), 1)
+    xs = np.round(np.linspace(a, cc, n_pts + 1)).astype(int)
+    ys = np.round(np.linspace(b, dd, n_pts + 1)).astype(int)
+    valid = (xs >= 0) & (xs < w) & (ys >= 0) & (ys < h)
+    mean_intens = (float(fog_img[ys[valid], xs[valid]].mean())
+                   if valid.any() else 0.0)
+    if len2[i] == 0 or c is None:
+      results.append((0, 0.0, mean_intens))
+      continue
+    g = pg[bounds[i]:bounds[i + 1]]
+    n_grains = int(g.size)
+    width_px = 0.0
+    if n_grains > 1:
+      perp = np.abs((c[g, 0] - a) * dy[i] - (c[g, 1] - b) * dx[i]) \
+        / seg_len[i]
+      width_px = float(perp.std())
+    results.append((n_grains, width_px, mean_intens))
+  return results
+
+
 def _measure_tracks(
   fog_img: np.ndarray,
   binary: np.ndarray,
   lines: np.ndarray,
   grain_radius: float,
+  device=None,
 ) -> list[tuple[int, float, float]]:
   """Return (n_grains, width_px, mean_intens) for each track segment.
 
   grain_radius: distance threshold (px) to associate a grain blob
-  with a segment.
+  with a segment. With a torch ``device`` the segment-to-grain
+  distances, an all-pairs product, are screened there.
   """
   contours, _ = cv2.findContours(
     binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
@@ -86,6 +170,9 @@ def _measure_tracks(
   results: list[tuple[int, float, float]] = []
 
   C = np.column_stack([cx_list, cy_list]) if cx_list else None
+  if device is not None and len(lines):
+    return _measure_tracks_batched(fog_img, np.asarray(lines), C,
+                                   grain_radius, device)
 
   for x1, y1, x2, y2 in lines:
     dx = float(x2 - x1)
@@ -170,6 +257,86 @@ def _footprint_width(t, binary: np.ndarray) -> float:
   return float(np.median(fg_widths)) if fg_widths.size else 0.0
 
 
+# Largest footprint width a sample can report: the centre pixel plus a
+# full search on each side.
+_FOOTPRINT_MAX_WIDTH = 2 * _FOOTPRINT_MAX_SEARCH_PX - 1
+
+
+def footprint_widths(tracks, binary: np.ndarray,
+                     device=None) -> np.ndarray:
+  """``_footprint_width`` for every segment at once.
+
+  The sample points of all segments are laid end to end, so each
+  perpendicular step is one gather over the whole slice instead of a
+  call per segment (13 of a slice's 16.5 s in the export went to
+  that loop). Coordinates are float64 built with the same operations
+  as np.linspace and np.round, so the widths are identical. With a
+  torch ``device`` (e.g. "cuda") the gathers run there.
+  """
+  m = len(tracks)
+  if m == 0:
+    return np.zeros(0)
+  h, w = binary.shape
+  a = np.array([(t.px1, t.py1, t.px2, t.py2, t.length_px) for t in tracks],
+               dtype=np.float64)
+  px1, py1, px2, py2, length = a.T
+  seg_len = np.maximum(length, 1.0)
+  ux = (px2 - px1) / seg_len
+  uy = (py2 - py1) / seg_len
+  n = np.maximum(length.astype(np.int64), 2)
+  seg = np.repeat(np.arange(m), n)
+  start = np.cumsum(n) - n
+  i = (np.arange(seg.size) - start[seg]).astype(np.float64)
+  # np.linspace: start + i * (stop - start) / (n - 1), last = stop
+  xs = i * ((px2 - px1) / (n - 1))[seg] + px1[seg]
+  ys = i * ((py2 - py1) / (n - 1))[seg] + py1[seg]
+  last = start + n - 1
+  xs[last], ys[last] = px2, py2
+  pxu, pyu = -uy[seg], ux[seg]
+
+  if device is None:
+    xp, img = np, binary > 0
+
+    def at(x, y):
+      cx = np.clip(np.round(x).astype(np.int64), 0, w - 1)
+      cy = np.clip(np.round(y).astype(np.int64), 0, h - 1)
+      return img[cy, cx]
+  else:
+    import torch
+    xp = torch
+    img = torch.as_tensor(binary > 0, device=device)
+    xs, ys, pxu, pyu = (torch.as_tensor(v, device=device)
+                        for v in (xs, ys, pxu, pyu))
+
+    def at(x, y):
+      cx = torch.clamp(torch.round(x).long(), 0, w - 1)
+      cy = torch.clamp(torch.round(y).long(), 0, h - 1)
+      return img[cy, cx]
+
+  center = at(xs, ys)
+  run = xp.zeros(center.shape, dtype=xp.int64) if device is None \
+    else torch.zeros(center.shape, dtype=torch.int64, device=device)
+  for sign in (1, -1):
+    active = center.clone() if device is not None else center.copy()
+    for k in range(1, _FOOTPRINT_MAX_SEARCH_PX):
+      active &= at(xs + (sign * k) * pxu, ys + (sign * k) * pyu)
+      run += active
+  widths = run + 1
+  if device is not None:
+    widths, center = widths.cpu().numpy(), center.cpu().numpy()
+
+  # Per-segment median of the foreground widths (small integers), from
+  # a histogram: np.median takes the mean of the two middle values.
+  n_val = _FOOTPRINT_MAX_WIDTH + 1
+  hist = np.bincount(seg[center] * n_val + widths[center],
+                     minlength=m * n_val).reshape(m, n_val)
+  cum = hist.cumsum(axis=1)
+  total = cum[:, -1]
+  lo = np.argmax(cum > ((total - 1) // 2)[:, None], axis=1)
+  hi = np.argmax(cum > (total // 2)[:, None], axis=1)
+  return np.where(total > 0, (lo + hi) / 2.0, 0.0)
+
+
 def _pixel_to_stage(
   affine: list[float], px: float, py: float
 ) -> tuple[float, float]:
@@ -245,7 +412,8 @@ def find_tracks(
 
   # OpenCV 4 returns (N, 1, 4); OpenCV 5 returns (N, 4)
   line_arr = lines.reshape(-1, 4)
-  measurements = _measure_tracks(fog_img, binary, line_arr, grain_radius)
+  measurements = _measure_tracks(fog_img, binary, line_arr, grain_radius,
+                                 default_device())
 
   entry = reader.entries[idx]
   affine = reader.affine_p2s

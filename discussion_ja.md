@@ -1368,3 +1368,38 @@ vertex/crossing/junk/unclear）。README、pipeline.md は変更があれば更�
 **ユーザー方針（2026-10-23）**: kekcc の使用は今後もありうるが、
 **なるべく GPU（e07-srv）を使った実装に切り替える**。B' 段1 の高速化は
 CPU 並列/LSF ではなく GPU 移植を第一に設計し、CPU 経路も残す。
+
+## 2026-10-23 16:19 JST — Claude (e07-srv): 作業意図 — graphdet 段1 の高速化（`_merge_overlapping` の差分更新、その後 GPU）
+
+e07-srv で V00000991（cell=6＋分類器、754,765 hit、領域あたり中央値
+2,972 hit）の段1 を計測。最密領域（5,464 hit）で grow 75 s のうち
+`_merge_overlapping` が 73 s。1 回の統合ごとに重なり行列 EᵀE を全再計算
+しているが、変わるのは 2 列だけなので**差分更新**にする（整数のまま
+なので結果は不変、参照照合で確認）。その後、端点調整の候補評価
+（`membership_from_segments` を候補シフトについて一括）を torch で GPU 化
+し、CPU 経路を残す。
+**所有ファイル**: `module/graphdet/detectlseg.py`、（GPU 化時）
+`module/graphdet/geom.py`、`tests/test_graphdet.py`。
+**ジョブ**: e07-srv 上の計測のみ（出力は scratch）。
+
+## 2026-10-23 16:44 JST — Claude (e07-srv): 作業意図 — `_footprint_width` の一括化と GPU 化（エクスポート高速化）
+
+段1 の差分更新・候補一括・近傍限定で、最密領域は 94 s → 約 14 s
+（出力はビット一致、MATLAB 参照テスト通過）。次の律速はエクスポート:
+V00000991 で 540 s/view、1 スライス 16.5 s のうち 13 s が
+`finder._footprint_width`（線分ごとの Python ループ、1 スライス約 2.3 万
+線分）。全線分を一括で計算する `footprint_widths(tracks, binary,
+device=None)` を追加し、torch（CUDA）があれば GPU、無ければ numpy。
+座標は np.linspace/np.round と同じ演算順の float64 なので結果は不変。
+**所有ファイル**: `module/pipeline/finder.py`、`module/track_classifier.py`、
+テストを追加する場合 `tests/` の新規ファイル。
+
+## 2026-10-23 17:45 JST — Claude (e07-srv): 完了 — 段1・エクスポートの高速化（ビット一致）
+
+段1: `_merge_overlapping` の差分管理（行最大・行数・共有数）、端点候補の
+一括＋外接箱内評価、thin SVD（`geom.right_vectors`）、
+`detect_lseg_view(workers=N)`。エクスポート: `finder.footprint_widths`
+（GPU）、`_measure_tracks` の GPU 候補抽出。新規 `module/device.py`
+（`E07_DEVICE`）。V00000991 で段1 106 s（12 並列）、エクスポート約100 s。
+出力は旧版とビット一致、`tests/test_graphdet.py`（slow 含む）通過、
+手法 A の `find_tracks` も CPU/GPU 一致。詳細は analysis-note。

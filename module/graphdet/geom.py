@@ -26,6 +26,17 @@ from .config import MATLAB_CONFIG, MATLAB_Z_SCALE, DetectorConfig
 _GAP_FACTOR = 15.0
 
 
+def right_vectors(a: np.ndarray) -> np.ndarray:
+  """V^T of the SVD of ``a`` (rows are points), always square.
+
+  Only V is ever used, so the n x n U of a full SVD is waste for a
+  large component; the thin SVD gives the same V^T when there are at
+  least as many points as dimensions, and the full one is kept for
+  fewer (where the thin V^T would not be square).
+  """
+  return np.linalg.svd(a, full_matrices=a.shape[0] < a.shape[1])[2]
+
+
 def norma(x: np.ndarray, axis: int) -> np.ndarray:
   """Port of norma.m: Euclidean norm along one axis."""
   return np.sqrt(np.sum(x ** 2, axis=axis))
@@ -53,7 +64,7 @@ def is_a_line(x: np.ndarray, th: float) -> bool:
   if x.shape[0] <= 2:
     return True
   mu = x.mean(axis=0)
-  _, _, vt = np.linalg.svd(x - mu, full_matrices=True)
+  vt = right_vectors(x - mu)
   y = (x - mu) @ vt.T
   return not norma(y[:, 1:], 1).max() > th
 
@@ -73,7 +84,7 @@ def is_same_track(
 
   x = np.concatenate([x1, x2], axis=0)
   mu = x.mean(axis=0)
-  _, _, vt = np.linalg.svd(x - mu, full_matrices=True)
+  vt = right_vectors(x - mu)
   v = vt.T
   y = (x - mu) @ v
   if norma(y[:, 1:], 1).max() > th:
@@ -138,7 +149,7 @@ def segments_from_membership(
       continue
     x1 = x[ind]
     mu_i = x1.mean(axis=0)
-    _, _, vt = np.linalg.svd(x1 - mu_i, full_matrices=True)
+    vt = right_vectors(x1 - mu_i)
     v_i = vt.T
     y = (x1 - mu_i) @ v_i
     if norma(y[:, 1:], 1).max() < th:
@@ -237,7 +248,7 @@ def is_a_line3(lseg1: np.ndarray, lseg2: np.ndarray,
   # Rows 1 and 2 are the two focus endpoints; rows 0 and 3 the far ones.
   lseg = np.concatenate([lseg1[::-1], lseg2], axis=0)
   mu = lseg.mean(axis=0)
-  _, _, vt = np.linalg.svd(lseg - mu, full_matrices=True)
+  vt = right_vectors(lseg - mu)
   y = (lseg - mu) @ vt.T
   if norma(y[:, 1:], 1).max() > cfg.join_max_residual:
     return np.inf
@@ -280,7 +291,7 @@ def is_a_line3a(lseg1: np.ndarray, lseg2: np.ndarray,
 
   lseg = np.concatenate([lseg1[::-1], lseg2], axis=0)
   mu = lseg.mean(axis=0)
-  _, _, vt = np.linalg.svd(lseg - mu, full_matrices=True)
+  vt = right_vectors(lseg - mu)
   y = (lseg - mu) @ vt[0]
   if y[0] > y[-1]:
     y = y[::-1]
