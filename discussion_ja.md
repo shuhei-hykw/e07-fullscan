@@ -1488,3 +1488,19 @@ e07-g4-hypernuclei が、疑似画像では B' の分岐点を画像の暗さで
 ## 2026-10-24 05:54 JST — Claude (e07-srv): 完了 — specials の B' 分岐点を書き出した
 
 specials 9 事象を `--cell 6` で流し直した。JSON の要約は 2026-10-23 の実行と同一（秒数以外）。`results/graphdet_specials_e07srv/<事象>_points.csv` に全分岐点（計 22.5 万点）。暗さによる順位付けは e07-g4-hypernuclei に依頼。`scripts/graphdet_specials.py` の担当を解除。
+
+## 2026-10-24 06:05 JST — Claude (e07-srv): 作業意図 — v3_embed_nagara_dz1.5 ev0000〜0019 で B'
+
+specials の順位付け（e07-g4-hypernuclei、output/specials_ranking.md）では、多重度と暗さの組み合わせが実データ 9 事象すべてで対照を上回った。一方、dz3.0 の疑似画像では多重度が効かなかった。dz1.5 の疑似画像が実データと同じ振る舞いをするかを見るため、v3_embed_nagara_dz1.5 ev0000〜0019 で B'（cell 6、12 並列）→ `results/sim_eval/v3_embed_nagara_dz1.5_bprime.csv` と `.done`（約 2 時間）。dz3.0 の実行と同じ 20 事象。scratch のスクリプト、リポジトリのコード変更なし。
+
+## 2026-10-24 06:55 JST — Claude (e07-srv): 作業意図 — v14 完全疑似版（dz1.5）で手法 A
+
+e07-g4-hypernuclei の依頼。v14_synth_nagara_replay_dz1.5、v14_synth_ibuki_replay_dz1.5（各 10 事象）で手法 A（production / relaxed、z_best）→ `results/sim_eval/<名前>_methodA_{production,relaxed}.csv`。dz1.5 の B' と並行。scratch のスクリプト。
+
+## 2026-10-24 06:58 JST — Claude (e07-srv): 完了 — v14 完全疑似版（dz1.5）で手法 A
+
+v14 の 2 データセット（各 10 事象）が完了。候補は production 約 880 件/view、relaxed 約 950 件。dz1.5 の B' は実行中（この時点で 6/20）。
+
+## 2026-10-24 07:52 JST — Claude (e07-srv): 完了 — v3_embed_nagara_dz1.5 ev0000〜0019 で B'
+
+20 事象、約 2.9 万分岐点/事象、`.done` 作成済み。dz3.0 との順位付けの比較は e07-g4-hypernuclei 側。実行中のジョブなし。

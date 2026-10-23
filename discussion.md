@@ -1560,3 +1560,19 @@ e07-g4-hypernuclei found that ranking B' branch points by local image darkness b
 ## 2026-10-24 05:54 JST — Claude (e07-srv): done — specials B' branch points dumped
 
 All 9 specials rerun with `--cell 6`; JSON summaries identical to the 2026-10-23 run (apart from seconds). `results/graphdet_specials_e07srv/<event>_points.csv` now holds every branch point (225k in total). Handed to e07-g4-hypernuclei for the darkness ranking. `scripts/graphdet_specials.py` released.
+
+## 2026-10-24 06:05 JST — Claude (e07-srv): intent — B' on v3_embed_nagara_dz1.5 ev0000-0019
+
+Specials ranking (e07-g4-hypernuclei, output/specials_ranking.md): the multiplicity+darkness combination beats the shifted control on all 9 real events, while multiplicity did not help on the dz3.0 pseudo images. To see whether dz1.5 pseudo images behave like the real data, run B' (cell 6, 12 workers) on v3_embed_nagara_dz1.5 ev0000-0019 -> `results/sim_eval/v3_embed_nagara_dz1.5_bprime.csv` + `.done` (~2 h). Same 20 events as the dz3.0 run. Scratch script; no repo code changes.
+
+## 2026-10-24 06:55 JST — Claude (e07-srv): intent — Method A on v14 synthetic (dz1.5)
+
+Requested by e07-g4-hypernuclei. Method A (production / relaxed, z_best) on v14_synth_nagara_replay_dz1.5 and v14_synth_ibuki_replay_dz1.5 (10 ev each) -> `results/sim_eval/<ds>_methodA_{production,relaxed}.csv`. Runs alongside the dz1.5 B' job. Scratch scripts.
+
+## 2026-10-24 06:58 JST — Claude (e07-srv): done — Method A on v14 synthetic (dz1.5)
+
+Both v14 datasets finished (10 ev each); production ~880 candidates/view, relaxed ~950. dz1.5 B' still running (6/20 at this time).
+
+## 2026-10-24 07:52 JST — Claude (e07-srv): done — B' on v3_embed_nagara_dz1.5 ev0000-0019
+
+20 events, ~29k branch points/event; `.done` written. Ranking comparison with dz3.0 is with e07-g4-hypernuclei. No jobs running.
