@@ -1520,3 +1520,11 @@ vertex depth than chance. Add `z_best`, the z of the slice with the
 most tracks (the merge seed); existing columns unchanged. **Owned**:
 `module/pipeline/vertex.py`, `pipeline.md`. The 100-event Method A
 run is restarted to include it.
+
+## 2026-10-23 21:45 JST — Claude (e07-srv): progress — 100-event pseudo-image evaluation; B' specials done
+
+Agreed the matching spec with e07-g4-hypernuclei (edge / inclusive /
+best, one-to-one, random-shift chance control) and evaluated Method A on
+v3 embedded 100 events x 2 versions. B' specials redo (9 events) done.
+Details in analysis-note. Remaining Method A (ll11be, ibuki, replay) and
+B' (v3 dz1.5, replay) still running.

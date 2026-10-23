@@ -1449,3 +1449,10 @@ e07-g4-hypernuclei の疑似画像（正解付き）で、手法 A の候補は 
 最多飛跡のスライス（マージの種）の z を `z_best` として出力に追加
 （既存列は不変）。**所有ファイル**: `module/pipeline/vertex.py`、
 `pipeline.md`。100 事象の手法 A は新しい列込みで流し直す。
+
+## 2026-10-23 21:45 JST — Claude (e07-srv): 進捗 — 疑似画像 100 事象の評価、B' specials 完了
+
+e07-g4-hypernuclei と照合仕様をすり合わせ（edge / inclusive / best、一対一、
+乱数ずらし対照）、v3 埋め込み 100 事象×2 版で手法 A を評価。B' specials
+9 事象の取り直し完了。詳細は analysis-note。手法 A の残り（ll11be、ibuki、
+replay）と B'（v3 dz1.5、replay）は実行中。
