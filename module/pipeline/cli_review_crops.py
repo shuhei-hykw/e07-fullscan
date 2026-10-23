@@ -31,6 +31,9 @@ CATEGORIES = [
   ("bad",     "2", "#c44"),  # background / fake
   ("unclear", "3", "#888"),  # uncertain, revisit later
 ]
+# Extra CSV columns per label, and the longest note kept
+_EXTRA_FIELDS = ("ts", "note", "seconds")
+_NOTE_MAX = 200
 # Colours handed out in order to categories given on the command line
 _PALETTE = ["#4a4", "#c44", "#c84", "#888", "#48c", "#a4a"]
 
@@ -148,6 +151,13 @@ h3 { font-size:0.75em; color:#666; text-transform:uppercase;
   </div>
 
   <div>
+    <h3>Note <span style="color:#555;">(saved with the label)</span></h3>
+    <input id="note" type="text" maxlength="200" placeholder="e.g. why unclear"
+         style="width:100%; background:#333; color:#ddd;
+            border:1px solid #555; padding:4px; font-size:0.85em;">
+  </div>
+
+  <div>
     <h3>Navigate</h3>
     <div class="nav-row">
       <button class="nav-btn" onclick="go(cur-1)">&#9664; Prev</button>
@@ -178,7 +188,7 @@ h3 { font-size:0.75em; color:#666; text-transform:uppercase;
       <img id="slice-img" src="" alt="slice">
       <div id="slice-ctl">
         <input id="slice-range" type="range" min="0" value="0"
-             oninput="showSlice(+this.value)">
+             oninput="showSlice(+this.value)" onchange="this.blur()">
         <span id="slice-pos"></span> &nbsp;W/S step, P play
       </div>
     </div>
@@ -204,7 +214,8 @@ function updateBadge(label) {
   badge.style.borderColor = cat ? cat[2] : '#555';
 }
 
-let slices = [], sliceIdx = 0, playTimer = null;
+let slices = [], sliceIdx = 0, playTimer = null, shownAt = Date.now();
+const NOTES = {{ notes_json|safe }};
 const PLAY_MS = 150;
 
 function showSlice(i) {
@@ -245,6 +256,8 @@ function load(idx) {
   img.style.opacity = '0.4';
   img.onload = () => { img.style.opacity = '1'; };
   img.src    = '/crop/' + encodeURIComponent(name);
+  shownAt = Date.now();
+  document.getElementById('note').value = NOTES[name] || '';
   document.getElementById('crop-title').textContent = name;
   updateBadge(LABELS[name] || null);
   loadSlices(name);
@@ -274,9 +287,12 @@ function setLabel(cat) {
   fetch('/label', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({name, label: cat})
+    body: JSON.stringify({name, label: cat,
+      note: document.getElementById('note').value,
+      seconds: (Date.now() - shownAt) / 1000})
   }).then(r => r.json()).then(d => {
     LABELS[name] = cat;
+    NOTES[name] = document.getElementById('note').value;
     updateBadge(cat);
     // update progress
     document.getElementById('prog-fill').style.width = d.pct + '%';
@@ -339,24 +355,25 @@ def create_app(crops_dir: Path, labels_path: Path,
     p.name for p in crops_dir.glob("*.png")
   )
   labels: dict[str, str] = {}
+  # Per label: when it was given, the reviewer's note (e.g. why a crop
+  # is unclear) and the seconds spent on the crop
+  extra: dict[str, dict] = {}
 
   if labels_path.exists():
     with labels_path.open(newline="") as f:
       for row in csv.DictReader(f):
         labels[row["filename"]] = row["label"]
+        extra[row["filename"]] = {k: row.get(k, "") or ""
+                                  for k in _EXTRA_FIELDS}
 
   def _save() -> None:
     with labels_path.open("w", newline="") as f:
-      w = csv.DictWriter(
-        f, fieldnames=["filename", "label", "ts"]
-      )
+      w = csv.DictWriter(f, fieldnames=["filename", "label",
+                                        *_EXTRA_FIELDS])
       w.writeheader()
       for name, label in labels.items():
-        w.writerow({
-          "filename": name,
-          "label": label,
-          "ts": labels.get("__ts__" + name, ""),
-        })
+        w.writerow({"filename": name, "label": label,
+                    **extra.get(name, {})})
 
   def _stats() -> dict:
     counts: dict[str, int] = {}
@@ -392,6 +409,7 @@ def create_app(crops_dir: Path, labels_path: Path,
       cat_json=json.dumps(categories),
       names_json=json.dumps(names),
       labels_json=json.dumps(labels),
+      notes_json=json.dumps({k: v.get("note", "") for k, v in extra.items()}),
       n_total=len(names),
       n_labeled=st["n_labeled"],
       pct=st["pct"],
@@ -421,6 +439,11 @@ def create_app(crops_dir: Path, labels_path: Path,
     label = data.get("label", "")
     if name and label in allowed and name in set(names):
       labels[name] = label
+      extra[name] = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "note": str(data.get("note", ""))[:_NOTE_MAX],
+        "seconds": round(float(data.get("seconds", 0) or 0), 1),
+      }
       _save()
     st = _stats()
     return jsonify(st)

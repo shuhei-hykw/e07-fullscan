@@ -170,6 +170,18 @@ and a minimum-intensity projection over its z range) plus every slice
 of the range at full resolution. `render --pilot N` renders the first N
 of each stratum only. The review page steps through the slices (W/S,
 P to play) when a directory of per-slice PNGs sits beside a crop.
+Every slice of a candidate shares one contrast stretch, so darkness can
+be compared across depth; `render_info.csv` records how many slices
+each candidate shows and how much of it lies outside the image. The
+review server stores the time, a free-text note (e.g. why a crop is
+unclear) and the seconds spent with each label. `vertex_audit.py
+recheck` links a random 20% of the judged candidates under new ids for
+a blind second pass (agreement rate).
+
+`scripts/graphdet_specials.py --cell 6` runs the graph detector on a
+specials event at a fixed export cell (no widening) and matches branch
+points within 200 px in XY and +-30 um of the clicked depth, with the
+branch-point z mapped back to stage millimetres.
 
 ## Batch Track Analysis (KEKCC)
 

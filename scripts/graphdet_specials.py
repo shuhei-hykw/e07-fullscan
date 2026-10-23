@@ -33,7 +33,9 @@ from module.graphdet import (
   detect_lseg_view, integrate_smallregions,
 )
 from module.graphdet.geom import scale_z
-from module.matlab_export import export_hits_grid, _GRAPH_CELL_PX
+from module.matlab_export import (
+  export_hits_grid, _GRAPH_CELL_PX, _ORIGIN_OFFSET,
+)
 from module.reader import load_spng
 from module.track_classifier import build_training_set, train_classifier
 
@@ -46,6 +48,9 @@ _Z_WINDOW = 80
 # The truth itself is only good to 200 px XY (expert click session), so
 # a tighter radius would be measuring the clicks, not the detector.
 _MATCH_PX = 200.0
+_UM_PER_MM = 1000.0
+# Processes for stage 1 (the 256 sub-regions are independent)
+_WORKERS = 12
 # Hits per sub-region the detector is affordable at. Stage 1 costs
 # roughly N^2 in the hits of one 128x128x80 region: ~40 s at 3,000 and
 # over 32 minutes at 6,700, which is 140 h per view. specials events
@@ -69,7 +74,8 @@ def z_window(n_slices: int, centre: int) -> tuple[int, int]:
 
 
 def run(event: str, specials: Path, out_dir: Path,
-        cell_min: int = _GRAPH_CELL_PX) -> dict:
+        cell_min: int = _GRAPH_CELL_PX, fixed_cell: bool = False,
+        workers: int = _WORKERS) -> dict:
   gt_all = json.loads(_GT_PATH.read_text())
   gt = gt_all["events"][event]
   path = specials / event / "image.json"
@@ -86,7 +92,7 @@ def run(event: str, specials: Path, out_dir: Path,
     per_region = pl.shape[0] / _N_REGIONS
     print(f"{event}: slices {lo}-{hi} of {n_slices}, cell {cell} px -> "
           f"{pl.shape[0]} hits ({per_region:.0f}/region)", flush=True)
-    if per_region <= _TARGET_PER_REGION:
+    if fixed_cell or per_region <= _TARGET_PER_REGION:
       break
     want = cell * (per_region / _TARGET_PER_REGION) ** (
       1.0 / _HIT_DENSITY_EXPONENT)
@@ -100,7 +106,7 @@ def run(event: str, specials: Path, out_dir: Path,
 
   x = pl[:, :3]
   cfg = MATLAB_CONFIG.for_spacing(float(cell))
-  seg, _ = detect_lseg_view(x, cfg=cfg)
+  seg, _ = detect_lseg_view(x, cfg=cfg, workers=workers)
   t2 = time.time()
   print(f"  stage 1: {seg.shape[2]} segments in {t2 - t1:.0f} s", flush=True)
   polys = integrate_smallregions(x, seg, cfg)
@@ -122,9 +128,19 @@ def run(event: str, specials: Path, out_dir: Path,
     # Rank by multiplicity, the way a human would triage the list.
     order = np.argsort(-mult, kind="stable")
     p, m = pts[order], mult[order]
-    d = np.linalg.norm(p[:, :2] - np.array([gt["vx"], gt["vy"]]), axis=1)
+    # Back to image coordinates: the export adds a 1-based origin to
+    # x, y and z, and z counts slices from the window's first slice.
+    xy = p[:, :2] - _ORIGIN_OFFSET
+    d = np.linalg.norm(xy - np.array([gt["vx"], gt["vy"]]), axis=1)
     res["dist_px"] = float(d.min())
-    hit = np.flatnonzero(d <= _MATCH_PX)
+    zs = load_spng(path).z_positions()
+    sl = p[:, 2] - _ORIGIN_OFFSET + lo
+    z_mm = np.interp(sl, np.arange(len(zs)), zs)
+    z_true = zs[int(gt["z_slice"])]
+    tol_z = gt_all.get("tolerance_z_um", 30) / _UM_PER_MM
+    res["match"] = "xy+z"
+    hit = np.flatnonzero((d <= _MATCH_PX) & (np.abs(z_mm - z_true) <= tol_z))
+    res["n_match"] = int(hit.size)
     if hit.size:
       res["rank"] = int(hit[0]) + 1
       res["mult"] = int(m[hit[0]])
@@ -143,8 +159,13 @@ def main() -> int:
                   default=Path("results/graphdet_specials"))
   ap.add_argument("--cell-min", type=int, default=_GRAPH_CELL_PX,
                   help="smallest export cell to try (px)")
+  ap.add_argument("--cell", type=int, default=None,
+                  help="fixed export cell (px); no widening")
+  ap.add_argument("--workers", type=int, default=_WORKERS)
   args = ap.parse_args()
-  run(args.event, args.specials, args.out, args.cell_min)
+  run(args.event, args.specials, args.out,
+      args.cell if args.cell else args.cell_min, args.cell is not None,
+      args.workers)
   return 0
 
 

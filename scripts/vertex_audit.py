@@ -77,6 +77,9 @@ WHITE = 255
 YELLOW = (0, WHITE, WHITE)
 RED = (0, 0, WHITE)
 KEY_STAMP = "KEY_SHA256"
+STRETCH_PCT = (1, 99)
+# Share of judged candidates shown again blind, for agreement
+RECHECK_FRAC = 0.2
 
 
 def local_view(view_id: str) -> Path:
@@ -136,12 +139,16 @@ def _crop(img: np.ndarray, cx: float, cy: float, size: int) -> np.ndarray:
   return out
 
 
-def _to_bgr(img: np.ndarray) -> np.ndarray:
-  """Contrast-stretch the valid pixels; outside the image is black."""
+def _to_bgr(img: np.ndarray, scale=None) -> np.ndarray:
+  """Contrast-stretch the valid pixels; outside the image is black.
+
+  ``scale`` = (lo, hi) applies one stretch to every slice of a
+  candidate, so a grain's darkness can be compared across depth;
+  without it the image's own 1-99% range is used."""
   valid = ~np.isnan(img)
   out = np.zeros(img.shape, np.uint8)
   if valid.any():
-    lo, hi = np.percentile(img[valid], (1, 99))
+    lo, hi = scale or np.percentile(img[valid], STRETCH_PCT)
     v = (img[valid] - lo) / max(hi - lo, 1.0) * WHITE
     out[valid] = np.clip(v, 0, WHITE).astype(np.uint8)
   return cv2.cvtColor(out, cv2.COLOR_GRAY2BGR)
@@ -168,7 +175,7 @@ def z_range(z: np.ndarray, row) -> range:
   return range(max(lo - Z_MARGIN, 0), min(hi + Z_MARGIN, len(z) - 1) + 1)
 
 
-def render_one(reader, row, cache: dict, out_dir: Path) -> None:
+def render_one(reader, row, cache: dict, out_dir: Path) -> dict:
   z = reader.z_positions()
   idx = z_range(z, row)
 
@@ -179,16 +186,19 @@ def render_one(reader, row, cache: dict, out_dir: Path) -> None:
 
   sub = out_dir / row.audit_id
   sub.mkdir(exist_ok=True)
-  details = []
-  for i in idx:
-    d = _crop(slice_(i), row.vx_px, row.vy_px, DETAIL_PX)
-    details.append(d)
+  details = [_crop(slice_(i), row.vx_px, row.vy_px, DETAIL_PX)
+             for i in idx]
+  stack = np.stack(details)
+  valid = ~np.isnan(stack)
+  scale = (tuple(np.percentile(stack[valid], STRETCH_PCT))
+           if valid.any() else None)
+  for i, d in zip(idx, details):
     um = (z[i] - z[idx[0]]) * 1000
     cv2.imwrite(str(sub / f"s{i:02d}.png"),
-                _mark(_to_bgr(d), f"slice {i}  {um:+.0f} um"))
+                _mark(_to_bgr(d, scale), f"slice {i}  {um:+.0f} um"))
   mid = idx[len(idx) // 2]
   ov = _crop(slice_(mid), row.vx_px, row.vy_px, OVERVIEW_PX)
-  ov = cv2.resize(_to_bgr(ov), (DETAIL_PX, DETAIL_PX),
+  ov = cv2.resize(_to_bgr(ov, scale), (DETAIL_PX, DETAIL_PX),
                   interpolation=cv2.INTER_AREA)
   # Box of the detail window inside the overview
   q = DETAIL_PX * DETAIL_PX // OVERVIEW_PX // 2
@@ -198,6 +208,9 @@ def render_one(reader, row, cache: dict, out_dir: Path) -> None:
   mip = _mark(_to_bgr(np.fmin.reduce(details)),
               f"min slices {idx[0]}-{idx[-1]}")
   cv2.imwrite(str(out_dir / f"{row.audit_id}.png"), np.hstack([ov, mip]))
+  # How much the reviewer had to go on, for reading the verdicts later
+  return {"audit_id": row.audit_id, "n_slices_shown": len(idx),
+          "outside_frac": round(float(1 - valid[0].mean()), 3)}
 
 
 def cmd_render(args) -> None:
@@ -212,6 +225,7 @@ def cmd_render(args) -> None:
   stamp.write_text(sha + "\n")
   if args.pilot:
     key = key.groupby("stratum", sort=False).head(args.pilot)
+  info = []
   for view_id, grp in key.groupby("view_id"):
     path = local_view(view_id)
     if not path.exists():
@@ -220,8 +234,37 @@ def cmd_render(args) -> None:
     reader, cache = load_spng(path), {}
     for row in grp.itertuples():
       if not (crops / f"{row.audit_id}.png").exists():
-        render_one(reader, row, cache, crops)
+        info.append(render_one(reader, row, cache, crops))
+  if info:
+    info_path = args.out / "render_info.csv"
+    old = (pd.read_csv(info_path, dtype={"audit_id": str})
+           if info_path.exists() else None)
+    new = pd.DataFrame(info)
+    (new if old is None else pd.concat([old, new])).drop_duplicates(
+      "audit_id", keep="last").to_csv(info_path, index=False)
   print(f"{len(list(crops.glob('*.png')))} candidates rendered in {crops}")
+
+
+def cmd_recheck(args) -> None:
+  """Blind second pass: RECHECK_FRAC of the judged candidates under new
+  ids (links to the same images), for the agreement rate."""
+  labels = pd.read_csv(args.out / "labels.csv")
+  rng = np.random.default_rng(args.seed + 1)
+  n = max(1, round(len(labels) * RECHECK_FRAC))
+  pick = labels.iloc[rng.choice(len(labels), n, replace=False)]
+  src, dst = args.out / "crops", args.out / "crops_recheck"
+  if dst.exists():
+    raise SystemExit(f"{dst} exists; the recheck ids are already fixed")
+  dst.mkdir()
+  rows = []
+  for j, name in enumerate(pick.filename):
+    new = f"r{j + 1:03d}"
+    stem = Path(name).stem
+    (dst / f"{new}.png").symlink_to(src / name)
+    (dst / new).symlink_to(src / stem, target_is_directory=True)
+    rows.append({"recheck_id": new, "audit_id": stem})
+  pd.DataFrame(rows).to_csv(args.out / "recheck_key.csv", index=False)
+  print(f"{n} candidates linked in {dst}")
 
 
 def main() -> int:
@@ -234,10 +277,13 @@ def main() -> int:
   r = sub.add_parser("render")
   r.add_argument("--pilot", type=int, default=0,
                  help="render only the first N of each stratum")
-  for p in (s, r):
+  c = sub.add_parser("recheck")
+  c.add_argument("--seed", type=int, default=SEED)
+  for p in (s, r, c):
     p.add_argument("--out", type=Path, default=_OUT)
   args = ap.parse_args()
-  {"sample": cmd_sample, "render": cmd_render}[args.cmd](args)
+  {"sample": cmd_sample, "render": cmd_render,
+   "recheck": cmd_recheck}[args.cmd](args)
   return 0
 
 

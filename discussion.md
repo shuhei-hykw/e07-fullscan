@@ -1470,3 +1470,36 @@ and a GPU screen in `_measure_tracks`. New `module/device.py`
 Output bit-identical to before, `tests/test_graphdet.py` (incl. slow)
 passes, Method A `find_tracks` identical on CPU and GPU. Details in
 analysis-note.
+
+## 2026-10-23 17:49 JST — Claude (e07-srv): intent — check Method A on e07-g4-hypernuclei pseudo images
+
+Read the 5 events x 2 versions (physical z step 3.0 / 1.5 um) made by
+the e07-g4-hypernuclei session with SpngReader and run Method A as in
+`rank_specials.py` (production and relaxed cuts) to produce candidate
+CSVs. **Inputs (read only)**: `~/work/e07-g4-hypernuclei/data/images/nagara5_dz{3.0,1.5}/`.
+**Outputs (new)**: `results/sim_eval/nagara5_dz*_methodA_{production,relaxed}.csv`.
+Script in scratch (no repo change).
+
+## 2026-10-23 18:02 JST — Claude (e07-srv): intent — redo B' specials with fixed settings and the same z test
+
+kekcc's `results/graphdet_specials/` used a different cell (6/8/10/16)
+and z window per event and matched in XY only (Codex). Add `--cell`
+(fixed, no widening) and `--workers` to `scripts/graphdet_specials.py`,
+map branch-point z back to stage mm (window offset, 1-based index) and
+match within 200 px XY and +-30 um of the clicked depth. Run on e07-srv
+at cell 6 for all 9 events.
+**Owned file**: `scripts/graphdet_specials.py`.
+**Outputs (new)**: `results/graphdet_specials_e07srv/` (kekcc's kept).
+
+## 2026-10-23 18:14 JST — Claude (e07-srv): progress — audit hand-off ready; Method A on pseudo images
+
+Audit (Codex's points): one contrast stretch per candidate,
+`render_info.csv`, time / note / seconds per label (also fixes the ts
+column that was always empty), `vertex_audit.py recheck` (20% blind
+second pass), reviewer guide `results/vertex_audit_v7/INSTRUCTIONS_ja.md`.
+Display regression-checked at specials truth positions and at the image
+edge (the marker sits on D005's star apex).
+Pseudo images (e07-g4-hypernuclei): dz=1.5 finds most capture vertices,
+dz=3.0 almost none; far fewer candidates than real data (~750/view).
+Image statistics gaps (binary foreground 8.6% vs 1.3%, etc.) sent to
+that session; efficiency estimates wait until realism is matched.

@@ -1403,3 +1403,34 @@ device=None)` を追加し、torch（CUDA）があれば GPU、無ければ nump
 （`E07_DEVICE`）。V00000991 で段1 106 s（12 並列）、エクスポート約100 s。
 出力は旧版とビット一致、`tests/test_graphdet.py`（slow 含む）通過、
 手法 A の `find_tracks` も CPU/GPU 一致。詳細は analysis-note。
+
+## 2026-10-23 17:49 JST — Claude (e07-srv): 作業意図 — e07-g4-hypernuclei の疑似画像で手法 A を確認
+
+e07-g4-hypernuclei（別セッション）が作った疑似顕微鏡画像 5 事象×2 版
+（物理 z 刻み 3.0 / 1.5 µm）を SpngReader で読み、`rank_specials.py` と
+同じ手法 A（本番カット＋relaxed）を流して候補 CSV を作る。
+**入力（読むだけ）**: `~/work/e07-g4-hypernuclei/data/images/nagara5_dz{3.0,1.5}/`。
+**出力（新規）**: `results/sim_eval/nagara5_dz*_methodA_{production,relaxed}.csv`。
+スクリプトは scratch（リポジトリ変更なし）。
+
+## 2026-10-23 18:02 JST — Claude (e07-srv): 作業意図 — B' specials を固定設定・同じ z 判定で取り直す
+
+kekcc の `results/graphdet_specials/` は事象ごとに cell（6/8/10/16）と
+z 窓が違い、照合も XY のみ（Codex 指摘）。`scripts/graphdet_specials.py` に
+`--cell`（固定、自動拡大しない）と `--workers` を追加し、branch point の
+z を窓オフセットと 1 始まり添字からステージ mm に戻して、XY 200 px かつ
+クリック深さ ±30 µm で照合する。e07-srv で cell=6 固定、9 事象。
+**所有ファイル**: `scripts/graphdet_specials.py`。
+**出力（新規）**: `results/graphdet_specials_e07srv/`（kekcc の結果は残す）。
+
+## 2026-10-23 18:14 JST — Claude (e07-srv): 進捗 — 監査の引き渡し準備、疑似画像での手法 A
+
+監査（Codex 指摘を反映）: 候補内で共通の濃度尺度、`render_info.csv`、
+判定ごとの時刻・Note・秒数（従来 ts が空だった不具合も解消）、
+`vertex_audit.py recheck`（20% を別 id で再判定）、判定手引き
+`results/vertex_audit_v7/INSTRUCTIONS_ja.md`。specials 真値位置と画像端で
+表示の回帰確認済み（十字が D005 の星の頂点に乗る）。
+疑似画像（e07-g4-hypernuclei）: dz=1.5 で捕獲点を多く検出、dz=3.0 は
+ほぼ不検出、候補数は実データ（~750/view）よりはるかに少ない。実画像と
+の統計差（前景率 8.6% 対 1.3% など）を相手セッションに送付し、効率推定
+は写実性を合わせてからとした。
