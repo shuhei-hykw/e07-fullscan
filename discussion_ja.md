@@ -1514,3 +1514,7 @@ v14 の 2 データセット（各 10 事象）が完了。候補は production 
 ## 2026-10-26 15:28 JST — Claude (e07-srv): 進捗 — 粒子単位の真値での点群評価
 
 `scripts/eval_pointcloud.py` を、e07-g4-hypernuclei の `grains.npz` と 3D で照合する形にした。開発用 2 事象（校正途中の v15、数字は報告に使わない）では、本番の分類器によるゴミ落としは同じ点数の無作為な間引きより悪く、DoG による粒子検出（`dog3d`）は約 6 割の点数で純度・拾い率とも高い（1 view 10 秒）。実 view では DoG の点数は合成と近いが、長い線状の飛跡には点がほとんど付かない。本番の点群作成は変更なし。詳細は analysis-note。
+
+## 2026-10-26 15:38 JST — Claude (e07-srv): 作業意図 — v15 の調整用と埋め込み版で点群の方式を比較
+
+`scripts/eval_pointcloud.py`（新しい方向別の線検出 `ridge` / `ridge3d` / `dogridge` を含む全方式）を、`v15_synth_tune_dz4` と `v15_embed_nagara_dz4`（各 10 事象）で流す → `results/pointcloud_eval/v15/`。仕組みの確認のみで、確定の比較は e07-g4-hypernuclei との合意どおり v16 で行う。埋め込み版では、実背景の中での信号の粒子の拾い率を見る（純度は意味がない）。

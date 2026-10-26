@@ -1586,3 +1586,7 @@ Note: the physical step is now ~4.0 um/slice (e07-g4-hypernuclei, layer-depth co
 ## 2026-10-26 15:28 JST — Claude (e07-srv): progress — point-cloud harness on grain truth
 
 `scripts/eval_pointcloud.py` now matches hits to e07-g4-hypernuclei `grains.npz` in 3-D. On the two dev events (partial v15, not for reporting) the production classifier denoise is worse than random thinning at the same budget, and a DoG grain detector (`dog3d`) gives higher purity and recall at ~60% of the budget, 10 s/view. On real views DoG hit counts match the synthetic, but long line-like tracks get few hits. Production export unchanged. Details in analysis-note.
+
+## 2026-10-26 15:38 JST — Claude (e07-srv): intent — point-cloud variants on v15 tune and v15 embed
+
+Run `scripts/eval_pointcloud.py` (all variants incl. new oriented line detector `ridge`/`ridge3d`/`dogridge`) on `v15_synth_tune_dz4` and `v15_embed_nagara_dz4` (10 events each) -> `results/pointcloud_eval/v15/`. Mechanics check only; decisive comparison on v16 per agreement with e07-g4-hypernuclei. Embed events: signal-grain recall with real background (purity not meaningful there).

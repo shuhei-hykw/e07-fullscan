@@ -19,6 +19,18 @@ the step that loses real grains (or lets junk through) shows up:
   dog3d       the same maxima kept only if they are also the maximum
               over the slices either side, so a grain seen in three
               slices gives one hit at its sharpest slice
+  ridge       line detector: elongated oriented filters (a ridge
+              profile across, a long Gaussian along, RIDGE_ANGLES
+              directions), thresholded at RIDGE_K robust sigmas; centre
+              lines at least RIDGE_MIN_LEN_PX long, sampled every cell
+              px. Real flat tracks are smooth faint grey lines with no
+              grain maxima along them, which DoG misses, and a local
+              (Hessian) curvature is lost in the background texture --
+              they only stand out when integrated along their length
+  ridge3d     ridge hits kept only where the line is at least as strong
+              as in the slices either side (its sharpest slice)
+  dogridge    dog3d plus the ridge3d hits farther than COVER_R_PX from
+              any dog3d hit in the same slice
 
 Each mask is reduced to hits with ``weighted_grid_hits`` at the
 production cell. Truth is e07-g4-hypernuclei's ``grains.npz`` (one row
@@ -54,6 +66,7 @@ import numpy as np
 import pandas as pd
 from scipy.ndimage import maximum_filter
 from scipy.spatial import cKDTree
+from skimage.morphology import remove_small_objects, skeletonize
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from module.matlab_export import (
@@ -96,6 +109,18 @@ DOG_K = 3.0
 DOG_PEAK_PX = 5
 _MAD_TO_SIGMA = 1.4826
 DOG_VARIANTS = ("dog", "dog3d")
+# Line detector: cross-section and along-line sigmas (px). Chosen by
+# eye on a real view: (1.5, 8) and (2.5, 12) behave alike, and K = 3
+# already picks up the background texture where K = 4 does not.
+RIDGE_SIGMA_CROSS_PX = 2.5
+RIDGE_SIGMA_ALONG_PX = 12.0
+RIDGE_ANGLES = 16
+RIDGE_K = 4.0
+RIDGE_MIN_LEN_PX = 30
+# Components smaller than this are removed before thinning.
+RIDGE_MIN_AREA_PX = 40
+_KERNEL_HALF_SIGMAS = 3
+RIDGE_VARIANTS = ("ridge", "ridge3d", "dogridge")
 CLASS_NAMES = {1: "capture", 2: "decay", 3: "secondary", 4: "background",
                5: "junk"}
 
@@ -312,6 +337,87 @@ def dog_hits(reader, k=DOG_K):
   return {v: np.concatenate(out[v]).astype(float) for v in out}, secs
 
 
+def _line_kernels():
+  """Zero-mean ridge kernels, one per direction."""
+  half = int(_KERNEL_HALF_SIGMAS * RIDGE_SIGMA_ALONG_PX)
+  y, x = np.mgrid[-half:half + 1, -half:half + 1].astype(np.float32)
+  out = []
+  for th in np.linspace(0, np.pi, RIDGE_ANGLES, endpoint=False):
+    u = x * np.cos(th) + y * np.sin(th)
+    v = -x * np.sin(th) + y * np.cos(th)
+    vv = v * v / RIDGE_SIGMA_CROSS_PX ** 2
+    k = (1 - vv) * np.exp(-u * u / (2 * RIDGE_SIGMA_ALONG_PX ** 2)
+                          - vv / 2)
+    k -= k.mean()
+    out.append(k / np.abs(k).sum())
+  return out
+
+
+_LINE_KERNELS = _line_kernels()
+
+
+def ridge_response(img):
+  """Best oriented line response of the fog-removed slice."""
+  f = fog_remove(img).astype(np.float32)
+  return np.max([cv2.filter2D(f, -1, k) for k in _LINE_KERNELS], axis=0)
+
+
+def line_mask(r, k=RIDGE_K):
+  """Centre lines of the long structures above k robust sigmas."""
+  med = np.median(r)
+  m = r > med + k * _MAD_TO_SIGMA * np.median(np.abs(r - med))
+  sk = skeletonize(remove_small_objects(m, RIDGE_MIN_AREA_PX))
+  n, lab = cv2.connectedComponents(sk.astype(np.uint8))
+  size = np.bincount(lab.ravel(), minlength=n)
+  size[0] = 0
+  return (size[lab] >= RIDGE_MIN_LEN_PX).astype(np.uint8) * 255
+
+
+def ridge_hits(reader, cell, k=RIDGE_K):
+  """Hits on line centres, every slice and at each line's best slice."""
+  out = {"ridge": [], "ridge3d": []}
+  secs = {"ridge": 0.0, "ridge3d": 0.0}
+  n = len(reader)
+  win = {}
+  for s in range(n + 1):
+    t = time.time()
+    if s < n:
+      r = ridge_response(reader.read(s))
+      hh = weighted_grid_hits(line_mask(r, k), np.maximum(r, 0), cell)
+      win[s] = (r, maximum_filter(r, size=3), hh)
+    dt = time.time() - t
+    secs["ridge"] += dt
+    secs["ridge3d"] += dt
+    c = s - 1
+    if c < 0:
+      continue
+    t = time.time()
+    r, _, hh = win[c]
+    out["ridge"].append(np.column_stack([hh[:, :2], np.full(len(hh), c)]))
+    ys = np.clip(np.rint(hh[:, 1]).astype(int), 0, r.shape[0] - 1)
+    xs = np.clip(np.rint(hh[:, 0]).astype(int), 0, r.shape[1] - 1)
+    keep = np.ones(len(hh), bool)
+    for nb in (c - 1, c + 1):
+      if nb in win:
+        keep &= r[ys, xs] >= win[nb][1][ys, xs]
+    out["ridge3d"].append(np.column_stack(
+      [hh[keep, :2], np.full(keep.sum(), c)]))
+    secs["ridge3d"] += time.time() - t
+    win.pop(c - 1, None)
+  return {v: np.concatenate(out[v]) for v in out}, secs
+
+
+def merge_hits(a, b):
+  """a plus the hits of b farther than COVER_R_PX from a (same slice)."""
+  keep = np.ones(len(b), bool)
+  for s in np.unique(b[:, 2]):
+    ia, ib = a[:, 2] == s, np.flatnonzero(b[:, 2] == s)
+    if ia.any() and ib.size:
+      d = cKDTree(a[ia, :2]).query(b[ib, :2])[0]
+      keep[ib] = d > COVER_R_PX
+  return np.concatenate([a, b[keep]])
+
+
 def evaluate(ev_dir, variants, clf, cell):
   reader = load_spng(ev_dir / "image.json")
   shape = reader.read(0).shape[:2]
@@ -321,10 +427,16 @@ def evaluate(ev_dir, variants, clf, cell):
     masks = sorted(set(masks) | {"otsu", "classifier"},
                    key=MASK_VARIANTS.index)
   hits, secs = collect_hits(reader, masks, clf, cell)
-  if any(v in DOG_VARIANTS for v in variants):
+  if any(v in DOG_VARIANTS or v == "dogridge" for v in variants):
     dh, ds = dog_hits(reader)
     hits.update(dh)
     secs.update(ds)
+  if any(v in RIDGE_VARIANTS for v in variants):
+    rh, rs = ridge_hits(reader, cell)
+    hits.update(rh)
+    secs.update(rs)
+    hits["dogridge"] = merge_hits(hits["dog3d"], hits["ridge3d"])
+    secs["dogridge"] = secs["dog3d"] + secs["ridge3d"]
   if "otsu_rand" in variants:
     rng = np.random.default_rng(SEED)
     o = hits["otsu"]
@@ -360,7 +472,7 @@ def main() -> int:
                   default=Path("results/pointcloud_eval"))
   ap.add_argument("--variants",
                   default=",".join(MASK_VARIANTS + ("otsu_rand",)
-                                   + DOG_VARIANTS))
+                                   + DOG_VARIANTS + RIDGE_VARIANTS))
   ap.add_argument("--cell", type=int, default=_GRAPH_CELL_PX)
   ap.add_argument("--tag", default="", help="prefix for output files")
   args = ap.parse_args()
