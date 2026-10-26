@@ -14,8 +14,13 @@ records what the downstream sees:
             and Z_TOL_SLICES of a polyline sample (rec_frac), and how many
             polylines share those grains (n_poly, counting a polyline
             once it holds MIN_SHARE of them)
+            and the share held by the single best polyline (rec_best,
+            the track found as one piece)
   polylines the fraction of a polyline's samples near some track grain
-            (purity); one under FAKE_PURITY is called fake
+            (purity; under FAKE_PURITY is fake: count and total length)
+            and the share of its matched samples on its main track
+            (main_frac; low means it joins tracks)
+  memory    peak RSS of the whole process tree (stage-1 workers summed)
 
 One variant per process, so the peak RSS belongs to that variant.
 
@@ -26,9 +31,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import resource
+import os
 import sys
+import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -63,6 +70,8 @@ FAKE_PURITY = 0.3
 REC_GOOD = 0.5
 KB_PER_MB = 1024.0
 PRODUCTION = "production"
+PIXEL_UM = 0.29        # the graph detector's MATLAB pixel size
+RSS_POLL_S = 0.5
 
 
 def hits_for(ev, variant, dog_k):
@@ -77,6 +86,50 @@ def hits_for(ev, variant, dog_k):
   hits, _ = ep.build_hits(load_spng(path), (variant,), None,
                           _GRAPH_CELL_PX)
   return hits[variant][:, :3] + _ORIGIN_OFFSET
+
+
+class TreeRSS:
+  """Peak resident memory of this process and all its descendants,
+  summed, sampled every RSS_POLL_S from /proc."""
+
+  def __init__(self):
+    self.peak_mb = 0.0
+    self._stop = threading.Event()
+    self._t = threading.Thread(target=self._run, daemon=True)
+
+  @staticmethod
+  def _tree_kb(root):
+    kids, rss = {}, {}
+    for d in os.listdir("/proc"):
+      if not d.isdigit():
+        continue
+      try:
+        with open(f"/proc/{d}/status") as f:
+          st = dict(line.split(":", 1) for line in f if ":" in line)
+      except OSError:
+        continue
+      kids.setdefault(int(st["PPid"]), []).append(int(d))
+      rss[int(d)] = int(st.get("VmRSS", "0 kB").split()[0])
+    total, todo = 0, [root]
+    while todo:
+      p = todo.pop()
+      total += rss.get(p, 0)
+      todo += kids.get(p, [])
+    return total
+
+  def _run(self):
+    while not self._stop.is_set():
+      self.peak_mb = max(self.peak_mb,
+                         self._tree_kb(os.getpid()) / KB_PER_MB)
+      self._stop.wait(RSS_POLL_S)
+
+  def __enter__(self):
+    self._t.start()
+    return self
+
+  def __exit__(self, *exc):
+    self._stop.set()
+    self._t.join()
 
 
 def sample(polys):
@@ -106,8 +159,8 @@ def near(a_xy, a_z, b_xy, b_z):
   return np.where(np.isfinite(d), j, -1)
 
 
-def track_scores(g, shape, n_slices, polys):
-  """Per-track table and polyline purities against grain truth."""
+def track_scores(g, shape, n_slices, polys, z_scale):
+  """Per-track table and per-polyline table against grain truth."""
   h, w = shape
   vis = ((g["cls"] >= 1) & (g["cls"] <= 4) & ~g["fog"]
          & (g["col"] >= 0) & (g["col"] < w) & (g["row"] >= 0)
@@ -119,26 +172,67 @@ def track_scores(g, shape, n_slices, polys):
   sp = sp - _ORIGIN_OFFSET
   hit = near(gxy, gz, sp[:, :2], sp[:, 2])
   pid = np.where(hit >= 0, sid[np.maximum(hit, 0)], -1)
-  rows = []
-  for t in np.unique(inst):
-    m = inst == t
-    if m.sum() < MIN_TRACK_GRAINS:
-      continue
-    p = pid[m]
-    cov = p[p >= 0]
-    n_poly = 0
-    if cov.size:
-      _, c = np.unique(cov, return_counts=True)
-      n_poly = int((c >= MIN_SHARE * cov.size).sum())
-    rows.append({"inst": int(t), "cls": int(cls[m][0]),
-                 "n_grains": int(m.sum()),
-                 "rec_frac": float(cov.size / m.sum()),
-                 "n_poly": n_poly})
-  tt = pd.DataFrame(rows)
-  back = near(sp[:, :2], sp[:, 2], gxy, gz) >= 0
-  purity = (pd.Series(back).groupby(sid).mean().to_numpy()
-            if len(sid) else np.zeros(0))
-  return tt, purity
+  # Per track: grain count, covered count, best single polyline
+  tid, ti = np.unique(inst, return_inverse=True)
+  n_g = np.bincount(ti)
+  t_cls = np.zeros(len(tid), int)
+  t_cls[ti] = cls
+  cv = pid >= 0
+  n_cov = np.bincount(ti[cv], minlength=len(tid))
+  pair, c = np.unique(np.column_stack([ti[cv], pid[cv]]), axis=0,
+                      return_counts=True)
+  best = np.zeros(len(tid), int)
+  np.maximum.at(best, pair[:, 0], c)
+  n_poly = np.bincount(pair[:, 0], minlength=len(tid),
+                       weights=c >= MIN_SHARE * n_cov[pair[:, 0]])
+  keep = n_g >= MIN_TRACK_GRAINS
+  tt = pd.DataFrame({"inst": tid, "cls": t_cls, "n_grains": n_g,
+                     "rec_frac": n_cov / n_g, "rec_best": best / n_g,
+                     "n_poly": n_poly.astype(int)})[keep]
+  tt = tt.reset_index(drop=True)
+  # Each polyline sample -> track of its nearest grain (or none).
+  # Instance ids can be negative, so 'none' is kept as a mask.
+  back = near(sp[:, :2], sp[:, 2], gxy, gz)
+  owned = back >= 0
+  n_p = len(polys)
+  n_s = np.bincount(sid, minlength=n_p)
+  n_on = np.bincount(sid[owned], minlength=n_p)
+  pair, c = np.unique(np.column_stack([sid[owned],
+                                       ti[back[owned]]]), axis=0,
+                      return_counts=True)
+  main = np.zeros(n_p, int)
+  np.maximum.at(main, pair[:, 0], c)
+  length = np.array([np.linalg.norm(np.diff(p, axis=0) * np.array(
+    [1.0, 1.0, z_scale]), axis=1).sum() for p in polys])
+  prow = {"poly": np.arange(n_p), "length_px": length,
+          "purity": n_on / np.maximum(n_s, 1),
+          "main_frac": main / np.maximum(n_on, 1)}
+  return tt, pd.DataFrame(prow)
+
+
+def quality(tt, pt):
+  """Summary of the per-track and per-polyline tables."""
+  fake = pt.purity < FAKE_PURITY if len(pt) else np.zeros(0, bool)
+  row = {"n_fake": int(fake.sum()),
+         "fake_frac": float(fake.mean()) if len(pt) else np.nan,
+         "fake_len_px": float(pt.length_px[fake].sum()) if len(pt) else 0.,
+         "main_frac_med": float(pt.main_frac[~fake].median())
+         if (~fake).any() else np.nan}
+  for nm, sub in (("bg", tt[tt.cls == 4]), ("sig", tt[tt.cls < 4])):
+    if len(sub):
+      row[f"{nm}_tracks"] = len(sub)
+      row[f"{nm}_rec_mean"] = float(sub.rec_frac.mean())
+      row[f"{nm}_good"] = float((sub.rec_frac >= REC_GOOD).mean())
+      row[f"{nm}_best_mean"] = float(sub.rec_best.mean())
+      row[f"{nm}_best_good"] = float((sub.rec_best >= REC_GOOD).mean())
+      row[f"{nm}_npoly_med"] = float(sub.n_poly[sub.n_poly > 0].median())
+  return row
+
+
+def load_polys(path):
+  """Polylines saved by main() (_polys.npz)."""
+  z = np.load(path)
+  return np.split(z["xyz"], np.cumsum(z["n"])[:-1]) if len(z["n"]) else []
 
 
 def main() -> int:
@@ -147,50 +241,53 @@ def main() -> int:
   ap.add_argument("--variant", default="dog3d")
   ap.add_argument("--dog-k", type=float, default=ep.DOG_K)
   ap.add_argument("--workers", type=int, default=WORKERS)
+  ap.add_argument("--z-um", type=float, default=None,
+                  help="slice step (um) for the detector's z scale; "
+                  "default keeps MATLAB_Z_SCALE (3.0 um)")
   ap.add_argument("--out", type=Path,
                   default=Path("results/pointcloud_eval/graphdet"))
   args = ap.parse_args()
   ev = args.event
   tag = args.variant if args.variant == PRODUCTION else \
     f"{args.variant}_k{args.dog_k:g}"
+  if args.z_um is not None:
+    tag += f"_z{args.z_um:g}"
   name = f"{ev.parent.name}__{ev.name}__{tag}"
   args.out.mkdir(parents=True, exist_ok=True)
 
-  t0 = time.time()
-  x = hits_for(ev, args.variant, args.dog_k)
-  t1 = time.time()
-  n_reg = np.array([r[2].shape[0] for r in iter_regions(x)], dtype=float)
   cfg = MATLAB_CONFIG.for_spacing(float(_GRAPH_CELL_PX))
-  seg, _ = detect_lseg_view(x, cfg=cfg, workers=args.workers)
-  t2 = time.time()
-  polys = integrate_smallregions(x, seg, cfg)
-  t3 = time.time()
-  rss = {who: resource.getrusage(w).ru_maxrss / KB_PER_MB for who, w in
-         (("self", resource.RUSAGE_SELF),
-          ("workers", resource.RUSAGE_CHILDREN))}
+  if args.z_um is not None:
+    cfg = replace(cfg, z_scale=args.z_um / PIXEL_UM)
+  with TreeRSS() as mem:
+    t0 = time.time()
+    x = hits_for(ev, args.variant, args.dog_k)
+    t1 = time.time()
+    n_reg = np.array([r[2].shape[0] for r in iter_regions(x)],
+                     dtype=float)
+    seg, _ = detect_lseg_view(x, cfg=cfg, workers=args.workers)
+    t2 = time.time()
+    polys = integrate_smallregions(x, seg, cfg)
+    t3 = time.time()
 
   reader = load_spng(ev / "image.json")
   g = dict(np.load(ev / "grains.npz"))
-  tt, purity = track_scores(g, reader.read(0).shape[:2], len(reader),
-                            polys)
+  tt, pt = track_scores(g, reader.read(0).shape[:2], len(reader),
+                        polys, cfg.z_scale)
   row = {"event": ev.name, "variant": tag, "n_hits": len(x),
          "region_max": int(n_reg.max()), "sum_n2": float((n_reg ** 2).sum()),
          "hits_s": round(t1 - t0, 1), "stage1_s": round(t2 - t1, 1),
          "stage2_s": round(t3 - t2, 1),
-         "rss_self_mb": round(rss["self"]), "rss_worker_mb":
-         round(rss["workers"]), "n_segments": int(seg.shape[2]),
-         "n_polylines": len(polys),
-         "fake_frac": float((purity < FAKE_PURITY).mean())
-         if len(purity) else np.nan}
-  for nm, sub in (("bg", tt[tt.cls == 4]), ("sig", tt[tt.cls < 4])):
-    if len(sub):
-      row[f"{nm}_tracks"] = len(sub)
-      row[f"{nm}_rec_mean"] = float(sub.rec_frac.mean())
-      row[f"{nm}_good"] = float((sub.rec_frac >= REC_GOOD).mean())
-      row[f"{nm}_npoly_med"] = float(sub.n_poly[sub.n_poly > 0].median())
+         "total_s": round(t3 - t0, 1),
+         "rss_tree_peak_mb": round(mem.peak_mb),
+         "n_segments": int(seg.shape[2]), "n_polylines": len(polys)}
+  row.update(quality(tt, pt))
   tt.insert(0, "variant", tag)
   tt.insert(0, "event", ev.name)
   tt.to_csv(args.out / f"{name}_tracks.csv", index=False)
+  # Polylines (export coordinates) for re-scoring without a rerun
+  np.savez_compressed(args.out / f"{name}_polys.npz",
+                      xyz=np.vstack(polys) if polys else np.zeros((0, 3)),
+                      n=np.array([len(p) for p in polys], dtype=int))
   (args.out / f"{name}.json").write_text(json.dumps(row, indent=2))
   print(json.dumps(row), flush=True)
   return 0

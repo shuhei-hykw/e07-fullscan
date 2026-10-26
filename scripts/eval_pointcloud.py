@@ -271,9 +271,9 @@ def exclusive_scores(h3, g, near_g, vi, rec, n_slices):
   nearest grain only; a grain counts as found (xrecall) if a hit within
   COVER_R_PX and Z_TOL_SLICES was given to its own track. 'close' grains
   have a grain of another track within the same reach -- where merges
-  happen. dz is the hit slice minus its nearest grain's continuous
-  focal position, in slices, for hits whose nearest grain has no other
-  track grain within reach (steep tracks make 'nearest' ambiguous)."""
+  happen. dz is, for each track grain with no other track grain within
+  reach (steep tracks make 'nearest' ambiguous), the slice of its
+  nearest hit minus its continuous focal position, in slices."""
   res = {}
   hz = hit_slices(h3, n_slices)
   have = near_g >= 0
@@ -286,34 +286,44 @@ def exclusive_scores(h3, g, near_g, vi, rec, n_slices):
   inst = g["instance"][ti]
   xrec = np.zeros(ti.size, bool)
   close = np.zeros(ti.size, bool)
-  # Track grains with no other track grain within reach
-  alone = np.zeros(len(g["cls"]), bool)
+  # Track grains with no other track grain within reach: the common
+  # set the depth error is measured on, whatever the variant
+  alone = np.zeros(ti.size, bool)
+  dz = np.full(ti.size, np.nan)
   hit_bands = band_trees(h3[:, :2], hz, n_slices)
   grain_bands = band_trees(gxy, gs, n_slices)
   for s in range(n_slices):
     gm = np.flatnonzero(gs == s)
     if not gm.size:
       continue
-    tree, idx = hit_bands[s]
-    if tree is not None:
-      dk, jk = tree.query(gxy[gm], k=MULTI_K,
-                          distance_upper_bound=COVER_R_PX)
-      ok = np.isfinite(dk)
-      own = owner[idx[np.minimum(jk, len(idx) - 1)]]
-      xrec[gm] = (ok & (own == inst[gm, None])).any(1)
     tree, idx = grain_bands[s]
     dk, jk = tree.query(gxy[gm], k=MULTI_K,
                         distance_upper_bound=COVER_R_PX)
     ok = np.isfinite(dk)
     other = inst[idx[np.minimum(jk, len(idx) - 1)]]
     close[gm] = (ok & (other != inst[gm, None])).any(1)
-    alone[ti[gm]] = ok.sum(1) == 1
-  # Depth error only where the nearest grain is unambiguous
-  sel = have & alone[np.maximum(near_g, 0)]
-  dz = h3[sel, 2] - g["slice"][near_g[sel]]
-  res["dz_abs_med"] = float(np.median(np.abs(dz))) if dz.size else np.nan
-  res["dz_bias"] = float(dz.mean()) if dz.size else np.nan
-  res["dz_n"] = int(dz.size)
+    alone[gm] = ok.sum(1) == 1
+    tree, idx = hit_bands[s]
+    if tree is None:
+      continue
+    dk, jk = tree.query(gxy[gm], k=MULTI_K,
+                        distance_upper_bound=COVER_R_PX)
+    ok = np.isfinite(dk)
+    hj = idx[np.minimum(jk, len(idx) - 1)]
+    own = owner[hj]
+    xrec[gm] = (ok & (own == inst[gm, None])).any(1)
+    first = ok[:, 0]
+    dz[gm[first]] = h3[hj[first, 0], 2] - g["slice"][ti[gm[first]]]
+  # Depth error of the nearest hit (xy) to each isolated grain; a grain
+  # with no hit within reach counts as missed
+  d = dz[alone]
+  got = d[np.isfinite(d)]
+  res["dz_n"] = int(d.size)
+  res["dz_miss"] = float(np.isnan(d).mean()) if d.size else np.nan
+  if got.size:
+    res["dz_abs_med"] = float(np.median(np.abs(got)))
+    res["dz_abs_p90"] = float(np.quantile(np.abs(got), 0.9))
+    res["dz_bias"] = float(got.mean())
   for k, name in CLASS_NAMES.items():
     m = cls[t] == k
     if k <= 4 and m.any():
@@ -777,6 +787,11 @@ def evaluate(ev_dir, variants, clf, cell):
            "seconds": round(secs[v], 1), **budget(h3)}
     res, tt = score_row(h3, g, shape, len(reader))
     row.update(res)
+    if v == "dog3dz" and "dog3d" in hits:
+      off = h3[:, 2] - hits["dog3d"][:, 2]
+      # The fit failed (no downward bend, stack end) or hit the clip
+      row["fit_flat"] = float((off == 0).mean())
+      row["fit_clip"] = float((np.abs(off) >= MAX_SUBSLICE).mean())
     if bg_hits is not None:
       res, tb = score_row(bg_hits[v], g, shape, len(reader))
       row.update({f"bgctl_{k}": x for k, x in res.items()

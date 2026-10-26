@@ -1607,3 +1607,43 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   本番 0.002、dog3dz K=2 0.74。
 - 暫定: 主は dog3dz K=2、感度確認に dog3d K=3。v21 の光学で確かめ直す。
   詳細は analysis-note.md。
+
+## 2026-10-26 23:42 JST
+意図（Claude, fullscan）: Codex 第 13 回の採点の修正と、調整用の組の再実行。
+- eval_pointcloud.py: z 誤差を粒子の側で、共通の孤立した粒子の集合で測る
+  （dz_abs_med/p90、dz_bias、dz_miss）。dog3dz の fit_flat/fit_clip。
+- graphdet_pointcloud.py: --z-um（検出器の z 倍率）、飛跡ごとの rec_best
+  （最良の 1 本の折れ線）、折れ線の main_frac、偽の本数・総長、プロセス群
+  全体の最大メモリ。
+- 実行: v19_synth_tune_dz4（10 事象）の評価 -> results/pointcloud_eval/
+  v19_tune_x2/。ev0000〜0002 でグラフ検出器、{production, dog3d K3/K2,
+  dog3dz K2} × {z 3.0（MATLAB）, 3.8 µm} -> results/pointcloud_eval/graphdet2/。
+  時間は B' と競合。競合なしの時間は B' の後に測る。
+
+## 2026-10-27 02:34 JST メモ（Claude, fullscan）：ピアの深さ幅調査を受けた計画
+- ピア（シミュレーション側）：v21 は採用せず、調整・評価とも v19 のまま。
+  合成の孤立粒子は実データより深さ方向の応答が約15%狭いので、合成から
+  求めた z 精度（dz_abs_med/p90）は楽観的。実データはコンパクトな孤立
+  粒子が少ない（26% 対 43%）。
+- fullscan 側の対応：v21 向けの FIT_HALF や z 統合の再調整はしない。
+  v19 tune を開発用の組とし、v19_synth_eval2_dz4 は合格基準を書き留めた
+  後に一度だけ評価して、独立評価の結果とする。合成の z 精度は楽観的な
+  上限として、実データと合成の深さ FWHM の差と並べて報告する。
+- 整理：single_dz4 の再計算コピーが cp の対話確認で止まっていた。
+  ファイルは既に同一だったので cp を停止した。
+
+## 2026-10-27 02:54 JST 完了・予定（Claude, fullscan）：第13回の再実行と graphdet の修正
+- 完了：v19 tune の再評価 → results/pointcloud_eval/v19_tune_x2/。
+  graphdet ev0000–0002 × {production, dog3d K3/K2, dog3dz K2} × z {3.0, 3.8}
+  → results/pointcloud_eval/graphdet2/（計時は競合下）。まとめは
+  analysis-note.md の同時刻の項。
+- バグ：graphdet_pointcloud の折れ線純度が、背景飛跡の負の instance ID を
+  「所有なし」と扱っていた。graphdet2 の fake_frac・main_frac は無効
+  （飛跡側の rec_frac・rec_best は正しい）。修正・ベクトル化し、折れ線を
+  _polys.npz に保存、quality()・load_polys() で採点し直せる。
+  eval_pointcloud は影響なし。
+- 予定：B'（v19_embed_nagara_dz4）終了後、同じ 24 ケースを競合なしで順に
+  再実行 → results/pointcloud_eval/graphdet3/（正しい total_s・RSS、偽折れ線、
+  main_frac）。担当ファイル：scripts/graphdet_pointcloud.py、
+  scripts/eval_pointcloud.py、results/pointcloud_eval/{v19_tune_x2,
+  graphdet2,graphdet3}/。

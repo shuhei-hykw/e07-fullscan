@@ -164,20 +164,32 @@ parabola over the slices within `FIT_HALF` of the kept maximum;
 `--dog-k` sets the DoG threshold. Merge-aware columns credit each hit
 to the track of its nearest grain only (`xrecall_*`, and
 `close_recall` / `close_xrecall` for grains with another track within
-reach); `dz_abs_med` / `dz_bias` are the depth error, in slices, on
-isolated grains.
+reach); `dz_abs_med` / `dz_abs_p90` / `dz_bias` are the depth error,
+in slices, grain-side on a common set of track grains with no other
+track grain in reach (`dz_miss`: the share of them with no hit), and
+`fit_flat` / `fit_clip` the share of `dog3dz` hits whose parabola was
+flat (z left integer) or clipped at `MAX_SUBSLICE`.
 
 ```bash
-python scripts/graphdet_pointcloud.py EVENT_DIR --variant dog3dz --dog-k 2
+python scripts/graphdet_pointcloud.py EVENT_DIR --variant dog3dz --dog-k 2 \
+  [--z-um 3.8]
 python scripts/toy_twograin.py
 python scripts/grain_depth_profile.py STACK [...]
 ```
 
 `graphdet_pointcloud.py` runs graph-detector stages 1-2 on one
 variant's hits (`production` is the classifier export) and records
-wall time, peak RSS, sum of N^2 over sub-regions, segment and polyline
-counts, per-track reconstruction (`rec_frac`, polylines per track) and
-the fraction of fake polylines. `toy_twograin.py` renders one or two
+wall time (`total_s`: export + stage 1 + stage 2), peak RSS of the
+whole process tree (`rss_tree_peak_mb`), sum of N^2 over sub-regions,
+segment and polyline counts, per-track reconstruction (`rec_frac`, the
+union of polylines; `rec_best`, the single best polyline, i.e. the
+track found as one piece; polylines per track), fake polylines (count,
+fraction, total length) and `main_frac`, the share of a polyline's
+matched samples on its main track (low means it joins tracks).
+`--z-um` sets the detector's z scale from the slice step (default:
+MATLAB_Z_SCALE, 3.0 um). The polylines are saved (`_polys.npz`,
+`load_polys`) so `track_scores` / `quality` can re-score them without
+a rerun. `toy_twograin.py` renders one or two
 grains with e07-g4-hypernuclei's renderer and optics model and scores
 `dog` / `dog3d` one-to-one, to map where depth suppression merges
 grains. `grain_depth_profile.py` measures, without truth, how fast

@@ -1681,3 +1681,45 @@ Done (Claude, fullscan): tune-set metrics and graphdet stage 1/2 cost.
   tracks >=50% reconstructed: production 0.002, dog3dz K=2 0.74.
 - Provisional: primary dog3dz K=2, sensitivity dog3d K=3; recheck on
   v21 optics. Details in analysis-note.md.
+
+## 2026-10-26 23:42 JST
+Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
+- eval_pointcloud.py: depth error now grain-side on a common isolated
+  set (dz_abs_med/p90, dz_bias, dz_miss); fit_flat/fit_clip for dog3dz.
+- graphdet_pointcloud.py: --z-um (detector z scale), per-track rec_best
+  (single best polyline), polyline main_frac, fake count/length, peak
+  RSS of the whole process tree.
+- Runs: eval on v19_synth_tune_dz4 (10 ev) -> results/pointcloud_eval/
+  v19_tune_x2/; graphdet on ev0000-0002, {production, dog3d K3/K2,
+  dog3dz K2} x {z 3.0 (MATLAB), 3.8 um} -> results/pointcloud_eval/
+  graphdet2/. Timing is contended by B'; clean timing after B'.
+
+## 2026-10-27 02:34 JST Note (Claude, fullscan): plan after peer depth-width study
+- Peer (sim): no v21; v19 stays the model for tune/eval. Synthetic
+  isolated grains have ~15% narrower depth response than real, so
+  synthetic z precision (dz_abs_med/p90) is optimistic; real views have
+  fewer compact isolated grains (26% vs 43%).
+- Consequence for fullscan: no retune of FIT_HALF or z-merge for v21.
+  v19 tune stays the development set; v19_synth_eval2_dz4 is evaluated
+  once, after the acceptance criteria are written down, and is then the
+  held-out result. z precision from synth is reported as an optimistic
+  bound; the real-vs-synth depth FWHM gap is quoted next to it.
+- Housekeeping: the single_dz4 redo copy job stalled on an interactive
+  cp prompt; the files were already identical, the cp was killed.
+
+## 2026-10-27 02:54 JST Done + intent (Claude, fullscan): round-13 reruns, graphdet fix
+- Done: v19 tune rerun -> results/pointcloud_eval/v19_tune_x2/;
+  graphdet ev0000-0002 x {production, dog3d K3/K2, dog3dz K2} x z
+  {3.0, 3.8} -> results/pointcloud_eval/graphdet2/ (contended timing).
+  Summary in analysis-note.md (this time).
+- Bug: graphdet_pointcloud polyline purity treated negative instance ids
+  (background tracks) as 'no owner', so fake_frac/main_frac in
+  graphdet2 are invalid (track-side rec_frac/rec_best are fine). Fixed,
+  vectorised, polylines now saved (_polys.npz); quality()/load_polys()
+  for re-scoring. eval_pointcloud is unaffected.
+- Intent: after B' (v19_embed_nagara_dz4) finishes, rerun the same 24
+  graphdet cases sequentially without contention ->
+  results/pointcloud_eval/graphdet3/ (clean total_s / RSS, fake and
+  main_frac). Owned: scripts/graphdet_pointcloud.py,
+  scripts/eval_pointcloud.py, results/pointcloud_eval/{v19_tune_x2,
+  graphdet2,graphdet3}/.
