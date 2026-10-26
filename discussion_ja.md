@@ -1647,3 +1647,19 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   main_frac）。担当ファイル：scripts/graphdet_pointcloud.py、
   scripts/eval_pointcloud.py、results/pointcloud_eval/{v19_tune_x2,
   graphdet2,graphdet3}/。
+
+## 2026-10-27 03:02 JST 完了・予定（Claude, fullscan）：Codex 第14回、採点器の第3版
+- Codex 14：dog3dz K2 を主候補にすることに賛成。ただし基準を凍結する前に
+  採点器の修正を求められた。rec_best は粒子を最寄りの折れ線 1 本に割り当てて
+  いたので、重なった折れ線が支持を分け合い過小評価になっていた。各折れ線の
+  粒子を独立に数える方式（全組の近傍探索）に変更。run_best、n_frag50、
+  main_share_all（長さ重み、未対応部分も分母に入れる）、{bg,sig}_cov_grains
+  を追加。B' 後に流す graphdet3 はこの版を使う。折れ線は保存済み。
+- tune での確認：dog3dz の z 補正で ±1 スライスの箱から出る点は 2.5%、入る点は
+  6.9%（全飛跡。信号では出る 45・入る 92）。短飛跡 1 本の消失は実在するが、
+  正味では少数側の失敗。背景飛跡は段2出力で細切れ（dog3d K3 ev0000：
+  折れ線長の中央値 20 µm、n_frag50 の中央値 13、20〜50 粒子の飛跡でも
+  4 片）。production との比較は graphdet3 で行う。
+- Codex に従う計画：基準は z 3.8（3.0 は互換性確認）。グラフ検出器は
+  dog3dz K2 と production を eval2 の全 10 視野、dog3d K3 は 3 視野。
+  担当ファイルは前の項と同じ。

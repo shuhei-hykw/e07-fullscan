@@ -1723,3 +1723,20 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   main_frac). Owned: scripts/graphdet_pointcloud.py,
   scripts/eval_pointcloud.py, results/pointcloud_eval/{v19_tune_x2,
   graphdet2,graphdet3}/.
+
+## 2026-10-27 03:02 JST Done + intent (Claude, fullscan): Codex round 14, scorer v3
+- Codex 14: agrees dog3dz K2 primary; fix the scorer before freezing.
+  rec_best split support between overlapping polylines (nearest-only
+  assignment) -> now each polyline's grains counted independently
+  (sparse pair search). Added run_best, n_frag50, main_share_all
+  (length-weighted, unmatched in the denominator), {bg,sig}_cov_grains.
+  graphdet3 (queued after B') picks this up; polylines are saved.
+- Checks on tune: dog3dz z shift moves hits out of the +-1 slice box
+  for 2.5% of hits and in for 6.9% (all tracks; signal 45 out / 92 in)
+  - the lost short track is a real but net-minority failure mode.
+  Background tracks are fragmented at stage-2 output (dog3d K3 ev0000:
+  polyline length median 20 um, n_frag50 median 13; 4 pieces even for
+  20-50 grain tracks); production comparison comes with graphdet3.
+- Plan per Codex: criteria at z 3.8 (3.0 as compatibility); graph
+  detector for dog3dz K2 and production on all 10 eval2 views, dog3d K3
+  on 3. Owned files unchanged from the previous entry.

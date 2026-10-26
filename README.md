@@ -182,10 +182,14 @@ variant's hits (`production` is the classifier export) and records
 wall time (`total_s`: export + stage 1 + stage 2), peak RSS of the
 whole process tree (`rss_tree_peak_mb`), sum of N^2 over sub-regions,
 segment and polyline counts, per-track reconstruction (`rec_frac`, the
-union of polylines; `rec_best`, the single best polyline, i.e. the
-track found as one piece; polylines per track), fake polylines (count,
-fraction, total length) and `main_frac`, the share of a polyline's
-matched samples on its main track (low means it joins tracks).
+union of polylines; `rec_best`, the single best polyline with each
+polyline's grains counted on their own, i.e. the track found as one
+piece; `run_best`, the longest run of consecutive covered grains along
+the track; `n_frag50`, the fewest disjoint pieces holding half the
+track; polylines per track), fake polylines (count, fraction, total
+length), `main_frac`, the share of a polyline's matched samples on its
+main track (low means it joins tracks), and `main_share_all`, the
+length-weighted share of all polyline samples on their main track.
 `--z-um` sets the detector's z scale from the slice step (default:
 MATLAB_Z_SCALE, 3.0 um). The polylines are saved (`_polys.npz`,
 `load_polys`) so `track_scores` / `quality` can re-score them without

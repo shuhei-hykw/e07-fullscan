@@ -159,6 +159,46 @@ def near(a_xy, a_z, b_xy, b_z):
   return np.where(np.isfinite(d), j, -1)
 
 
+def pairs(a_xy, a_z, b_xy, b_z):
+  """All (i, j) with b[j] inside a[i]'s box (as in near())."""
+  if not len(a_xy) or not len(b_xy):
+    return np.zeros(0, int), np.zeros(0, int)
+  zs = COVER_R_PX / (Z_TOL_SLICES + 0.5)
+  ta = cKDTree(np.column_stack([a_xy, a_z * zs]))
+  tb = cKDTree(np.column_stack([b_xy, b_z * zs]))
+  m = ta.sparse_distance_matrix(tb, COVER_R_PX + 1e-9, p=np.inf,
+                                output_type="ndarray")
+  return m["i"].astype(int), m["j"].astype(int)
+
+
+def track_runs(ti, xyz, covered, part, n_t):
+  """Per track: longest run of consecutive covered grains along its main
+  axis, and the fewest disjoint pieces (part: polyline of each grain's
+  nearest sample, -1 none) that together hold half its grains (0 if
+  they never do)."""
+  run = np.zeros(n_t, int)
+  frag = np.zeros(n_t, int)
+  order = np.argsort(ti, kind="stable")
+  bounds = np.flatnonzero(np.r_[True, np.diff(ti[order]) != 0, True])
+  for a, b in zip(bounds[:-1], bounds[1:]):
+    idx = order[a:b]
+    t = ti[idx[0]]
+    if b - a >= MIN_TRACK_GRAINS:
+      p = xyz[idx] - xyz[idx].mean(0)
+      ax = np.linalg.svd(p, full_matrices=False)[2][0]
+      k = covered[idx][np.argsort(p @ ax)]
+      # Longest run of True in k
+      e = np.flatnonzero(np.diff(np.r_[0, k.astype(int), 0]))
+      run[t] = (e[1::2] - e[::2]).max() if e.size else 0
+    q = part[idx]
+    q = q[q >= 0]
+    if q.size:
+      c = np.cumsum(np.sort(np.unique(q, return_counts=True)[1])[::-1])
+      if c[-1] >= REC_GOOD * (b - a):
+        frag[t] = int(np.searchsorted(c, REC_GOOD * (b - a)) + 1)
+  return run, frag
+
+
 def track_scores(g, shape, n_slices, polys, z_scale):
   """Per-track table and per-polyline table against grain truth."""
   h, w = shape
@@ -172,22 +212,29 @@ def track_scores(g, shape, n_slices, polys, z_scale):
   sp = sp - _ORIGIN_OFFSET
   hit = near(gxy, gz, sp[:, :2], sp[:, 2])
   pid = np.where(hit >= 0, sid[np.maximum(hit, 0)], -1)
-  # Per track: grain count, covered count, best single polyline
+  # Per track: grain count, covered count (union of polylines)
   tid, ti = np.unique(inst, return_inverse=True)
   n_g = np.bincount(ti)
   t_cls = np.zeros(len(tid), int)
   t_cls[ti] = cls
   cv = pid >= 0
   n_cov = np.bincount(ti[cv], minlength=len(tid))
-  pair, c = np.unique(np.column_stack([ti[cv], pid[cv]]), axis=0,
-                      return_counts=True)
+  # Best single polyline: each polyline's grains counted on their own,
+  # so overlapping polylines do not split the support
+  gi, sj = pairs(gxy, gz, sp[:, :2], sp[:, 2])
+  gp = np.unique(np.column_stack([gi, sid[sj]]), axis=0)
+  pair, c = np.unique(np.column_stack([ti[gp[:, 0]], gp[:, 1]]),
+                      axis=0, return_counts=True)
   best = np.zeros(len(tid), int)
   np.maximum.at(best, pair[:, 0], c)
   n_poly = np.bincount(pair[:, 0], minlength=len(tid),
                        weights=c >= MIN_SHARE * n_cov[pair[:, 0]])
+  xyz = np.column_stack([g["x_um"], g["y_um"], g["z_um"]])[vis]
+  run, frag = track_runs(ti, xyz, cv, pid, len(tid))
   keep = n_g >= MIN_TRACK_GRAINS
   tt = pd.DataFrame({"inst": tid, "cls": t_cls, "n_grains": n_g,
                      "rec_frac": n_cov / n_g, "rec_best": best / n_g,
+                     "run_best": run / n_g, "n_frag50": frag,
                      "n_poly": n_poly.astype(int)})[keep]
   tt = tt.reset_index(drop=True)
   # Each polyline sample -> track of its nearest grain (or none).
@@ -206,7 +253,8 @@ def track_scores(g, shape, n_slices, polys, z_scale):
     [1.0, 1.0, z_scale]), axis=1).sum() for p in polys])
   prow = {"poly": np.arange(n_p), "length_px": length,
           "purity": n_on / np.maximum(n_s, 1),
-          "main_frac": main / np.maximum(n_on, 1)}
+          "main_frac": main / np.maximum(n_on, 1),
+          "main_share": main / np.maximum(n_s, 1), "n_samples": n_s}
   return tt, pd.DataFrame(prow)
 
 
@@ -217,7 +265,11 @@ def quality(tt, pt):
          "fake_frac": float(fake.mean()) if len(pt) else np.nan,
          "fake_len_px": float(pt.length_px[fake].sum()) if len(pt) else 0.,
          "main_frac_med": float(pt.main_frac[~fake].median())
-         if (~fake).any() else np.nan}
+         if (~fake).any() else np.nan,
+         # Length-weighted share of all polyline samples on their
+         # polyline's main track (samples are evenly spaced)
+         "main_share_all": float((pt.main_share * pt.n_samples).sum()
+                                 / max(pt.n_samples.sum(), 1))}
   for nm, sub in (("bg", tt[tt.cls == 4]), ("sig", tt[tt.cls < 4])):
     if len(sub):
       row[f"{nm}_tracks"] = len(sub)
@@ -226,6 +278,11 @@ def quality(tt, pt):
       row[f"{nm}_best_mean"] = float(sub.rec_best.mean())
       row[f"{nm}_best_good"] = float((sub.rec_best >= REC_GOOD).mean())
       row[f"{nm}_npoly_med"] = float(sub.n_poly[sub.n_poly > 0].median())
+      row[f"{nm}_run_mean"] = float(sub.run_best.mean())
+      f50 = sub.n_frag50[sub.n_frag50 > 0]
+      row[f"{nm}_frag50_med"] = float(f50.median()) if len(f50) else np.nan
+      row[f"{nm}_cov_grains"] = int((sub.rec_frac * sub.n_grains)
+                                    .round().sum())
   return row
 
 
