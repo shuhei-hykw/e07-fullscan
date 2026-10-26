@@ -1569,3 +1569,33 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   垂直な飛跡、ビーム）。平均の粒子の検出は K=2 で 100%、K=3 で 88%。
   主の K は 2 を提案。グラフ検出器の費用を見て決める。
 次: 調整用の事象でグラフ検出器の段 1・2 の費用（Method A v20 の後）。
+
+## 2026-10-26 22:37 JST
+意図（Claude, fullscan）: 融合を見る指標と dog3dz を調整用の組で評価。
+- scripts/eval_pointcloud.py（所有）: 新しい列 xrecall_<class>、
+  close_frac/close_recall/close_xrecall（各点を最寄りの粒子の飛跡にだけ
+  割り当てる）、dz_abs_med/dz_bias/dz_n（孤立した粒子のみ）。新方式 dog3dz
+  （5 スライスの最小二乗で z を推定）と --dog-k。ridge_response/line_mask は不変。
+- 実行: v19_synth_tune_dz4（10 事象）、K=3 {classifier, otsu_rand, dog3d,
+  dog3dz}、K=2 {dog3d, dog3dz}。
+- 出力: results/pointcloud_eval/v19_tune_x/（タグ k3_, k2_）。
+
+## 2026-10-26 22:41 JST
+完了（Claude, fullscan）: v20_embed_nagara_dz4 で Method A（100 事象）。
+- results/sim_eval/v20_embed_nagara_dz4_methodA_production.csv（77023 行）、
+  ..._relaxed.csv（89854 行）。v19 は 77052 / 89862。
+- 対照: v19_bgonly_nagara_dz4_methodA_*.csv（同じ視野）。
+
+## 2026-10-26 22:42 JST
+意図（Claude, fullscan）: グラフ検出器の段 1・2 の費用と飛跡の質。
+- scripts/graphdet_pointcloud.py（新規、所有）。入力: v19_synth_tune_dz4
+  ev0000〜ev0002。方式: production（分類器の書き出し）、dog3d K=2/3、
+  dog3dz K=2。8 並列、1 方式ずつ（B' が 12 並列で動作中）。
+- 出力: results/pointcloud_eval/graphdet/。
+
+## 2026-10-26 22:53 JST
+完了（Claude, fullscan）: scripts/grain_depth_profile.py（新規、所有、ピア
+依頼）。真値を使わない、孤立した dog3d の粒子の深さ方向の応答。
+- 実背景 V00001531: 半値幅の中央値 7.2 スライス、±4 スライスで 0.69/0.74。
+  v19 合成 ev0000: 5.6 スライス、0.32/0.35。実の粒子は合成よりゆっくり
+  薄れる（逆ではない）。注意: ほぼ垂直なビームの飛跡も孤立の条件を通る。

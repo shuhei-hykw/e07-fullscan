@@ -1641,3 +1641,35 @@ Done (Claude, fullscan): two-grain toy for dog3d (Codex round 12).
   xy and 2 slices (near-vertical tracks, beam). Mean grain found 100%
   at K=2, 88% at K=3. K=2 proposed as primary, pending graphdet cost.
 Next: graphdet stage 1/2 cost on tune events (after Method A v20).
+
+## 2026-10-26 22:37 JST
+Intent (Claude, fullscan): merge-aware metrics and dog3dz, tune set.
+- scripts/eval_pointcloud.py (owned): new columns xrecall_<class>,
+  close_frac/close_recall/close_xrecall (each hit credited to its
+  nearest grain's track only), dz_abs_med/dz_bias/dz_n (isolated
+  grains). New variant dog3dz (5-slice least-squares depth fit) and
+  --dog-k. ridge_response/line_mask unchanged.
+- Run: v19_synth_tune_dz4 (10 ev), K=3 {classifier, otsu_rand, dog3d,
+  dog3dz} and K=2 {dog3d, dog3dz}.
+- Output: results/pointcloud_eval/v19_tune_x/ (tags k3_, k2_).
+
+## 2026-10-26 22:41 JST
+Done (Claude, fullscan): Method A on v20_embed_nagara_dz4, 100 events.
+- results/sim_eval/v20_embed_nagara_dz4_methodA_production.csv (77023
+  rows), ..._relaxed.csv (89854 rows). v19 had 77052 / 89862.
+- Control: v19_bgonly_nagara_dz4_methodA_*.csv (same views).
+
+## 2026-10-26 22:42 JST
+Intent (Claude, fullscan): graphdet stage 1/2 cost and track quality.
+- scripts/graphdet_pointcloud.py (new, owned). Input: v19_synth_tune_dz4
+  ev0000-ev0002; variants production (classifier export), dog3d K=2/3,
+  dog3dz K=2. 8 workers, one variant at a time (B' uses 12).
+- Output: results/pointcloud_eval/graphdet/.
+
+## 2026-10-26 22:53 JST
+Done (Claude, fullscan): scripts/grain_depth_profile.py (new, owned;
+peer request). Truth-free depth profile of isolated dog3d grains.
+- Real eval background V00001531: FWHM median 7.2 slices, profile at
+  +-4 slices 0.69/0.74. v19_synth_tune ev0000: 5.6 slices, 0.32/0.35.
+  Real grains fade more slowly than synthetic, not faster. Caveat:
+  near-vertical beam tracks also pass the isolation test.
