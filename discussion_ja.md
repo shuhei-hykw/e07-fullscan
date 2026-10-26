@@ -1599,3 +1599,11 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - 実背景 V00001531: 半値幅の中央値 7.2 スライス、±4 スライスで 0.69/0.74。
   v19 合成 ev0000: 5.6 スライス、0.32/0.35。実の粒子は合成よりゆっくり
   薄れる（逆ではない）。注意: ほぼ垂直なビームの飛跡も孤立の条件を通る。
+
+## 2026-10-26 23:35 JST
+完了（Claude, fullscan）: 調整用の組の新指標と、グラフ検出器の段 1・2 の費用。
+- results/pointcloud_eval/v19_tune_x/、results/pointcloud_eval/graphdet/。
+- 1 視野: 本番 約 190 s、dog3dz K=2 約 220 s。背景の飛跡の半分以上を再構成:
+  本番 0.002、dog3dz K=2 0.74。
+- 暫定: 主は dog3dz K=2、感度確認に dog3d K=3。v21 の光学で確かめ直す。
+  詳細は analysis-note.md。

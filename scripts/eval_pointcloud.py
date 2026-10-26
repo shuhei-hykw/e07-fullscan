@@ -19,6 +19,10 @@ the step that loses real grains (or lets junk through) shows up:
   dog3d       the same maxima kept only if they are also the maximum
               over the slices either side, so a grain seen in three
               slices gives one hit at its sharpest slice
+  dog3dz      dog3d with a sub-slice z from a parabola through the
+              responses of the slices within FIT_HALF of it: the
+              optics barely dim a grain one slice (~4 um) out of
+              focus, so the sharpest slice alone is good to +-1 slice
   ridge       line detector: elongated oriented filters (a ridge
               profile across, a long Gaussian along, RIDGE_ANGLES
               directions), thresholded at RIDGE_K robust sigmas; centre
@@ -114,7 +118,13 @@ DOG_K = 3.0
 # Neighbourhood (px) a maximum must win; about one grain diameter.
 DOG_PEAK_PX = 5
 _MAD_TO_SIGMA = 1.4826
-DOG_VARIANTS = ("dog", "dog3d")
+DOG_VARIANTS = ("dog", "dog3d", "dog3dz")
+# dog3dz: dog3d with z refined by a parabola fitted to the responses
+# of the slices within FIT_HALF of the kept one.
+FIT_HALF = 2
+# The fitted peak may lie in a neighbour slice when the depth profile
+# is flat (the kept maximum is then a noise pick), but not beyond.
+MAX_SUBSLICE = 1.0
 # Line detector: cross-section and along-line sigmas (px). Chosen by
 # eye on a real view: (1.5, 8) and (2.5, 12) behave alike, and K = 3
 # already picks up the background texture where K = 4 does not.
@@ -190,14 +200,17 @@ def grain_scores(h3, g, shape, n_slices):
   trk = (g["cls"] >= 1) & (g["cls"] <= 4) & ~g["fog"]
   gxy = np.column_stack([g["col"], g["row"]])
   gs = g["focus_slice"].astype(int)
-  hz = h3[:, 2].astype(int)
+  hz = hit_slices(h3, n_slices)
   shifted = np.column_stack([(h3[:, 0] + SHIFT_PX) % w,
                              (h3[:, 1] + SHIFT_PX) % h])
   rmax = max(RADII_PX)
   sets = {"trk": trk, "fog": g["fog"]}
   d = {k: np.full(len(h3), np.inf) for k in ("trk", "fog", "chance")}
   multi = np.zeros(len(h3), bool)
+  # Nearest track grain of each hit (global grain index, -1 if none)
+  near_g = np.full(len(h3), -1)
   for name, sel in sets.items():
+    gi = np.flatnonzero(sel)
     for s, (tree, idx) in enumerate(band_trees(gxy[sel], gs[sel],
                                                n_slices)):
       hm = np.flatnonzero(hz == s)
@@ -206,6 +219,8 @@ def grain_scores(h3, g, shape, n_slices):
       dd, jj = tree.query(h3[hm, :2], distance_upper_bound=rmax)
       d[name][hm] = dd
       if name == "trk":
+        ok = dd <= COVER_R_PX
+        near_g[hm[ok]] = gi[idx[jj[ok]]]
         d["chance"][hm] = tree.query(shifted[hm],
                                      distance_upper_bound=rmax)[0]
         dk, jk = tree.query(h3[hm, :2], k=MULTI_K,
@@ -240,10 +255,74 @@ def grain_scores(h3, g, shape, n_slices):
     m = cls == k
     res[f"recall_{name}"] = float(rec[m].mean()) if m.any() else np.nan
   res["dup_med"] = float(np.median(n_near[rec])) if rec.any() else np.nan
+  res.update(exclusive_scores(h3, g, near_g, vi, rec, n_slices))
   t = (cls >= 1) & (cls <= 4)
   xyz = np.column_stack([g["x_um"], g["y_um"], g["z_um"]])[vi]
   tt = track_table(g["instance"][vi][t], cls[t], xyz[t], rec[t])
   return res, tt
+
+
+def exclusive_scores(h3, g, near_g, vi, rec, n_slices):
+  """Merge-aware recall and depth error.
+
+  Grains along one track sit closer than the optics resolve, so a
+  one-to-one grain match is ill-defined; what a merge costs is support
+  for a neighbouring track. Each hit is given to the track of its
+  nearest grain only; a grain counts as found (xrecall) if a hit within
+  COVER_R_PX and Z_TOL_SLICES was given to its own track. 'close' grains
+  have a grain of another track within the same reach -- where merges
+  happen. dz is the hit slice minus its nearest grain's continuous
+  focal position, in slices, for hits whose nearest grain has no other
+  track grain within reach (steep tracks make 'nearest' ambiguous)."""
+  res = {}
+  hz = hit_slices(h3, n_slices)
+  have = near_g >= 0
+  owner = np.where(have, g["instance"][np.maximum(near_g, 0)], 0)
+  cls = g["cls"][vi]
+  t = (cls >= 1) & (cls <= 4)
+  ti = vi[t]
+  gxy = np.column_stack([g["col"][ti], g["row"][ti]])
+  gs = g["focus_slice"][ti].astype(int)
+  inst = g["instance"][ti]
+  xrec = np.zeros(ti.size, bool)
+  close = np.zeros(ti.size, bool)
+  # Track grains with no other track grain within reach
+  alone = np.zeros(len(g["cls"]), bool)
+  hit_bands = band_trees(h3[:, :2], hz, n_slices)
+  grain_bands = band_trees(gxy, gs, n_slices)
+  for s in range(n_slices):
+    gm = np.flatnonzero(gs == s)
+    if not gm.size:
+      continue
+    tree, idx = hit_bands[s]
+    if tree is not None:
+      dk, jk = tree.query(gxy[gm], k=MULTI_K,
+                          distance_upper_bound=COVER_R_PX)
+      ok = np.isfinite(dk)
+      own = owner[idx[np.minimum(jk, len(idx) - 1)]]
+      xrec[gm] = (ok & (own == inst[gm, None])).any(1)
+    tree, idx = grain_bands[s]
+    dk, jk = tree.query(gxy[gm], k=MULTI_K,
+                        distance_upper_bound=COVER_R_PX)
+    ok = np.isfinite(dk)
+    other = inst[idx[np.minimum(jk, len(idx) - 1)]]
+    close[gm] = (ok & (other != inst[gm, None])).any(1)
+    alone[ti[gm]] = ok.sum(1) == 1
+  # Depth error only where the nearest grain is unambiguous
+  sel = have & alone[np.maximum(near_g, 0)]
+  dz = h3[sel, 2] - g["slice"][near_g[sel]]
+  res["dz_abs_med"] = float(np.median(np.abs(dz))) if dz.size else np.nan
+  res["dz_bias"] = float(dz.mean()) if dz.size else np.nan
+  res["dz_n"] = int(dz.size)
+  for k, name in CLASS_NAMES.items():
+    m = cls[t] == k
+    if k <= 4 and m.any():
+      res[f"xrecall_{name}"] = float(xrec[m].mean())
+  res["close_frac"] = float(close.mean()) if close.size else np.nan
+  if close.any():
+    res["close_recall"] = float(rec[t][close].mean())
+    res["close_xrecall"] = float(xrec[close].mean())
+  return res
 
 
 def track_table(inst, cls, xyz_um, cov):
@@ -304,6 +383,32 @@ def collect_hits(reader, variants, clf, cell):
   return {v: np.concatenate(hits[v]) for v in variants}, secs
 
 
+def depth_offset(prof):
+  """Sub-slice position of a depth maximum: least-squares parabola
+  through the responses at slice offsets -FIT_HALF..FIT_HALF (one row
+  per hit, NaN where the stack ends); 0 where fewer than three slices
+  exist or the fit does not bend down."""
+  k = np.arange(-FIT_HALF, FIT_HALF + 1, dtype=float)
+  ok = np.isfinite(prof)
+  y = np.where(ok, prof, 0.0)
+  basis = np.stack([np.ones_like(k), k, k * k])          # (3, M)
+  w = ok.astype(float)
+  ata = np.einsum("nm,im,jm->nij", w, basis, basis)
+  aty = np.einsum("nm,im->ni", w * y, basis)
+  good = ok.sum(1) >= 3
+  coef = np.zeros_like(aty)
+  coef[good] = np.linalg.solve(ata[good], aty[good][..., None])[..., 0]
+  b, c = coef[:, 1], coef[:, 2]
+  with np.errstate(divide="ignore", invalid="ignore"):
+    off = np.where(good & (c < 0), -b / (2.0 * c), 0.0)
+  return np.clip(off, -MAX_SUBSLICE, MAX_SUBSLICE)
+
+
+def hit_slices(h3, n_slices):
+  """Nearest slice index of each hit (z may be sub-slice)."""
+  return np.clip(np.rint(h3[:, 2]), 0, n_slices - 1).astype(int)
+
+
 def dog_response(img):
   """Grain-scale band-pass of the fog-removed slice (grains positive)."""
   f = fog_remove(img).astype(np.float32)
@@ -311,13 +416,14 @@ def dog_response(img):
     cv2.GaussianBlur(f, (0, 0), DOG_SIGMA_OUT_PX)
 
 
-def dog_hits(reader, k=DOG_K):
+def dog_hits(reader, k=None):
   """Hits from 2-D and 3-D local maxima of the DoG response."""
-  out = {"dog": [], "dog3d": []}
-  secs = {"dog": 0.0, "dog3d": 0.0}
+  k = DOG_K if k is None else k
+  out = {"dog": [], "dog3d": [], "dog3dz": []}
+  secs = {"dog": 0.0, "dog3d": 0.0, "dog3dz": 0.0}
   n = len(reader)
   win = {}
-  for s in range(n + 1):
+  for s in range(n + FIT_HALF):
     t = time.time()
     if s < n:
       r = dog_response(reader.read(s))
@@ -326,9 +432,9 @@ def dog_hits(reader, k=DOG_K):
       mx = maximum_filter(r, size=DOG_PEAK_PX)
       win[s] = (r, mx, (r == mx) & (r > thr))
     dt = time.time() - t
-    secs["dog"] += dt
-    secs["dog3d"] += dt
-    c = s - 1
+    for v in out:
+      secs[v] += dt
+    c = s - FIT_HALF
     if c < 0:
       continue
     t = time.time()
@@ -342,7 +448,14 @@ def dog_hits(reader, k=DOG_K):
     out["dog3d"].append(np.column_stack(
       [xs[keep], ys[keep], np.full(keep.sum(), c)]))
     secs["dog3d"] += time.time() - t
-    win.pop(c - 1, None)
+    xk, yk = xs[keep], ys[keep]
+    prof = np.column_stack([
+      win[c + o][0][yk, xk] if c + o in win else np.full(xk.size, np.nan)
+      for o in range(-FIT_HALF, FIT_HALF + 1)])
+    out["dog3dz"].append(np.column_stack([xk, yk,
+                                          c + depth_offset(prof)]))
+    secs["dog3dz"] += time.time() - t
+    win.pop(c - FIT_HALF, None)
   return {v: np.concatenate(out[v]).astype(float) for v in out}, secs
 
 
@@ -480,8 +593,9 @@ def _neighbour_max(mx):
   return torch.maximum(prev, nxt)
 
 
-def dog_hits_gpu(reader, dev, k=DOG_K):
+def dog_hits_gpu(reader, dev, k=None):
   """dog_hits on the GPU."""
+  k = DOG_K if k is None else k
   import torch
   import torch.nn.functional as F
   t = time.time()
@@ -496,10 +610,20 @@ def dog_hits_gpu(reader, dev, k=DOG_K):
     for v, m in (("dog", peak), ("dog3d", keep)):
       z, y, x = torch.nonzero(m, as_tuple=True)
       out[v] = torch.stack([x, y, z], 1).cpu().numpy().astype(float)
+    # Neighbour responses; a missing neighbour (stack end) is replaced
+    # by the centre, which leaves the slice unrefined
+    last = r.shape[0] - 1
+    nan = torch.tensor(float("nan"), device=r.device)
+    prof = torch.stack([
+      torch.where((z + o >= 0) & (z + o <= last),
+                  r[(z + o).clamp(0, last), y, x], nan)
+      for o in range(-FIT_HALF, FIT_HALF + 1)], 1)
+    zf = z.cpu().numpy() + depth_offset(prof.cpu().numpy())
+    out["dog3dz"] = np.column_stack([out["dog3d"][:, :2], zf])
   del r, mx, peak, keep
   torch.cuda.empty_cache()
   dt = time.time() - t
-  return out, {"dog": dt, "dog3d": dt}
+  return out, {"dog": dt, "dog3d": dt, "dog3dz": dt}
 
 
 def ridge_hits_gpu(reader, cell, dev, k=RIDGE_K):
@@ -667,6 +791,7 @@ def evaluate(ev_dir, variants, clf, cell):
 
 
 def main() -> int:
+  global DOG_K
   ap = argparse.ArgumentParser()
   ap.add_argument("events", nargs="+", type=Path)
   ap.add_argument("--out", type=Path,
@@ -676,7 +801,10 @@ def main() -> int:
                                    + DOG_VARIANTS + RIDGE_VARIANTS))
   ap.add_argument("--cell", type=int, default=_GRAPH_CELL_PX)
   ap.add_argument("--tag", default="", help="prefix for output files")
+  ap.add_argument("--dog-k", type=float, default=DOG_K,
+                  help="DoG threshold in robust sigmas")
   args = ap.parse_args()
+  DOG_K = args.dog_k
   variants = tuple(args.variants.split(","))
   clf = train_classifier(*build_training_set(_LABELS_DIR))
   args.out.mkdir(parents=True, exist_ok=True)

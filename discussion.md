@@ -1673,3 +1673,11 @@ peer request). Truth-free depth profile of isolated dog3d grains.
   +-4 slices 0.69/0.74. v19_synth_tune ev0000: 5.6 slices, 0.32/0.35.
   Real grains fade more slowly than synthetic, not faster. Caveat:
   near-vertical beam tracks also pass the isolation test.
+
+## 2026-10-26 23:35 JST
+Done (Claude, fullscan): tune-set metrics and graphdet stage 1/2 cost.
+- results/pointcloud_eval/v19_tune_x/, results/pointcloud_eval/graphdet/.
+- Per view: production ~190 s total, dog3dz K=2 ~220 s. Background
+  tracks >=50% reconstructed: production 0.002, dog3dz K=2 0.74.
+- Provisional: primary dog3dz K=2, sensitivity dog3d K=3; recheck on
+  v21 optics. Details in analysis-note.md.

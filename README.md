@@ -159,6 +159,30 @@ view alone (`bgctl_*` columns), the support signal grains get from
 background hits by chance. The DoG and line filters run on the GPU
 (torch) when one is available, falling back to the CPU without one,
 with `E07_DEVICE=cpu`, or when the GPU runs out of memory.
+`dog3dz` is `dog3d` with a sub-slice depth from a least-squares
+parabola over the slices within `FIT_HALF` of the kept maximum;
+`--dog-k` sets the DoG threshold. Merge-aware columns credit each hit
+to the track of its nearest grain only (`xrecall_*`, and
+`close_recall` / `close_xrecall` for grains with another track within
+reach); `dz_abs_med` / `dz_bias` are the depth error, in slices, on
+isolated grains.
+
+```bash
+python scripts/graphdet_pointcloud.py EVENT_DIR --variant dog3dz --dog-k 2
+python scripts/toy_twograin.py
+python scripts/grain_depth_profile.py STACK [...]
+```
+
+`graphdet_pointcloud.py` runs graph-detector stages 1-2 on one
+variant's hits (`production` is the classifier export) and records
+wall time, peak RSS, sum of N^2 over sub-regions, segment and polyline
+counts, per-track reconstruction (`rec_frac`, polylines per track) and
+the fraction of fake polylines. `toy_twograin.py` renders one or two
+grains with e07-g4-hypernuclei's renderer and optics model and scores
+`dog` / `dog3d` one-to-one, to map where depth suppression merges
+grains. `grain_depth_profile.py` measures, without truth, how fast
+isolated grains fade with focus (depth FWHM of the DoG response), the
+same way on real and synthetic stacks.
 
 ### Measuring stage 4
 
