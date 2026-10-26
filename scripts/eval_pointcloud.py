@@ -57,6 +57,7 @@ grain is visible over about +-1 slice of focus.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -418,10 +419,8 @@ def merge_hits(a, b):
   return np.concatenate([a, b[keep]])
 
 
-def evaluate(ev_dir, variants, clf, cell):
-  reader = load_spng(ev_dir / "image.json")
-  shape = reader.read(0).shape[:2]
-  g = dict(np.load(ev_dir / "grains.npz"))
+def build_hits(reader, variants, clf, cell):
+  """Hits and seconds for every requested variant on one stack."""
   masks = [v for v in variants if v in MASK_VARIANTS]
   if "otsu_rand" in variants:
     masks = sorted(set(masks) | {"otsu", "classifier"},
@@ -435,6 +434,7 @@ def evaluate(ev_dir, variants, clf, cell):
     rh, rs = ridge_hits(reader, cell)
     hits.update(rh)
     secs.update(rs)
+  if "dogridge" in variants:
     hits["dogridge"] = merge_hits(hits["dog3d"], hits["ridge3d"])
     secs["dogridge"] = secs["dog3d"] + secs["ridge3d"]
   if "otsu_rand" in variants:
@@ -444,23 +444,51 @@ def evaluate(ev_dir, variants, clf, cell):
                       replace=False)
     hits["otsu_rand"] = o[np.sort(keep)]
     secs["otsu_rand"] = secs["otsu"]
+  return hits, secs
+
+
+def score_row(h3, g, shape, n_slices):
+  """Summary metrics and per-track table for one set of hits."""
+  row, tt = grain_scores(h3, g, shape, n_slices)
+  for name, sub in (("bg", tt[tt.cls == 4]), ("sig", tt[tt.cls < 4])):
+    if len(sub):
+      row[f"{name}_tracks"] = len(sub)
+      row[f"{name}_lost"] = float((sub.coverage == 0).mean())
+      row[f"{name}_cov_mean"] = float(sub.coverage.mean())
+      row[f"{name}_cov_p10"] = float(sub.coverage.quantile(0.1))
+      row[f"{name}_newgap_med_um"] = float(sub.new_gap_um.median())
+  return row, tt
+
+
+def evaluate(ev_dir, variants, clf, cell):
+  """Score every variant; for an embedded event also the same variants
+  on the background view alone (columns prefixed bgctl_), the support
+  the signal grains would get from background hits by chance."""
+  reader = load_spng(ev_dir / "image.json")
+  shape = reader.read(0).shape[:2]
+  g = dict(np.load(ev_dir / "grains.npz"))
+  truth = json.loads((ev_dir / "truth.json").read_text())
+  hits, secs = build_hits(reader, variants, clf, cell)
+  bg_view = truth.get("background_view")
+  bg_hits = None
+  if bg_view and Path(bg_view).exists():
+    bg_reader = load_spng(bg_view)
+    if len(bg_reader) == len(reader):
+      bg_hits, _ = build_hits(bg_reader, variants, clf, cell)
   summary, tracks = [], []
   for v in variants:
     h3 = hits[v]
     row = {"event": ev_dir.name, "variant": v, "n_hits": len(h3),
            "seconds": round(secs[v], 1), **budget(h3)}
-    res, tt = grain_scores(h3, g, shape, len(reader))
+    res, tt = score_row(h3, g, shape, len(reader))
     row.update(res)
+    if bg_hits is not None:
+      res, _ = score_row(bg_hits[v], g, shape, len(reader))
+      row.update({f"bgctl_{k}": x for k, x in res.items()
+                  if k.startswith(("recall_", "sig_"))})
     tt.insert(0, "variant", v)
     tt.insert(0, "event", ev_dir.name)
     tracks.append(tt)
-    for name, sub in (("bg", tt[tt.cls == 4]), ("sig", tt[tt.cls < 4])):
-      if len(sub):
-        row[f"{name}_tracks"] = len(sub)
-        row[f"{name}_lost"] = float((sub.coverage == 0).mean())
-        row[f"{name}_cov_mean"] = float(sub.coverage.mean())
-        row[f"{name}_cov_p10"] = float(sub.coverage.quantile(0.1))
-        row[f"{name}_newgap_med_um"] = float(sub.new_gap_um.median())
     summary.append(row)
   return pd.DataFrame(summary), pd.concat(tracks)
 
