@@ -31,6 +31,10 @@ the step that loses real grains (or lets junk through) shows up:
               as in the slices either side (its sharpest slice)
   dogridge    dog3d plus the ridge3d hits farther than COVER_R_PX from
               any dog3d hit in the same slice
+  otsu3d      otsu (blob3d: blob) hits kept only where the smoothed
+  blob3d      darkness is at least the 3x3 maximum of the slices either
+              side -- the same one-hit-per-grain z suppression as dog3d,
+              without the DoG detector
 
 Each mask is reduced to hits with ``weighted_grid_hits`` at the
 production cell. Truth is e07-g4-hypernuclei's ``grains.npz`` (one row
@@ -123,6 +127,9 @@ RIDGE_MIN_LEN_PX = 30
 RIDGE_MIN_AREA_PX = 40
 _KERNEL_HALF_SIGMAS = 3
 RIDGE_VARIANTS = ("ridge", "ridge3d", "dogridge")
+# z suppression of mask hits: darkness smoothed at grain scale.
+FOCUS_SIGMA_PX = 1.2
+ZSUP_VARIANTS = {"otsu3d": "otsu", "blob3d": "blob"}
 CLASS_NAMES = {1: "capture", 2: "decay", 3: "secondary", 4: "background",
                5: "junk"}
 
@@ -559,9 +566,26 @@ def merge_hits(a, b):
   return np.concatenate([a, b[keep]])
 
 
+def focus_suppress(reader, h3):
+  """Keep the hits whose smoothed darkness is at least the 3x3 maximum
+  of the slices either side (each grain at its sharpest slice)."""
+  f = np.stack([cv2.GaussianBlur(fog_remove(reader.read(s)).astype(
+    np.float32), (0, 0), FOCUS_SIGMA_PX) for s in range(len(reader))])
+  mx = maximum_filter(f, size=(1, 3, 3))
+  ninf = np.full_like(mx[:1], -np.inf)
+  nb = np.maximum(np.concatenate([ninf, mx[:-1]]),
+                  np.concatenate([mx[1:], ninf]))
+  z = h3[:, 2].astype(int)
+  y = np.clip(np.rint(h3[:, 1]).astype(int), 0, f.shape[1] - 1)
+  x = np.clip(np.rint(h3[:, 0]).astype(int), 0, f.shape[2] - 1)
+  return h3[f[z, y, x] >= nb[z, y, x]]
+
+
 def build_hits(reader, variants, clf, cell):
   """Hits and seconds for every requested variant on one stack."""
   masks = [v for v in variants if v in MASK_VARIANTS]
+  masks += [ZSUP_VARIANTS[v] for v in variants if v in ZSUP_VARIANTS]
+  masks = sorted(set(masks), key=MASK_VARIANTS.index)
   if "otsu_rand" in variants:
     masks = sorted(set(masks) | {"otsu", "classifier"},
                    key=MASK_VARIANTS.index)
@@ -579,6 +603,11 @@ def build_hits(reader, variants, clf, cell):
   if "dogridge" in variants:
     hits["dogridge"] = merge_hits(hits["dog3d"], hits["ridge3d"])
     secs["dogridge"] = secs["dog3d"] + secs["ridge3d"]
+  for v in variants:
+    if v in ZSUP_VARIANTS:
+      t = time.time()
+      hits[v] = focus_suppress(reader, hits[ZSUP_VARIANTS[v]])
+      secs[v] = secs[ZSUP_VARIANTS[v]] + time.time() - t
   if "otsu_rand" in variants:
     rng = np.random.default_rng(SEED)
     o = hits["otsu"]

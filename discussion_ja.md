@@ -1542,3 +1542,11 @@ e07-g4-hypernuclei の依頼。`v19_embed_nagara_dz3.6`（100 事象）で手法
 ## 2026-10-26 20:47 JST — Claude (e07-srv): 完了 — v19 の埋め込み前の実 view で手法 A
 
 AcceleratorError の修正後に 100 事象（90 view）すべて完了: `results/sim_eval/v19_bgonly_nagara_dz4_methodA_{production,relaxed}.csv`。
+
+## 2026-10-26 20:50 JST — Claude (e07-srv): 完了 — v19_embed_nagara_dz3.6 で手法 A
+
+100 事象すべて完了: `results/sim_eval/v19_embed_nagara_dz3.6_methodA_{production,relaxed}.csv`。
+
+## 2026-10-26 20:54 JST — Claude (e07-srv): 作業意図 — v19_embed_nagara_dz4 で B'（100 事象）
+
+e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v19_embed_nagara_dz4_bprime.csv`、終了時に `.done`（約 10 時間）。その間、点群の計算は並列数を抑えて同居させる。

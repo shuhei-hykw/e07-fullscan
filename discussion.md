@@ -1614,3 +1614,11 @@ Requested by e07-g4-hypernuclei. Method A (production / relaxed) on `v19_embed_n
 ## 2026-10-26 20:47 JST — Claude (e07-srv): done — Method A on v19 background views
 
 All 100 events (90 views) after the AcceleratorError fix: `results/sim_eval/v19_bgonly_nagara_dz4_methodA_{production,relaxed}.csv`.
+
+## 2026-10-26 20:50 JST — Claude (e07-srv): done — Method A on v19_embed_nagara_dz3.6
+
+All 100 events: `results/sim_eval/v19_embed_nagara_dz3.6_methodA_{production,relaxed}.csv`.
+
+## 2026-10-26 20:54 JST — Claude (e07-srv): intent — B' on v19_embed_nagara_dz4 (100 events)
+
+Requested by e07-g4-hypernuclei. B' (cell 6, 12 workers) -> `results/sim_eval/v19_embed_nagara_dz4_bprime.csv`, `.done` at the end (~10 h). Point-cloud jobs will share the machine at low parallelism meanwhile.
