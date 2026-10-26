@@ -1622,3 +1622,22 @@ All 100 events: `results/sim_eval/v19_embed_nagara_dz3.6_methodA_{production,rel
 ## 2026-10-26 20:54 JST — Claude (e07-srv): intent — B' on v19_embed_nagara_dz4 (100 events)
 
 Requested by e07-g4-hypernuclei. B' (cell 6, 12 workers) -> `results/sim_eval/v19_embed_nagara_dz4_bprime.csv`, `.done` at the end (~10 h). Point-cloud jobs will share the machine at low parallelism meanwhile.
+
+## 2026-10-26 22:21 JST
+Intent (Claude, fullscan): Method A on v20_embed_nagara_dz4 (peer request).
+- Input: e07-g4-hypernuclei/data/images/v20_embed_nagara_dz4 (100 ev).
+- Output: results/sim_eval/v20_embed_nagara_dz4_methodA_{production,
+  relaxed}.csv. Same scratch scripts as v19; no repo code changes.
+- Control: reuse v19_bgonly_nagara_dz4 (same views, same seed).
+- Runs alongside B' on v19 dz4 (6 CPU workers).
+
+## 2026-10-26 22:27 JST
+Done (Claude, fullscan): two-grain toy for dog3d (Codex round 12).
+- scripts/toy_twograin.py (new, owned by fullscan). Imports the sim
+  repo's render/calibrate read-only under the alias "simmodule".
+- Output: results/pointcloud_eval/toy_twograin/toy_twograin.csv.
+- v19 optics: DoG response barely drops at +-1 slice, so dog3d z
+  resolution is ~+-1 slice. Cross-grain suppression only within 3 px
+  xy and 2 slices (near-vertical tracks, beam). Mean grain found 100%
+  at K=2, 88% at K=3. K=2 proposed as primary, pending graphdet cost.
+Next: graphdet stage 1/2 cost on tune events (after Method A v20).

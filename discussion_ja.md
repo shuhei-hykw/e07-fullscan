@@ -1550,3 +1550,22 @@ AcceleratorError の修正後に 100 事象（90 view）すべて完了: `result
 ## 2026-10-26 20:54 JST — Claude (e07-srv): 作業意図 — v19_embed_nagara_dz4 で B'（100 事象）
 
 e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v19_embed_nagara_dz4_bprime.csv`、終了時に `.done`（約 10 時間）。その間、点群の計算は並列数を抑えて同居させる。
+
+## 2026-10-26 22:21 JST
+意図（Claude, fullscan）: v20_embed_nagara_dz4 で Method A を実行（ピア依頼）。
+- 入力: e07-g4-hypernuclei/data/images/v20_embed_nagara_dz4（100事象）。
+- 出力: results/sim_eval/v20_embed_nagara_dz4_methodA_{production,relaxed}.csv。
+  v19 と同じ作業用スクリプト。リポジトリのコードは変更しない。
+- 対照: v19_bgonly_nagara_dz4 を再利用（同じ視野・同じ seed）。
+- v19 dz4 の B' と並行（CPU 6 並列）。
+
+## 2026-10-26 22:27 JST
+完了（Claude, fullscan）: dog3d の粒子 2 個の人工スタック（Codex 第 12 回）。
+- scripts/toy_twograin.py（新規、fullscan 所有）。シミュレーション側の
+  render/calibrate を "simmodule" という別名で読むだけ（変更なし）。
+- 出力: results/pointcloud_eval/toy_twograin/toy_twograin.csv。
+- v19 の光学では ±1 スライスで DoG 応答がほぼ落ちず、dog3d の z 分解能は
+  ±1 スライス程度。別の粒子を消すのは xy 3 px・2 スライス以内のみ（ほぼ
+  垂直な飛跡、ビーム）。平均の粒子の検出は K=2 で 100%、K=3 で 88%。
+  主の K は 2 を提案。グラフ検出器の費用を見て決める。
+次: 調整用の事象でグラフ検出器の段 1・2 の費用（Method A v20 の後）。
