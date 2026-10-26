@@ -154,6 +154,11 @@ synthetic event: purity against a shifted control, grain recall by
 class, per-track coverage, lost tracks and new gaps, and hits per
 graph-detector region. Writes `<dataset>__<event>_summary.csv` and a
 per-track table.
+For an embedded event the same variants are also run on the background
+view alone (`bgctl_*` columns), the support signal grains get from
+background hits by chance. The DoG and line filters run on the GPU
+(torch) when one is available, falling back to the CPU without one,
+with `E07_DEVICE=cpu`, or when the GPU runs out of memory.
 
 ### Measuring stage 4
 

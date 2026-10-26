@@ -70,6 +70,7 @@ from scipy.spatial import cKDTree
 from skimage.morphology import remove_small_objects, skeletonize
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from module.device import default_device
 from module.matlab_export import (
   _GRAPH_CELL_PX, _GRID_CELL_PX, remove_unaligned_noise,
   remove_unaligned_noise_v2, weighted_grid_hits,
@@ -408,6 +409,144 @@ def ridge_hits(reader, cell, k=RIDGE_K):
   return {v: np.concatenate(out[v]) for v in out}, secs
 
 
+# --- GPU path (torch) -----------------------------------------------
+# Same filters as dog_response / ridge_response / maximum_filter, run on
+# the whole stack at once. Kept numerically close to the OpenCV path
+# (reflect-101 borders, fog_remove's uint8 rounding and saturation), not
+# bit-identical; module.device.default_device() decides, E07_DEVICE=cpu
+# forces the CPU path.
+_FOG_SIGMA_PX = 8.0       # what cv2 derives for the 51 px fog kernel
+_FOG_RADIUS_PX = 25
+_GPU_BATCH = 8            # slices per batch on the GPU
+_GAUSS_RADIUS_SIGMAS = 4
+
+
+def _gauss_kernel(sigma, radius, dev):
+  import torch
+  x = torch.arange(-radius, radius + 1, device=dev, dtype=torch.float32)
+  k = torch.exp(-x * x / (2 * sigma * sigma))
+  return k / k.sum()
+
+
+def _blur(x, sigma, radius=None):
+  """Separable Gaussian blur of (N, 1, H, W), reflect-101 borders."""
+  import torch.nn.functional as F
+  r = radius or int(round(_GAUSS_RADIUS_SIGMAS * sigma))
+  k = _gauss_kernel(sigma, r, x.device)
+  x = F.conv2d(F.pad(x, (r, r, 0, 0), mode="reflect"), k.view(1, 1, 1, -1))
+  return F.conv2d(F.pad(x, (0, 0, r, r), mode="reflect"),
+                  k.view(1, 1, -1, 1))
+
+
+def _fog_gpu(imgs):
+  """fog_remove on a (N, 1, H, W) uint8-valued float tensor."""
+  b = _blur(imgs, _FOG_SIGMA_PX, _FOG_RADIUS_PX).round()
+  return (b - imgs).clamp(min=0)
+
+
+def _stack_responses(reader, dev, fn):
+  """fn(fog batch) for every slice, as one (S, H, W) GPU tensor."""
+  import torch
+  out = []
+  for a in range(0, len(reader), _GPU_BATCH):
+    b = min(a + _GPU_BATCH, len(reader))
+    imgs = torch.from_numpy(np.stack([reader.read(s) for s in range(a, b)])
+                            ).to(dev, torch.float32).unsqueeze(1)
+    out.append(fn(_fog_gpu(imgs))[:, 0])
+  return torch.cat(out)
+
+
+def _robust_thr(r, k):
+  """Per-slice median + k robust sigmas of an (S, H, W) tensor."""
+  flat = r.flatten(1)
+  med = flat.median(dim=1).values
+  mad = (flat - med[:, None]).abs().median(dim=1).values
+  return (med + k * _MAD_TO_SIGMA * mad)[:, None, None]
+
+
+def _neighbour_max(mx):
+  """Per slice, the max of mx over the slices either side (or -inf)."""
+  import torch
+  pad = torch.full_like(mx[:1], -float("inf"))
+  prev = torch.cat([pad, mx[:-1]])
+  nxt = torch.cat([mx[1:], pad])
+  return torch.maximum(prev, nxt)
+
+
+def dog_hits_gpu(reader, dev, k=DOG_K):
+  """dog_hits on the GPU."""
+  import torch
+  import torch.nn.functional as F
+  t = time.time()
+  dog = lambda f: _blur(f, DOG_SIGMA_IN_PX) - _blur(f, DOG_SIGMA_OUT_PX)
+  with torch.no_grad():
+    r = _stack_responses(reader, dev, dog)
+    mx = F.max_pool2d(r.unsqueeze(1), DOG_PEAK_PX, 1,
+                      DOG_PEAK_PX // 2)[:, 0]
+    peak = (r == mx) & (r > _robust_thr(r, k))
+    keep = peak & (r >= _neighbour_max(mx))
+    out = {}
+    for v, m in (("dog", peak), ("dog3d", keep)):
+      z, y, x = torch.nonzero(m, as_tuple=True)
+      out[v] = torch.stack([x, y, z], 1).cpu().numpy().astype(float)
+  del r, mx, peak, keep
+  torch.cuda.empty_cache()
+  dt = time.time() - t
+  return out, {"dog": dt, "dog3d": dt}
+
+
+def ridge_hits_gpu(reader, cell, dev, k=RIDGE_K):
+  """ridge_hits with the oriented filters on the GPU; thinning and
+  sampling stay on the CPU."""
+  import torch
+  import torch.nn.functional as F
+  t = time.time()
+  w = torch.from_numpy(np.stack(_LINE_KERNELS)).to(dev, torch.float32)
+  w = w.unsqueeze(1)
+  half = w.shape[-1] // 2
+  line = lambda f: F.conv2d(F.pad(f, (half,) * 4, mode="reflect"),
+                            w).amax(1, keepdim=True)
+  with torch.no_grad():
+    r = _stack_responses(reader, dev, line)
+    nb = _neighbour_max(F.max_pool2d(r.unsqueeze(1), 3, 1, 1)[:, 0])
+    thr = _robust_thr(r, k)[:, 0, 0].cpu().numpy()
+  out = {"ridge": [], "ridge3d": []}
+  for s in range(r.shape[0]):
+    rs = r[s].cpu().numpy()
+    m = rs > thr[s]
+    sk = skeletonize(remove_small_objects(m, RIDGE_MIN_AREA_PX))
+    n, lab = cv2.connectedComponents(sk.astype(np.uint8))
+    size = np.bincount(lab.ravel(), minlength=n)
+    size[0] = 0
+    mask = (size[lab] >= RIDGE_MIN_LEN_PX).astype(np.uint8) * 255
+    hh = weighted_grid_hits(mask, np.maximum(rs, 0), cell)
+    out["ridge"].append(np.column_stack([hh[:, :2], np.full(len(hh), s)]))
+    ys = np.clip(np.rint(hh[:, 1]).astype(int), 0, rs.shape[0] - 1)
+    xs = np.clip(np.rint(hh[:, 0]).astype(int), 0, rs.shape[1] - 1)
+    keep = rs[ys, xs] >= nb[s].cpu().numpy()[ys, xs]
+    out["ridge3d"].append(np.column_stack(
+      [hh[keep, :2], np.full(keep.sum(), s)]))
+  del r, nb
+  torch.cuda.empty_cache()
+  dt = time.time() - t
+  return {v: np.concatenate(out[v]) for v in out}, {"ridge": dt,
+                                                    "ridge3d": dt}
+
+
+def _gpu_or_cpu(gpu_fn, cpu_fn):
+  """Run on the GPU when there is one; fall back to the CPU when it is
+  out of memory (several evaluations may share one card)."""
+  dev = default_device()
+  if dev:
+    import torch
+    try:
+      return gpu_fn(dev)
+    except torch.cuda.OutOfMemoryError:
+      torch.cuda.empty_cache()
+      print("GPU out of memory; CPU path", file=sys.stderr, flush=True)
+  return cpu_fn()
+
+
 def merge_hits(a, b):
   """a plus the hits of b farther than COVER_R_PX from a (same slice)."""
   keep = np.ones(len(b), bool)
@@ -427,11 +566,13 @@ def build_hits(reader, variants, clf, cell):
                    key=MASK_VARIANTS.index)
   hits, secs = collect_hits(reader, masks, clf, cell)
   if any(v in DOG_VARIANTS or v == "dogridge" for v in variants):
-    dh, ds = dog_hits(reader)
+    dh, ds = _gpu_or_cpu(lambda dev: dog_hits_gpu(reader, dev),
+                         lambda: dog_hits(reader))
     hits.update(dh)
     secs.update(ds)
   if any(v in RIDGE_VARIANTS for v in variants):
-    rh, rs = ridge_hits(reader, cell)
+    rh, rs = _gpu_or_cpu(lambda dev: ridge_hits_gpu(reader, cell, dev),
+                         lambda: ridge_hits(reader, cell))
     hits.update(rh)
     secs.update(rs)
   if "dogridge" in variants:
@@ -483,9 +624,11 @@ def evaluate(ev_dir, variants, clf, cell):
     res, tt = score_row(h3, g, shape, len(reader))
     row.update(res)
     if bg_hits is not None:
-      res, _ = score_row(bg_hits[v], g, shape, len(reader))
+      res, tb = score_row(bg_hits[v], g, shape, len(reader))
       row.update({f"bgctl_{k}": x for k, x in res.items()
                   if k.startswith(("recall_", "sig_"))})
+      tt = tt.merge(tb[["inst", "coverage"]].rename(
+        columns={"coverage": "bgctl_coverage"}), on="inst", how="left")
     tt.insert(0, "variant", v)
     tt.insert(0, "event", ev_dir.name)
     tracks.append(tt)

@@ -1518,3 +1518,11 @@ v14 の 2 データセット（各 10 事象）が完了。候補は production 
 ## 2026-10-26 15:38 JST — Claude (e07-srv): 作業意図 — v15 の調整用と埋め込み版で点群の方式を比較
 
 `scripts/eval_pointcloud.py`（新しい方向別の線検出 `ridge` / `ridge3d` / `dogridge` を含む全方式）を、`v15_synth_tune_dz4` と `v15_embed_nagara_dz4`（各 10 事象）で流す → `results/pointcloud_eval/v15/`。仕組みの確認のみで、確定の比較は e07-g4-hypernuclei との合意どおり v16 で行う。埋め込み版では、実背景の中での信号の粒子の拾い率を見る（純度は意味がない）。
+
+## 2026-10-26 17:42 JST — Claude (e07-srv): 作業意図 — single_eval_dz4 で点群の方式を比較
+
+`scripts/eval_pointcloud.py`（otsu, blob, classifier, otsu_rand, dog, dog3d, ridge, dogridge。背景だけの対照つき）を、e07-g4-hypernuclei の `single_eval_dz4`（80 事象 × 単一飛跡 25 本）で流す → `results/pointcloud_eval/single_dz4/`。飛跡ごとの拾い率を `single_tracks.csv`（種類・dip・長さ・dE/dx）と突き合わせる。
+
+## 2026-10-26 19:55 JST — Claude (e07-srv): 作業意図 — v19_embed_nagara_dz4 で手法 A、v19 合成で点群評価
+
+e07-g4-hypernuclei の依頼。`v19_embed_nagara_dz4`（100 事象）で手法 A（production / relaxed、z_best）→ `results/sim_eval/v19_embed_nagara_dz4_methodA_{production,relaxed}.csv`。dz3.6 は後で。B' は dz4 だけ、低い優先度で後回し（約 10 時間）。次に `v19_synth_tune_dz4`（調整用）で点群評価。`v19_synth_eval2_dz4` は方式としきい値を固定するまで触らない。

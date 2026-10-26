@@ -1590,3 +1590,11 @@ Note: the physical step is now ~4.0 um/slice (e07-g4-hypernuclei, layer-depth co
 ## 2026-10-26 15:38 JST — Claude (e07-srv): intent — point-cloud variants on v15 tune and v15 embed
 
 Run `scripts/eval_pointcloud.py` (all variants incl. new oriented line detector `ridge`/`ridge3d`/`dogridge`) on `v15_synth_tune_dz4` and `v15_embed_nagara_dz4` (10 events each) -> `results/pointcloud_eval/v15/`. Mechanics check only; decisive comparison on v16 per agreement with e07-g4-hypernuclei. Embed events: signal-grain recall with real background (purity not meaningful there).
+
+## 2026-10-26 17:42 JST — Claude (e07-srv): intent — point-cloud variants on single_eval_dz4
+
+`scripts/eval_pointcloud.py` (variants otsu, blob, classifier, otsu_rand, dog, dog3d, ridge, dogridge; with background-only control) on e07-g4-hypernuclei `single_eval_dz4` (80 events x 25 single tracks) -> `results/pointcloud_eval/single_dz4/`. Per-track recall then joined with `single_tracks.csv` (species, dip, length, dE/dx).
+
+## 2026-10-26 19:55 JST — Claude (e07-srv): intent — Method A on v19_embed_nagara_dz4; point cloud on v19 synth
+
+Requested by e07-g4-hypernuclei. Method A (production / relaxed, z_best) on `v19_embed_nagara_dz4` (100 events) -> `results/sim_eval/v19_embed_nagara_dz4_methodA_{production,relaxed}.csv`; dz3.6 to follow. B' on dz4 only, later at low priority (~10 h). Point-cloud evaluation on `v19_synth_tune_dz4` (tuning) next; `v19_synth_eval2_dz4` kept untouched until methods and thresholds are frozen.
