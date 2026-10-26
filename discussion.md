@@ -1598,3 +1598,19 @@ Run `scripts/eval_pointcloud.py` (all variants incl. new oriented line detector 
 ## 2026-10-26 19:55 JST — Claude (e07-srv): intent — Method A on v19_embed_nagara_dz4; point cloud on v19 synth
 
 Requested by e07-g4-hypernuclei. Method A (production / relaxed, z_best) on `v19_embed_nagara_dz4` (100 events) -> `results/sim_eval/v19_embed_nagara_dz4_methodA_{production,relaxed}.csv`; dz3.6 to follow. B' on dz4 only, later at low priority (~10 h). Point-cloud evaluation on `v19_synth_tune_dz4` (tuning) next; `v19_synth_eval2_dz4` kept untouched until methods and thresholds are frozen.
+
+## 2026-10-26 20:15 JST — Claude (e07-srv): intent — Method A on v19 background views (control)
+
+Requested by e07-g4-hypernuclei. Method A (production / relaxed) on the source views of `v19_embed_nagara_dz4` (`output/background_views_v19_embed_nagara_dz4.csv`, 100 rows / 90 views) -> `results/sim_eval/v19_bgonly_nagara_dz4_methodA_{production,relaxed}.csv`.
+
+## 2026-10-26 20:23 JST — Claude (e07-srv): intent — Method A on v19_embed_nagara_dz3.6
+
+Requested by e07-g4-hypernuclei. Method A (production / relaxed) on `v19_embed_nagara_dz3.6` (100 events) -> `results/sim_eval/v19_embed_nagara_dz3.6_methodA_{production,relaxed}.csv`.
+
+## 2026-10-26 20:33 JST — Claude (e07-srv): fix — GPU out-of-memory fallback missed AcceleratorError
+
+`module/pipeline/finder.py` `_gpu_oom()` (owned by me for this change) caught only `torch.OutOfMemoryError`; when the shared card is full at context creation, torch raises `torch.AcceleratorError` instead and the Method A shard died (40 of 100 background-control events lost). It now returns both, so the existing CPU fallback (same numbers) runs. Same in `scripts/eval_pointcloud.py`. Rerunning the lost events.
+
+## 2026-10-26 20:47 JST — Claude (e07-srv): done — Method A on v19 background views
+
+All 100 events (90 views) after the AcceleratorError fix: `results/sim_eval/v19_bgonly_nagara_dz4_methodA_{production,relaxed}.csv`.

@@ -541,7 +541,8 @@ def _gpu_or_cpu(gpu_fn, cpu_fn):
     import torch
     try:
       return gpu_fn(dev)
-    except torch.cuda.OutOfMemoryError:
+    except (torch.OutOfMemoryError,
+            getattr(torch, "AcceleratorError", torch.OutOfMemoryError)):
       torch.cuda.empty_cache()
       print("GPU out of memory; CPU path", file=sys.stderr, flush=True)
   return cpu_fn()

@@ -70,18 +70,26 @@ _GRAIN_SCREEN_SLACK_PX = 1e-3
 _GRAIN_SCREEN_BLOCK = 1 << 22
 
 
-def _gpu_oom() -> type:
-  """torch's out-of-memory error, or a class nothing raises."""
+def _gpu_oom() -> tuple[type, ...]:
+  """torch's out-of-memory errors, or a class nothing raises.
+
+  A card already full when this process first touches it fails at
+  context creation with AcceleratorError rather than OutOfMemoryError.
+  """
   try:
     import torch
   except ImportError:
-    return type("NoTorch", (Exception,), {})
-  return torch.OutOfMemoryError
+    return (type("NoTorch", (Exception,), {}),)
+  return (torch.OutOfMemoryError,
+          getattr(torch, "AcceleratorError", torch.OutOfMemoryError))
 
 
 def _release_gpu(err) -> None:
   import torch
-  torch.cuda.empty_cache()
+  try:
+    torch.cuda.empty_cache()
+  except _gpu_oom():
+    pass  # no usable context to release
   import logging
   logging.getLogger(__name__).warning("GPU out of memory, using CPU: %s",
                                       str(err).splitlines()[0])

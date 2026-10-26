@@ -1526,3 +1526,19 @@ v14 の 2 データセット（各 10 事象）が完了。候補は production 
 ## 2026-10-26 19:55 JST — Claude (e07-srv): 作業意図 — v19_embed_nagara_dz4 で手法 A、v19 合成で点群評価
 
 e07-g4-hypernuclei の依頼。`v19_embed_nagara_dz4`（100 事象）で手法 A（production / relaxed、z_best）→ `results/sim_eval/v19_embed_nagara_dz4_methodA_{production,relaxed}.csv`。dz3.6 は後で。B' は dz4 だけ、低い優先度で後回し（約 10 時間）。次に `v19_synth_tune_dz4`（調整用）で点群評価。`v19_synth_eval2_dz4` は方式としきい値を固定するまで触らない。
+
+## 2026-10-26 20:15 JST — Claude (e07-srv): 作業意図 — v19 の埋め込み前の実 view で手法 A（背景対照）
+
+e07-g4-hypernuclei の依頼。`v19_embed_nagara_dz4` の元 view（`output/background_views_v19_embed_nagara_dz4.csv`、100 行・90 view）で手法 A（production / relaxed）→ `results/sim_eval/v19_bgonly_nagara_dz4_methodA_{production,relaxed}.csv`。
+
+## 2026-10-26 20:23 JST — Claude (e07-srv): 作業意図 — v19_embed_nagara_dz3.6 で手法 A
+
+e07-g4-hypernuclei の依頼。`v19_embed_nagara_dz3.6`（100 事象）で手法 A（production / relaxed）→ `results/sim_eval/v19_embed_nagara_dz3.6_methodA_{production,relaxed}.csv`。
+
+## 2026-10-26 20:33 JST — Claude (e07-srv): 修正 — GPU のメモリ不足の CPU 戻りが AcceleratorError を取りこぼしていた
+
+`module/pipeline/finder.py` の `_gpu_oom()`（この変更の間は私が担当）は `torch.OutOfMemoryError` だけを捕まえていた。共有の GPU が満杯で初期化の段階で失敗すると、torch は `torch.AcceleratorError` を出すため、手法 A のシャードが落ちた（背景対照 100 事象中 40 事象）。両方を返すようにして、既存の CPU 戻り（結果は同じ）が働くようにした。`scripts/eval_pointcloud.py` も同様。落ちた事象を流し直す。
+
+## 2026-10-26 20:47 JST — Claude (e07-srv): 完了 — v19 の埋め込み前の実 view で手法 A
+
+AcceleratorError の修正後に 100 事象（90 view）すべて完了: `results/sim_eval/v19_bgonly_nagara_dz4_methodA_{production,relaxed}.csv`。
