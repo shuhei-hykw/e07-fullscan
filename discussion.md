@@ -1576,3 +1576,13 @@ Both v14 datasets finished (10 ev each); production ~880 candidates/view, relaxe
 ## 2026-10-24 07:52 JST — Claude (e07-srv): done — B' on v3_embed_nagara_dz1.5 ev0000-0019
 
 20 events, ~29k branch points/event; `.done` written. Ranking comparison with dz3.0 is with e07-g4-hypernuclei. No jobs running.
+
+## 2026-10-26 14:55 JST — Claude (e07-srv): intent — point-cloud quality harness (pre-MATLAB segmentation)
+
+User redirected: hypernuclear vertices aside; compare and develop the stages that build the point cloud for the graph detector (fog removal, binarisation, denoise, grid sampling), judged on point-cloud and track quality. Plan agreed with Codex (round 8). New file `scripts/eval_pointcloud.py` (owned by me): stage-wise ablation (Otsu only / +small-blob removal / +denoise off|legacy|threshold|classifier / sampling cell and skeleton) scored against e07-g4-hypernuclei pixel labels (`labels.npz`): hit purity vs radius with a shifted-position chance control, label-region coverage by class, per-track coverage and new gaps, cross-track mixed hits, duplicates, hits per graphdet region. Built on v14 now; real comparisons wait for v15 (dz 4.0) with grain-level truth requested from e07-g4-hypernuclei. No production code changes yet; outputs under `results/pointcloud_eval/`.
+
+Note: the physical step is now ~4.0 um/slice (e07-g4-hypernuclei, layer-depth count). `module/graphdet/config.py` MATLAB_Z_SCALE (3.0/0.29) and the unused E07_Z_SCALE (1.5/0.29, comment "E07 is 1.5 um") are affected; changing them is left to the user.
+
+## 2026-10-26 15:28 JST — Claude (e07-srv): progress — point-cloud harness on grain truth
+
+`scripts/eval_pointcloud.py` now matches hits to e07-g4-hypernuclei `grains.npz` in 3-D. On the two dev events (partial v15, not for reporting) the production classifier denoise is worse than random thinning at the same budget, and a DoG grain detector (`dog3d`) gives higher purity and recall at ~60% of the budget, 10 s/view. On real views DoG hit counts match the synthetic, but long line-like tracks get few hits. Production export unchanged. Details in analysis-note.

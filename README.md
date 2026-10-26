@@ -140,6 +140,21 @@ python run.py click ...           # click ground-truth vertices
 
 Each command delegates to `python -m module.<target>` with the same arguments.
 
+### Measuring the point cloud (input to the graph detector)
+
+```bash
+python scripts/eval_pointcloud.py EVENT_DIR [...] --out results/pointcloud_eval
+```
+
+Builds the hits of each cumulative export step (`otsu`, `speck`,
+`blob`, `legacy`, `threshold`, `classifier`), a random-thinning control
+(`otsu_rand`) and a grain detector (`dog`, `dog3d`), and matches them in
+3-D to the grain-level truth (`grains.npz`) of an e07-g4-hypernuclei
+synthetic event: purity against a shifted control, grain recall by
+class, per-track coverage, lost tracks and new gaps, and hits per
+graph-detector region. Writes `<dataset>__<event>_summary.csv` and a
+per-track table.
+
 ### Measuring stage 4
 
 ```bash

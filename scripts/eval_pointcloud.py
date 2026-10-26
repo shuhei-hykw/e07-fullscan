@@ -1,0 +1,383 @@
+"""Score the point cloud handed to the graph detector against grain truth.
+
+The graph detector only ever sees the hits ``export_hits_grid`` makes,
+so a track lost or a junk hit added before it cannot be repaired later.
+This measures that stage on its own, one cumulative step at a time, so
+the step that loses real grains (or lets junk through) shows up:
+
+  otsu        fog removal + Otsu, nothing else
+  speck       + removal of specks only (area < noise_amin)
+  blob        + full small-blob removal (remove_noise) = denoise "off"
+  legacy      + Hough-alignment filter (denoise "legacy")
+  threshold   + segment filter, two cut-offs (denoise "threshold")
+  classifier  + segment filter, trained model (denoise "classifier")
+  otsu_rand   otsu hits thinned at random to the classifier's count:
+              what a filter that knows nothing would do at that budget
+  dog         grain detector instead of Otsu: difference of Gaussians
+              at grain scale on the fog-removed slice, one hit per
+              local maximum above DOG_K robust sigmas
+  dog3d       the same maxima kept only if they are also the maximum
+              over the slices either side, so a grain seen in three
+              slices gives one hit at its sharpest slice
+
+Each mask is reduced to hits with ``weighted_grid_hits`` at the
+production cell. Truth is e07-g4-hypernuclei's ``grains.npz`` (one row
+per rendered grain: view col/row/slice, developed-emulsion um, track
+instance, class, fog flag). A grain is in reach of a hit when it lies
+within r px in x/y and Z_TOL_SLICES of the hit's slice -- an average
+grain is visible over about +-1 slice of focus.
+
+  purity_rN   hits with a track grain (class 1-4, not fog) in reach at
+              r = N; fog_rN the same for fog grains only; chance_rN for
+              the hits shifted by SHIFT_PX
+  multi       hits with grains of two or more tracks in reach (r = 3)
+  recall_*    visible grains (inside the image and the stack, not fog)
+              with a hit in reach (r = 3), by class
+  dup_med     median hits in reach of a recalled grain
+  per track   grain recall, tracks lost outright, and the largest gap
+              along the track's axis beyond the gap already present
+              between its grains (new_gap_um); written per track too
+  budget      hits per graph-detector region (max, 90th percentile)
+  seconds     mask time of the steps a variant needs, plus sampling
+
+  python scripts/eval_pointcloud.py EVENT_DIR [...] [--out DIR]
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+from pathlib import Path
+
+import cv2
+import numpy as np
+import pandas as pd
+from scipy.ndimage import maximum_filter
+from scipy.spatial import cKDTree
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from module.matlab_export import (
+  _GRAPH_CELL_PX, _GRID_CELL_PX, remove_unaligned_noise,
+  remove_unaligned_noise_v2, weighted_grid_hits,
+)
+from module.preprocess import (
+  _NOISE_AMIN, fog_remove, otsu_binarize, remove_noise,
+)
+from module.reader import load_spng
+from module.track_classifier import build_training_set, train_classifier
+
+_LABELS_DIR = Path(__file__).resolve().parents[1] / "results/manual_labels"
+MASK_VARIANTS = ("otsu", "speck", "blob", "legacy", "threshold",
+                 "classifier")
+# The step each mask variant is built on.
+PARENT = {"speck": "otsu", "blob": "otsu", "legacy": "blob",
+          "threshold": "blob", "classifier": "blob"}
+RADII_PX = (1, 2, 3, 5)
+COVER_R_PX = 3
+Z_TOL_SLICES = 1
+# Chance control: hits moved by a fixed offset (wrapping), far beyond
+# any track width and off the sampling grid.
+SHIFT_PX = 517
+# Graph-detector sub-region (module/graphdet/detectlseg.py).
+REGION_PX = 128
+REGION_Z = 80
+# Tracks with fewer visible grains than this are too short to judge.
+MIN_TRACK_GRAINS = 5
+# Grains looked at per hit when counting the tracks in reach.
+MULTI_K = 8
+SEED = 20261026
+# Grain detector: a focused grain is a Gaussian of sigma ~1 px, blurred
+# by the optics to ~1.2 px; the outer scale only has to remove the
+# local background left after fog removal.
+DOG_SIGMA_IN_PX = 1.2
+DOG_SIGMA_OUT_PX = 3.0
+DOG_K = 3.0
+# Neighbourhood (px) a maximum must win; about one grain diameter.
+DOG_PEAK_PX = 5
+_MAD_TO_SIGMA = 1.4826
+DOG_VARIANTS = ("dog", "dog3d")
+CLASS_NAMES = {1: "capture", 2: "decay", 3: "secondary", 4: "background",
+               5: "junk"}
+
+
+def slice_masks(img, variants, clf):
+  """Fog image, mask per variant, and seconds spent per step."""
+  t = time.time()
+  fog = fog_remove(img)
+  _, otsu = otsu_binarize(fog)
+  out, secs = {"otsu": otsu}, {"otsu": time.time() - t}
+  steps = {
+    "speck": lambda: remove_noise(otsu, noise_amax=0),
+    "blob": lambda: remove_noise(otsu),
+    "legacy": lambda: remove_unaligned_noise(out["blob"],
+                                             cell=_GRID_CELL_PX),
+    "threshold": lambda: remove_unaligned_noise_v2(
+      out["blob"], fog, cell=_GRID_CELL_PX, method="threshold"),
+    "classifier": lambda: remove_unaligned_noise_v2(
+      out["blob"], fog, cell=_GRID_CELL_PX, method="classifier",
+      classifier=clf),
+  }
+  need = set(variants)
+  for v in variants:
+    while v in PARENT:
+      v = PARENT[v]
+      need.add(v)
+  for v in ("speck", "blob", "legacy", "threshold", "classifier"):
+    if v in need:
+      t = time.time()
+      out[v] = steps[v]()
+      secs[v] = time.time() - t
+  return fog, out, secs
+
+
+def chain_seconds(v, secs):
+  """Mask seconds of a variant including the steps it is built on."""
+  total = secs.get(v, 0.0)
+  while v in PARENT:
+    v = PARENT[v]
+    total += secs.get(v, 0.0)
+  return total
+
+
+def band_trees(pts_xy, slices, n_slices):
+  """Per slice s, a 2-D tree of the points within Z_TOL_SLICES of s."""
+  out = []
+  for s in range(n_slices):
+    m = np.abs(slices - s) <= Z_TOL_SLICES
+    idx = np.flatnonzero(m)
+    out.append((cKDTree(pts_xy[idx]) if idx.size else None, idx))
+  return out
+
+
+def grain_scores(h3, g, shape, n_slices):
+  """Hit-to-grain matching; returns (summary dict, per-track table)."""
+  h, w = shape
+  res = {}
+  trk = (g["cls"] >= 1) & (g["cls"] <= 4) & ~g["fog"]
+  gxy = np.column_stack([g["col"], g["row"]])
+  gs = g["focus_slice"].astype(int)
+  hz = h3[:, 2].astype(int)
+  shifted = np.column_stack([(h3[:, 0] + SHIFT_PX) % w,
+                             (h3[:, 1] + SHIFT_PX) % h])
+  rmax = max(RADII_PX)
+  sets = {"trk": trk, "fog": g["fog"]}
+  d = {k: np.full(len(h3), np.inf) for k in ("trk", "fog", "chance")}
+  multi = np.zeros(len(h3), bool)
+  for name, sel in sets.items():
+    for s, (tree, idx) in enumerate(band_trees(gxy[sel], gs[sel],
+                                               n_slices)):
+      hm = np.flatnonzero(hz == s)
+      if tree is None or not hm.size:
+        continue
+      dd, jj = tree.query(h3[hm, :2], distance_upper_bound=rmax)
+      d[name][hm] = dd
+      if name == "trk":
+        d["chance"][hm] = tree.query(shifted[hm],
+                                     distance_upper_bound=rmax)[0]
+        dk, jk = tree.query(h3[hm, :2], k=MULTI_K,
+                            distance_upper_bound=COVER_R_PX)
+        ok = np.isfinite(dk)
+        inst_all = g["instance"][sel][idx]
+        ins = np.where(ok, inst_all[np.minimum(jk, len(idx) - 1)], 0)
+        ins = np.sort(ins, axis=1)
+        distinct = ((np.diff(ins, axis=1) != 0)
+                    & (ins[:, 1:] != 0)).sum(1) + (ins[:, 0] != 0)
+        multi[hm] = distinct >= 2
+  n = max(len(h3), 1)
+  for k in RADII_PX:
+    res[f"purity_r{k}"] = float((d["trk"] <= k).sum() / n)
+    res[f"fog_r{k}"] = float((d["fog"] <= k).sum() / n)
+    res[f"chance_r{k}"] = float((d["chance"] <= k).sum() / n)
+  res["multi"] = float(multi.sum() / n)
+
+  vis = (~g["fog"]) & (g["col"] >= 0) & (g["col"] < w) & \
+    (g["row"] >= 0) & (g["row"] < h) & (gs >= 0) & (gs < n_slices)
+  vi = np.flatnonzero(vis)
+  n_near = np.zeros(vi.size, int)
+  for s, (tree, idx) in enumerate(band_trees(h3[:, :2], hz, n_slices)):
+    gm = np.flatnonzero(gs[vi] == s)
+    if tree is None or not gm.size:
+      continue
+    n_near[gm] = tree.query_ball_point(gxy[vi[gm]], COVER_R_PX,
+                                       return_length=True)
+  rec = n_near > 0
+  cls = g["cls"][vi]
+  for k, name in CLASS_NAMES.items():
+    m = cls == k
+    res[f"recall_{name}"] = float(rec[m].mean()) if m.any() else np.nan
+  res["dup_med"] = float(np.median(n_near[rec])) if rec.any() else np.nan
+  t = (cls >= 1) & (cls <= 4)
+  xyz = np.column_stack([g["x_um"], g["y_um"], g["z_um"]])[vi]
+  tt = track_table(g["instance"][vi][t], cls[t], xyz[t], rec[t])
+  return res, tt
+
+
+def track_table(inst, cls, xyz_um, cov):
+  """Per-track grain recall and new gap along the track's main axis."""
+  order = np.argsort(inst, kind="stable")
+  inst = inst[order]
+  starts = np.flatnonzero(np.r_[True, inst[1:] != inst[:-1]])
+  ends = np.r_[starts[1:], len(inst)]
+  xyz = xyz_um[order].astype(np.float64)
+  cls, cv = cls[order], cov[order]
+  rows = []
+  for a, b in zip(starts, ends):
+    if b - a < MIN_TRACK_GRAINS:
+      continue
+    p = xyz[a:b] - xyz[a:b].mean(0)
+    axis = np.linalg.svd(p, full_matrices=False)[2][0]
+    t = p @ axis
+    o = np.argsort(t)
+    t, k = t[o], cv[a:b][o]
+    gap0 = np.diff(t).max()
+    tk = t[k]
+    if len(tk) > 1:
+      gap = max(np.diff(tk).max(), tk[0] - t[0], t[-1] - tk[-1])
+    else:
+      gap = t[-1] - t[0]
+    rows.append({"inst": int(inst[a]),
+                 "cls": int(np.bincount(cls[a:b]).argmax()),
+                 "n": int(b - a), "length_um": t[-1] - t[0],
+                 "dip": float(abs(axis[2])),
+                 "coverage": float(k.mean()),
+                 "new_gap_um": float(gap - gap0)})
+  return pd.DataFrame(rows)
+
+
+def budget(h3):
+  """Hits per graph-detector region: max and 90th percentile."""
+  if not len(h3):
+    return {"region_max": 0, "region_p90": 0.0}
+  key = (h3[:, 0] // REGION_PX).astype(np.int64) * 1_000_000 + \
+    (h3[:, 1] // REGION_PX).astype(np.int64) * 1000 + \
+    (h3[:, 2] // REGION_Z).astype(np.int64)
+  n = np.unique(key, return_counts=True)[1]
+  return {"region_max": int(n.max()),
+          "region_p90": float(np.percentile(n, 90))}
+
+
+def collect_hits(reader, variants, clf, cell):
+  """Hits (x, y, slice) and seconds per mask variant over the stack."""
+  hits = {v: [] for v in variants}
+  secs = {v: 0.0 for v in variants}
+  for s in range(len(reader)):
+    fog, masks, msecs = slice_masks(reader.read(s), variants, clf)
+    for v in variants:
+      t = time.time()
+      hh = weighted_grid_hits(masks[v], fog, cell)
+      secs[v] += time.time() - t + chain_seconds(v, msecs)
+      hits[v].append(np.column_stack([hh[:, :2], np.full(len(hh), s)]))
+  return {v: np.concatenate(hits[v]) for v in variants}, secs
+
+
+def dog_response(img):
+  """Grain-scale band-pass of the fog-removed slice (grains positive)."""
+  f = fog_remove(img).astype(np.float32)
+  return cv2.GaussianBlur(f, (0, 0), DOG_SIGMA_IN_PX) - \
+    cv2.GaussianBlur(f, (0, 0), DOG_SIGMA_OUT_PX)
+
+
+def dog_hits(reader, k=DOG_K):
+  """Hits from 2-D and 3-D local maxima of the DoG response."""
+  out = {"dog": [], "dog3d": []}
+  secs = {"dog": 0.0, "dog3d": 0.0}
+  n = len(reader)
+  win = {}
+  for s in range(n + 1):
+    t = time.time()
+    if s < n:
+      r = dog_response(reader.read(s))
+      med = np.median(r)
+      thr = med + k * _MAD_TO_SIGMA * np.median(np.abs(r - med))
+      mx = maximum_filter(r, size=DOG_PEAK_PX)
+      win[s] = (r, mx, (r == mx) & (r > thr))
+    dt = time.time() - t
+    secs["dog"] += dt
+    secs["dog3d"] += dt
+    c = s - 1
+    if c < 0:
+      continue
+    t = time.time()
+    r, mx, peak = win[c]
+    ys, xs = np.nonzero(peak)
+    out["dog"].append(np.column_stack([xs, ys, np.full(xs.size, c)]))
+    keep = np.ones(xs.size, bool)
+    for nb in (c - 1, c + 1):
+      if nb in win:
+        keep &= r[ys, xs] >= win[nb][1][ys, xs]
+    out["dog3d"].append(np.column_stack(
+      [xs[keep], ys[keep], np.full(keep.sum(), c)]))
+    secs["dog3d"] += time.time() - t
+    win.pop(c - 1, None)
+  return {v: np.concatenate(out[v]).astype(float) for v in out}, secs
+
+
+def evaluate(ev_dir, variants, clf, cell):
+  reader = load_spng(ev_dir / "image.json")
+  shape = reader.read(0).shape[:2]
+  g = dict(np.load(ev_dir / "grains.npz"))
+  masks = [v for v in variants if v in MASK_VARIANTS]
+  if "otsu_rand" in variants:
+    masks = sorted(set(masks) | {"otsu", "classifier"},
+                   key=MASK_VARIANTS.index)
+  hits, secs = collect_hits(reader, masks, clf, cell)
+  if any(v in DOG_VARIANTS for v in variants):
+    dh, ds = dog_hits(reader)
+    hits.update(dh)
+    secs.update(ds)
+  if "otsu_rand" in variants:
+    rng = np.random.default_rng(SEED)
+    o = hits["otsu"]
+    keep = rng.choice(len(o), size=min(len(hits["classifier"]), len(o)),
+                      replace=False)
+    hits["otsu_rand"] = o[np.sort(keep)]
+    secs["otsu_rand"] = secs["otsu"]
+  summary, tracks = [], []
+  for v in variants:
+    h3 = hits[v]
+    row = {"event": ev_dir.name, "variant": v, "n_hits": len(h3),
+           "seconds": round(secs[v], 1), **budget(h3)}
+    res, tt = grain_scores(h3, g, shape, len(reader))
+    row.update(res)
+    tt.insert(0, "variant", v)
+    tt.insert(0, "event", ev_dir.name)
+    tracks.append(tt)
+    for name, sub in (("bg", tt[tt.cls == 4]), ("sig", tt[tt.cls < 4])):
+      if len(sub):
+        row[f"{name}_tracks"] = len(sub)
+        row[f"{name}_lost"] = float((sub.coverage == 0).mean())
+        row[f"{name}_cov_mean"] = float(sub.coverage.mean())
+        row[f"{name}_cov_p10"] = float(sub.coverage.quantile(0.1))
+        row[f"{name}_newgap_med_um"] = float(sub.new_gap_um.median())
+    summary.append(row)
+  return pd.DataFrame(summary), pd.concat(tracks)
+
+
+def main() -> int:
+  ap = argparse.ArgumentParser()
+  ap.add_argument("events", nargs="+", type=Path)
+  ap.add_argument("--out", type=Path,
+                  default=Path("results/pointcloud_eval"))
+  ap.add_argument("--variants",
+                  default=",".join(MASK_VARIANTS + ("otsu_rand",)
+                                   + DOG_VARIANTS))
+  ap.add_argument("--cell", type=int, default=_GRAPH_CELL_PX)
+  ap.add_argument("--tag", default="", help="prefix for output files")
+  args = ap.parse_args()
+  variants = tuple(args.variants.split(","))
+  clf = train_classifier(*build_training_set(_LABELS_DIR))
+  args.out.mkdir(parents=True, exist_ok=True)
+  for ev in args.events:
+    name = f"{args.tag}{ev.parent.name}__{ev.name}"
+    out = args.out / f"{name}_summary.csv"
+    if out.exists():
+      continue
+    summ, tracks = evaluate(ev, variants, clf, args.cell)
+    tracks.to_csv(args.out / f"{name}_tracks.csv", index=False)
+    summ.to_csv(out, index=False)
+    print(summ.to_string(index=False), flush=True)
+  return 0
+
+
+if __name__ == "__main__":
+  raise SystemExit(main())
