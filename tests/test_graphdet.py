@@ -12,7 +12,8 @@ import numpy as np
 import pytest
 
 from module.graphdet.support import (
-  SUPPORT_XY_PX, filter_polylines, unsupported_fraction,
+  SUPPORT_XY_PX, filter_polylines, sample, supported_pieces,
+  unsupported_fraction,
 )
 from module.graphdet.geom import (
   is_a_line3, is_a_line3_batch, is_a_line3a, is_a_line3a_batch,
@@ -48,6 +49,12 @@ _STEEP_SLICES = 3.2
 _STEEP_Z_SCALE = 3.8 / 0.29
 _STEEP_WANT = 0.2 / 3.2
 _STEEP_TOL = 0.015
+# Sample count may differ by one when a line is redrawn with more
+# vertices (rounding of the per-segment step).
+_SAMPLE_COUNT_TOL = 1
+_DENSE_VERTICES = 101
+# Pieces either side of that stretch: samples 0..40 and 69..100 (px).
+_PIECE_LENS_PX = (40.0, 31.0)
 
 
 def _line(n, start, step):
@@ -240,6 +247,39 @@ def test_unsupported_fraction_is_the_longest_gap_over_length():
   assert frac[0] == pytest.approx(want, abs=_GAP_TOL)
   kept, keep = filter_polylines([poly], hits, 1.0, want / 2)
   assert kept == [] and not keep[0]
+
+
+def test_sample_does_not_depend_on_vertex_count():
+  ends = np.array([[0.0, 0.0, 0.0], [60.0, 20.0, 3.0]])
+  t = np.linspace(0.0, 1.0, _DENSE_VERTICES)[:, None]
+  dense = ends[0] + t * (ends[1] - ends[0])
+  a, _ = sample([ends], _STEEP_Z_SCALE)
+  b, _ = sample([dense], _STEEP_Z_SCALE)
+  assert abs(len(a) - len(b)) <= _SAMPLE_COUNT_TOL
+  # Spacing follows the z-scaled length, not the drawn vertices
+  step = np.linalg.norm(np.diff(b, axis=0) * [1, 1, _STEEP_Z_SCALE], axis=1)
+  assert step.max() <= 1.0 + _GAP_TOL
+
+
+def test_supported_pieces_split_at_the_gap():
+  poly = np.array([[0.0, 0.0, 5.0], [_GAP_POLY_PX, 0.0, 5.0]])
+  xs = np.r_[np.arange(0, _GAP_START_PX),
+             np.arange(_GAP_START_PX + _GAP_PX, _GAP_POLY_PX + 1)]
+  hits = np.column_stack([xs, np.zeros(xs.size), np.full(xs.size, 5.0)])
+  hits = hits.astype(float)
+  pieces = supported_pieces([poly], hits, 1.0, cut=_GAP_PX / 2,
+                            min_len=0.0)
+  lens = [np.ptp(p[:, 0]) for p in pieces]
+  assert lens == pytest.approx(_PIECE_LENS_PX)
+  # A cut longer than the gap keeps the polyline whole
+  whole = supported_pieces([poly], hits, 1.0, cut=2 * _GAP_PX)
+  assert len(whole) == 1 and np.ptp(whole[0][:, 0]) == _GAP_POLY_PX
+  # The shorter piece falls below min_len
+  long_only = supported_pieces([poly], hits, 1.0, cut=_GAP_PX / 2,
+                               min_len=np.mean(_PIECE_LENS_PX))
+  assert len(long_only) == 1
+  kept, keep = filter_polylines([poly], hits, 1.0, 0.0, salvage=True)
+  assert not keep[0] and len(kept) == len(_PIECE_LENS_PX)
 
 
 def test_unsupported_fraction_samples_steep_polylines_in_scaled_length():

@@ -197,7 +197,7 @@ def track_scores(g, shape, n_slices, polys, z_scale):
   gxy = np.column_stack([g["col"], g["row"]])[vis]
   gz = g["slice"][vis]
   inst, cls = g["instance"][vis], g["cls"][vis]
-  sp, sid = sample(polys)
+  sp, sid = sample(polys, z_scale)
   sp = sp - _ORIGIN_OFFSET
   hit = near(gxy, gz, sp[:, :2], sp[:, 2])
   pid = np.where(hit >= 0, sid[np.maximum(hit, 0)], -1)
@@ -292,6 +292,9 @@ def main() -> int:
   ap.add_argument("--max-gap-frac", type=float, default=None,
                   help="drop polylines whose longest unsupported "
                   "stretch exceeds this fraction of their length")
+  ap.add_argument("--salvage", action="store_true",
+                  help="keep the supported pieces of the dropped "
+                  "polylines (with --max-gap-frac)")
   ap.add_argument("--out", type=Path,
                   default=Path("results/pointcloud_eval/graphdet"))
   args = ap.parse_args()
@@ -300,7 +303,7 @@ def main() -> int:
     f"{args.variant}_k{args.dog_k:g}"
   tag += f"_z{args.z_um:g}"
   if args.max_gap_frac is not None:
-    tag += f"_g{args.max_gap_frac:g}"
+    tag += f"_g{args.max_gap_frac:g}" + ("s" if args.salvage else "")
   name = f"{ev.parent.name}__{ev.name}__{tag}"
   args.out.mkdir(parents=True, exist_ok=True)
 
@@ -318,7 +321,7 @@ def main() -> int:
     t3 = time.time()
     if args.max_gap_frac is not None:
       polys, _ = filter_polylines(polys, x, cfg.z_scale,
-                                  args.max_gap_frac)
+                                  args.max_gap_frac, args.salvage)
     t4 = time.time()
 
   reader = load_spng(ev / "image.json")

@@ -20,7 +20,9 @@ from .detectlseg import (
 )
 from .integrate import integrate_smallregions
 from .polyfit import inflection_nodes, pixellist_to_poly
-from .support import filter_polylines, unsupported_fraction
+from .support import (
+  filter_polylines, supported_pieces, unsupported_fraction,
+)
 from .simeval import (
   match_branch_points, run_pipeline, score, true_branch_points,
 )
@@ -34,6 +36,6 @@ __all__ = [
   "integrate_smallregions",
   "iter_regions", "junction_hits", "mabiki", "match_branch_points",
   "pixellist_to_poly", "refine_endpoints", "run_pipeline", "score",
-  "split_into_linear_components", "true_branch_points",
+  "split_into_linear_components", "supported_pieces", "true_branch_points",
   "unsupported_fraction",
 ]

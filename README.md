@@ -219,7 +219,15 @@ stretch with no hit within 2 px (x/y) and 1.5 slices (z) is more than
 original; tag `_g<F>`, time in `filter_s` and `total_s`). On a dense
 point cloud such as dog3dz, stage 2 also chains hits of different
 tracks across empty stretches; a hit-count cut would instead drop the
-short signal fragments. The polylines are saved (`_polys.npz`,
+short signal fragments. `--salvage` (with `--max-gap-frac`, tag
+`_g<F>s`) keeps the supported pieces of the dropped polylines instead:
+each is split at unsupported runs longer than 10 px and pieces of at
+least 10 px (z-scaled) are kept (`supported_pieces`), because a short
+real track chained to a long empty bridge would otherwise go with it.
+The scorer samples every polyline at fixed 1 px steps of z-scaled arc
+length (`support.sample`), so a polyline drawn with more vertices
+(such as the salvaged pieces, which are the support samples) is not
+weighted more. The polylines are saved (`_polys.npz`,
 `load_polys`) so `track_scores` / `quality` can re-score them without
 a rerun. `toy_twograin.py` renders one or two
 grains with e07-g4-hypernuclei's renderer and optics model and scores
