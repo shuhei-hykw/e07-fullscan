@@ -140,6 +140,27 @@ python run.py click ...           # click ground-truth vertices
 
 Each command delegates to `python -m module.<target>` with the same arguments.
 
+### Synthetic events: from Geant4 tracks to the microscope image
+
+The point cloud is measured on synthetic views from
+e07-g4-hypernuclei (image model v19, slice
+step 4.0 um). One embedded event, a Xi- capture on 12C giving a
+double-Lambda hypernucleus (LL6He) and its two weak decays:
+
+![Geant4 tracks to microscope image](docs/figures/sim_to_image.png)
+
+(a, b) Geant4 charged tracks around the capture (star) and the
+hypernuclear decays (circles); depth is in the developed emulsion,
+which shrinks along z by Sh = 1.9 on development while x and y keep
+their size. (c) The grains deposited along the tracks, more per um for
+heavier ionisation (colour: slice, size: darkness). (d) Those grains
+alone through the optics model: each grain is a Gaussian that widens
+with defocus, so only grains near the focal plane are sharp. (e) The
+same slice of the dataset, the grains rendered onto a real full-scan
+view with its fog, beam tracks, other tracks and noise. (f) Minimum
+projection over the event's slices with the true vertices. Made by
+`python scripts/sim_figure.py [--event ev0021]`.
+
 ### Measuring the point cloud (input to the graph detector)
 
 ```bash

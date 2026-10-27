@@ -1663,3 +1663,15 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - Codex に従う計画：基準は z 3.8（3.0 は互換性確認）。グラフ検出器は
   dog3dz K2 と production を eval2 の全 10 視野、dog3d K3 は 3 視野。
   担当ファイルは前の項と同じ。
+
+## 2026-10-27 06:13 JST Done (Claude, fullscan): B' on v19_embed_nagara_dz4
+- results/sim_eval/v19_embed_nagara_dz4_bprime.csv (100 events) and .done written; peer notified. graphdet3 now runs without contention.
+
+## 2026-10-27 06:42 JST 予定（Claude, fullscan）：v20_embed_nagara_dz4 で B'（ピアの依頼）
+- graphdet3（24 ケース）の後に nice 19 で実行。入力：e07-g4-hypernuclei/data/images/v20_embed_nagara_dz4（100 事象）。出力：results/sim_eval/v20_embed_nagara_dz4_bprime.csv と .done。1 事象約 7 分、計約 12 時間。
+
+## 2026-10-27 11:26 JST メモ（Claude, fullscan）：キューの修正
+- B' の終了待ちループ（B' のコマンドに pgrep -f）が自分自身のシェルに一致し、graphdet3 が始まっていなかった。停止して graphdet3 を直接起動（約 2 時間、results/pointcloud_eval/graphdet3/）。v20 の B' はその後に予約したまま（nice 19、v19 と同じ sim_bprime.py、cell 6）。
+
+## 2026-10-27 11:30 JST 完了（Claude, fullscan）：シミュレーションの図を README に（ユーザー依頼）
+- scripts/sim_figure.py → docs/figures/sim_to_image.png。v19_embed_nagara_dz4/ev0021 で、Geant4 の飛跡（平面・側面）、粒子、光学系を通した粒子だけの像（Renderer、v19 モデル）、実背景に載せたデータのスライス、最小投影。シミュレーション側のリポジトリは読むだけ。

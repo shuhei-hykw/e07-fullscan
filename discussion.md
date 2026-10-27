@@ -1740,3 +1740,15 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Plan per Codex: criteria at z 3.8 (3.0 as compatibility); graph
   detector for dog3dz K2 and production on all 10 eval2 views, dog3d K3
   on 3. Owned files unchanged from the previous entry.
+
+## 2026-10-27 06:13 JST Done (Claude, fullscan): B' on v19_embed_nagara_dz4
+- results/sim_eval/v19_embed_nagara_dz4_bprime.csv (100 events) and .done written; peer notified. graphdet3 now runs without contention.
+
+## 2026-10-27 06:42 JST Intent (Claude, fullscan): B' on v20_embed_nagara_dz4 (peer request)
+- Queued after graphdet3 (24 cases), nice 19. Input: e07-g4-hypernuclei/data/images/v20_embed_nagara_dz4 (100 ev). Output: results/sim_eval/v20_embed_nagara_dz4_bprime.csv + .done. ~7 min/event, ~12 h.
+
+## 2026-10-27 11:26 JST Note (Claude, fullscan): queue fix
+- The wait-for-B' loops (pgrep -f on the B' command) matched their own shell, so graphdet3 never started. Killed; graphdet3 started directly (~2 h, results/pointcloud_eval/graphdet3/). v20 B' still queued behind it (nice 19, same sim_bprime.py as v19, cell 6).
+
+## 2026-10-27 11:30 JST Done (Claude, fullscan): sim figure in README (user request)
+- scripts/sim_figure.py -> docs/figures/sim_to_image.png: v19_embed_nagara_dz4/ev0021, Geant4 tracks (plane, side), grains, grains through the optics (Renderer, v19 model), dataset slice on the real background, min projection. Reads the sim repo only.
