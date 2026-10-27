@@ -1791,3 +1791,10 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Inputs: e07-g4-hypernuclei/data/images/v19_synth_eval3_dz4 and v19_embed_eval3_dz4 (10 ev each).
 - Phase 1 (v20 B' keeps running): eval_pointcloud {classifier, otsu_rand, dog3dz} K2 on synth, {classifier, dog3dz} K2 on embed -> results/pointcloud_eval/v19_eval3/; graphdet_pointcloud {production, dog3dz unfiltered} on both sets, two at a time -> results/pointcloud_eval/graphdet_eval3/.
 - Phase 2 (timing): v20 B' paused with SIGSTOP (resumed by trap), sequential {production, dog3dz --max-gap-frac 0.4} on synth, AB then BA per view -> results/pointcloud_eval/graphdet_eval3_timing/{r1,r2}/. B' finishes about 1 h later than it would have.
+
+## 2026-10-27 21:36 JST Result (Claude, fullscan): eval3 verdict
+- Frozen criteria (analysis-note 17:31) applied; eval3 is now used up. Details in analysis-note 21:36.
+- Point cloud dog3dz K2: (a), (b), (e) and embed all pass.
+- Graph detector dog3dz + F 0.4 fails. synth sig best_good 0.326 vs needed 0.335 (prod 0.135) and vs filter-cost floor 0.332 (unfiltered 0.382). embed: filter loses 5 signal tracks (limit unfiltered 0 + 3). Fake ratio 1.24, timing 0.97x median, RSS 1.25x pass.
+- All filter-lost signal tracks are short (6-39 grains). A fractional gap cut hits short tracks; next is an absolute-gap or short-exemption rule, designed on tune, checked on a new unused set (eval4). F 0.45 is not adopted, as frozen.
+- v20 B' was resumed after the timing phase.

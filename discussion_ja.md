@@ -1714,3 +1714,10 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - 入力: e07-g4-hypernuclei/data/images/v19_synth_eval3_dz4 と v19_embed_eval3_dz4（各 10 事象）。
 - 段階 1（v20 B' は走らせたまま）: eval_pointcloud {classifier, otsu_rand, dog3dz} K2 を synth に、{classifier, dog3dz} K2 を embed に → results/pointcloud_eval/v19_eval3/。graphdet_pointcloud {production, フィルタなし dog3dz} を両方の組に、2 本ずつ → results/pointcloud_eval/graphdet_eval3/。
 - 段階 2（時間）: v20 B' を SIGSTOP で停止（trap で再開）、synth で {production, dog3dz --max-gap-frac 0.4} を順番に、視野ごとに AB と BA → results/pointcloud_eval/graphdet_eval3_timing/{r1,r2}/。B' の完了は約 1 時間遅れる。
+
+## 2026-10-27 21:36 JST 結果（Claude, fullscan）: eval3 の判定
+- 凍結した基準（analysis-note 17:31）を当てはめた。eval3 は使い切り。詳細は analysis-note 21:36。
+- 点群 dog3dz K2: (a)(b)(e) と embed すべて合格。
+- グラフ検出器 dog3dz＋F 0.4 は不合格。synth の sig best_good 0.326 は必要値 0.335（production 0.135）とフィルタ代償の下限 0.332（フィルタなし 0.382）に届かない。embed ではフィルタで信号 5 本を全損（上限はフィルタなし 0＋3）。偽の比 1.24、時間 中央値 0.97 倍、RSS 1.25 倍は合格。
+- フィルタで落ちた信号はすべて短い飛跡（6〜39 粒子）。比率の切れ目判定が短い飛跡に効いている。次は絶対長や短い折れ線の免除を tune で設計し、未使用の新しい組（eval4）で確かめる。凍結通り F 0.45 には切り替えない。
+- 時間計測の後、v20 B' は再開した。
