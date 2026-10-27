@@ -1756,3 +1756,10 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 ## 2026-10-27 12:54 JST Intent (Claude, fullscan): v19 eval2, criteria frozen
 - Criteria frozen in analysis-note.md (this time) before any eval2 output.
 - Runs on e07-g4-hypernuclei/data/images/v19_synth_eval2_dz4 (10 ev): eval_pointcloud {classifier, otsu_rand, dog3d, dog3dz} K3 and {dog3d, dog3dz} K2 -> results/pointcloud_eval/v19_eval2/; graphdet z 3.8 {production, dog3dz K2} x 10 ev, {dog3d K3} x 3 ev, z 3.0 {production, dog3dz K2} x 3 ev -> results/pointcloud_eval/graphdet_eval2/. Runs alongside v20 B' (nice 19).
+
+## 2026-10-27 15:30 JST Done (Claude, fullscan): v19 eval2 verdict
+- Frozen criteria applied once to v19_synth_eval2_dz4 (10 views); eval2 is now spent. Details in analysis-note.md.
+- dog3dz K2 passes (a) bg xrecall >= 4.17x classifier, per-hit >= 1.66x otsu_rand; (b) stratum loss below classifier (short 0.474), signal total loss 3 vs 22; (e) dz p90 <= classifier 10/10, |bias| <= 0.017. On grains both detect, |dz| median 0.76 -> 0.60 but p90 equal (1.36): the p90 gain comes from which grains are found.
+- Fails (c) fake length per view, median ratio 2.91 vs production (limit 2; ~3x in the 8 sparse views), and (d) max total_s ratio 2.53 (limit 2.5; median 1.79, v20 B' running alongside). The rest of (c) passes: sig best_good 0.419 vs 0.174, bg good 0.743 vs 0.002, main_share_all 10/10, main_frac -0.06.
+- My error: the freeze note's "fake length 1.54x on tune" was the pooled ratio; per-view median on tune was already 3.18. Criteria not rewritten; counted as fail.
+- Conclusion: better point cloud, but no production replacement. Next: tune stage-2 fake suppression for a denser cloud on v19 tune; a fresh unused set will be needed for the next held-out check.

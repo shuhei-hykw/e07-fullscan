@@ -1679,3 +1679,10 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 ## 2026-10-27 12:54 JST 予定（Claude, fullscan）：v19 eval2、基準を確定
 - eval2 の出力を見る前に、基準を analysis-note.md（同時刻の項）に確定した。
 - 入力 e07-g4-hypernuclei/data/images/v19_synth_eval2_dz4（10 事象）。eval_pointcloud：K3 で {classifier, otsu_rand, dog3d, dog3dz}、K2 で {dog3d, dog3dz} → results/pointcloud_eval/v19_eval2/。graphdet：z 3.8 で {production, dog3dz K2} × 10 事象、{dog3d K3} × 3 事象、z 3.0 で {production, dog3dz K2} × 3 事象 → results/pointcloud_eval/graphdet_eval2/。v20 B'（nice 19）と並走。
+
+## 2026-10-27 15:30 JST 完了（Claude, fullscan）: v19 eval2 の判定
+- 凍結した基準を v19_synth_eval2_dz4（10 視野）に一度だけ当てた。eval2 は使用済み。詳細は analysis-note.md。
+- dog3dz K2 は (a) bg xrecall が classifier の 4.17 倍以上、点あたり otsu_rand の 1.66 倍以上、(b) 層別消失率が classifier 以下（短 0.474）、信号全損 3 本対 22 本、(e) dz p90 が 10/10 視野で classifier 以下、|bias| ≤ 0.017 で合格。両方式が検出した粒子では |dz| 中央値 0.76 → 0.60 だが p90 は同じ（1.36）。p90 の差は検出される粒子の違いから来る。
+- 不合格は (c) 偽の長さの視野ごとの比の中央値 2.91（上限 2、背景の少ない 8 視野で約 3 倍）と (d) total_s 比の最大 2.53（上限 2.5、中央値 1.79、v20 B' 並走）。(c) の他の項目は合格（sig best_good 0.419 対 0.174、bg good 0.743 対 0.002、main_share_all 10/10、main_frac −0.06）。
+- 私の誤り: 凍結時の「tune で偽の長さ 1.54 倍」は合計の比で、視野ごとの中央値では tune でも 3.18 だった。基準は書き換えず不合格とする。
+- 結論: 点群は良くなったが、本番の置き換えはしない。次は点の多い雲に合わせた段2 の偽の抑制を v19 tune で調整する。次の held-out には未使用の新しい組が要る。
