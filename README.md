@@ -356,6 +356,12 @@ All three stages are ported.
 whole tracks — chaining them end to end, re-fitting each chain against
 the hits it owns (`pixellist_to_poly()`, from `pixellist2poly.m`), and
 finally joining polylines across the gaps that chaining cannot bridge.
+The two join tests (`isaline3.m`, `isaline3a.m`) are evaluated for all
+candidates of a stub at once (`is_a_line3_batch`, `is_a_line3a_batch`);
+the scalar ports stay as the reference. Same arithmetic, so the same
+decisions up to round-off at a threshold (one polyline of 48,700
+differed in one of four tested views); stage 2 on a dense synthetic
+view went from ~150 s to ~60-80 s.
 `detect_branches()` (from `detectbunki.m`) then groups tracks that meet:
 a hit lying on one track's body and at another's end is evidence of a
 branch, and the groups are the connected components of that relation.

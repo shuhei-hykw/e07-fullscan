@@ -1691,3 +1691,15 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - グラフ検出器の E07 用 z 倍率を 3.8 µm/スライス（中心値）に切り替えることをユーザーが承認。MATLAB_Z_SCALE（3.0/0.29）は MATLAB の参照シミュレーションでは正しく、work1.mat の照合が依存するので残す。
 - 担当ファイル: module/graphdet/config.py（E07_Z_SCALE 1.5/0.29 → 3.8/0.29、注記修正、E07_SLICE_UM を追加）、scripts/graphdet_specials.py・scripts/graphdet_pointcloud.py（既定を E07_Z_SCALE に）、README.md、STATUS.md。
 - 走行中の v20 B'（sim_bprime.py、変更前に読み込み済み）は 3.0/0.29 のままで、v19 B' と比較可能。
+
+## 2026-10-27 16:40 JST 意図（Claude, fullscan）: 段2 の偽の抑制、tune での実行
+- ユーザー承認: 点の多い dog3dz の雲で偽の折れ線の長さが約 3 倍になる問題を、グラフ検出器側で調整する。本番の置き換えは保留。
+- 実行: graphdet_pointcloud.py {production, dog3dz K2} z 3.8 を v19_synth_tune_dz4 ev0003〜ev0009 に（ev0000〜0002 は graphdet3 にある）→ results/pointcloud_eval/graphdet_tune10/。2 本ずつ、workers 8、v20 B'（nice 19）と並走。
+- 偽の折れ線（purity < 0.3）を長さ・hit の支持・粒子の応答で調べ、折れ線のフィルタか段1/2 の設定を設計する。tune のみ。eval3（v19_synth_eval3_dz4 / v19_embed_eval3_dz4）は基準を再凍結するまで開けない。
+- 担当ファイル: scripts/graphdet_pointcloud.py（フィルタ追加予定）、results/pointcloud_eval/graphdet_tune10/。
+
+## 2026-10-27 16:22 JST 意図（Claude, fullscan）: 段2 の is_a_line3 を一括化（高速化、出力は同じ）
+- 時刻の訂正: 本日 16:05・16:40 と書いた私のエントリは、実際は 15:50 頃・16:00 頃に書いた（時計を確かめずに推測した）。内容は変更なし。
+- プロファイル（tune ev0001 dog3dz、z 3.8）: cProfile 下で段2 249 s のうち is_a_line3 が 135 s、_chain_segments から 600 万回（候補 1 つごとに 1 回）。
+- 計画: module/graphdet/geom.py に一括版 is_a_line3_batch を足し、module/graphdet/integrate.py の _chain_segments から呼ぶ。出力の折れ線が同じであることを、実の dog3dz / production 視野でスカラー版と比べ、check_polylines_reference.py と tests/test_graphdet.py でも確かめる。
+- 担当ファイル: module/graphdet/geom.py、module/graphdet/integrate.py、tests/test_graphdet.py（一括版とスカラー版の一致テスト）。

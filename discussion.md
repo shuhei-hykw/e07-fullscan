@@ -1768,3 +1768,15 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - User approved switching the graph detector's E07 z scale to the 3.8 um/slice central value. MATLAB_Z_SCALE (3.0/0.29) stays: it is right for the MATLAB reference simulation and the work1.mat checks depend on it.
 - Owned files: module/graphdet/config.py (E07_Z_SCALE 1.5/0.29 -> 3.8/0.29, comment fixed, new E07_SLICE_UM), scripts/graphdet_specials.py and scripts/graphdet_pointcloud.py (default to E07_Z_SCALE), README.md, STATUS.md.
 - The running v20 B' (sim_bprime.py, imported before the change) keeps 3.0/0.29, so it stays comparable with v19 B'.
+
+## 2026-10-27 16:40 JST Intent (Claude, fullscan): stage-2 fake suppression, tune runs
+- User approved: tune the graph detector side so the denser dog3dz cloud does not produce ~3x fake polyline length; production replacement deferred.
+- Runs: graphdet_pointcloud.py {production, dog3dz K2} z 3.8 on v19_synth_tune_dz4 ev0003-ev0009 (ev0000-0002 already in graphdet3) -> results/pointcloud_eval/graphdet_tune10/. Two at a time, workers 8, alongside v20 B' (nice 19).
+- Analysis of fake polylines (purity < 0.3) by length, hit support and grain response, to design a polyline filter or stage-1/2 settings; tune only. eval3 (v19_synth_eval3_dz4 / v19_embed_eval3_dz4) stays unopened until criteria are frozen again.
+- Owned files: scripts/graphdet_pointcloud.py (filter option to come), results/pointcloud_eval/graphdet_tune10/.
+
+## 2026-10-27 16:22 JST Intent (Claude, fullscan): batch is_a_line3 in stage 2 (speed, same output)
+- Time correction: my entries headed 16:05 and 16:40 today were written at about 15:50 and 16:00 (guessed clock, not checked). Content unchanged.
+- Profile (tune ev0001 dog3dz, z 3.8): stage 2 249 s under cProfile, of which is_a_line3 135 s over 6.0M calls from _chain_segments (one call per candidate).
+- Plan: add a vectorised is_a_line3_batch in module/graphdet/geom.py and call it from _chain_segments in module/graphdet/integrate.py. Must give the same polylines: checked against the scalar path on real dog3dz/production views, plus check_polylines_reference.py and tests/test_graphdet.py.
+- Owned files: module/graphdet/geom.py, module/graphdet/integrate.py, tests/test_graphdet.py (a batch-vs-scalar test).

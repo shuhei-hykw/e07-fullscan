@@ -268,6 +268,48 @@ def is_a_line3(lseg1: np.ndarray, lseg2: np.ndarray,
   return float(np.linalg.norm(gap * weights))
 
 
+# Endpoint orders isaline3 accepts: in line, or the two focus endpoints
+# overlapping. Rows 0..3 are far1, focus1, focus2, far2.
+_LINE3_ORDERS = np.array([[0, 1, 2, 3], [3, 2, 1, 0],
+                          [0, 2, 1, 3], [3, 1, 2, 0]])
+
+
+def is_a_line3_batch(lseg1: np.ndarray, others: np.ndarray,
+                     cfg: DetectorConfig = MATLAB_CONFIG) -> np.ndarray:
+  """is_a_line3(lseg1, others[k]) for every k at once.
+
+  ``others`` is (K, 2, D), each focus point first. Same arithmetic as
+  the scalar version, so the same accept/reject decisions and gaps;
+  stage 2 calls this once per stub instead of once per candidate.
+  """
+  out = np.full(len(others), np.inf)
+  v1 = lseg1[1] - lseg1[0]
+  v2 = others[:, 1] - others[:, 0]
+  n1 = np.linalg.norm(v1)
+  n2 = np.linalg.norm(v2, axis=1)
+  if n1 == 0:
+    return out
+  ok = n2 > 0
+  ok[ok] = (v1 / n1) @ (v2[ok] / n2[ok, None]).T <= 0
+  idx = np.flatnonzero(ok)
+  if not idx.size:
+    return out
+  lseg = np.concatenate([np.broadcast_to(lseg1[::-1], (idx.size,) +
+                                         lseg1.shape), others[idx]],
+                        axis=1)
+  c = lseg - lseg.mean(axis=1, keepdims=True)
+  vt = np.linalg.svd(c, full_matrices=False)[2]
+  y = c @ np.swapaxes(vt, 1, 2)
+  ok = norma(y[:, :, 1:], 2).max(axis=1) <= cfg.join_max_residual
+  order = np.argsort(y[:, :, 0], axis=1, kind="stable")
+  ok &= (order[:, None, :] == _LINE3_ORDERS[None]).all(2).any(1)
+  y = np.take_along_axis(y, order[:, :, None], axis=1)
+  gap = y[:, 2] - y[:, 1]
+  weights = np.array([_JOIN_ALONG_WEIGHT] + [1.0] * (gap.shape[1] - 1))
+  out[idx[ok]] = np.linalg.norm(gap[ok] * weights, axis=1)
+  return out
+
+
 def is_a_line3a(lseg1: np.ndarray, lseg2: np.ndarray,
                 cfg: DetectorConfig = MATLAB_CONFIG) -> float:
   """Port of isaline3a.m: may two polylines be joined end to end?
@@ -314,6 +356,63 @@ def is_a_line3a(lseg1: np.ndarray, lseg2: np.ndarray,
     return np.inf
   return float(np.degrees(np.arccos(
     np.clip(-((u1 / n1) @ (u2 / n2)), -1.0, 1.0))))
+
+
+def _point_to_line(a: np.ndarray, b: np.ndarray,
+                   x: np.ndarray) -> np.ndarray:
+  """Row-wise min_distance_to_lineseg(stack([a, b]), x[None])[1][0]."""
+  du = b - a
+  with np.errstate(invalid="ignore", divide="ignore"):
+    du = du / np.linalg.norm(du, axis=1, keepdims=True)
+  el = (x * du).sum(1) - (a * du).sum(1)
+  return norma(x - (el[:, None] * du + a), 1)
+
+
+def is_a_line3a_batch(lseg1: np.ndarray, others: np.ndarray,
+                      cfg: DetectorConfig = MATLAB_CONFIG) -> np.ndarray:
+  """is_a_line3a(lseg1, others[k]) for every k at once (K, 2, D)."""
+  out = np.full(len(others), np.inf)
+  d = np.linalg.norm(lseg1[None, :, None, :] - others[:, None, :, :],
+                     axis=3)
+  # MATLAB's column-major first minimum is (0, 0) iff d00 is not
+  # beaten by any other pair (ties go to d00, scanned first)
+  ok = d[:, 0, 0] <= np.minimum(np.minimum(d[:, 1, 0], d[:, 0, 1]),
+                                d[:, 1, 1])
+  v1 = lseg1[1] - lseg1[0]
+  v2 = others[:, 1] - others[:, 0]
+  n1 = np.linalg.norm(v1)
+  n2 = np.linalg.norm(v2, axis=1)
+  if n1 == 0:
+    return out
+  ok &= n2 > 0
+  ok[ok] = (v1 / n1) @ (v2[ok] / n2[ok, None]).T <= 0
+  idx = np.flatnonzero(ok)
+  if not idx.size:
+    return out
+  o = others[idx]
+  lseg = np.concatenate([np.broadcast_to(lseg1[::-1], (idx.size,) +
+                                         lseg1.shape), o], axis=1)
+  c = lseg - lseg.mean(axis=1, keepdims=True)
+  vt = np.linalg.svd(c, full_matrices=False)[2]
+  y = (c * vt[:, None, 0, :]).sum(2)
+  flip = y[:, 0] > y[:, -1]
+  y[flip] = y[flip, ::-1]
+  ok = y[:, 2] - y[:, 1] >= -cfg.join_max_overlap
+  mid = 0.5 * (lseg1[0] + o[:, 0])
+  far1 = np.broadcast_to(lseg1[1], mid.shape)
+  er = (_point_to_line(mid, far1, np.broadcast_to(lseg1[0], mid.shape))
+        + _point_to_line(mid, o[:, 1], o[:, 0]))
+  # A NaN error (zero-length bend) passes here, as in the scalar port,
+  # and is rejected below by the zero-length check
+  ok &= ~(er > cfg.join_max_kink)
+  u1, u2 = mid - far1, mid - o[:, 1]
+  m1 = np.linalg.norm(u1, axis=1)
+  m2 = np.linalg.norm(u2, axis=1)
+  ok &= (m1 > 0) & (m2 > 0)
+  with np.errstate(invalid="ignore", divide="ignore"):
+    cos = -((u1 / m1[:, None]) * (u2 / m2[:, None])).sum(1)
+  out[idx[ok]] = np.degrees(np.arccos(np.clip(cos[ok], -1.0, 1.0)))
+  return out
 
 
 # mindistance_to_polyline.m calls two segments equidistant within this.

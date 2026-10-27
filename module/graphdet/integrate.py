@@ -25,8 +25,8 @@ from scipy.spatial import cKDTree
 
 from .config import MATLAB_CONFIG, DetectorConfig
 from .geom import (
-  hits_near_polyline, is_a_line3, is_a_line3a, min_distance_to_polyline,
-  norma,
+  hits_near_polyline, is_a_line3_batch, is_a_line3a_batch,
+  min_distance_to_polyline, norma,
 )
 from .polyfit import pixellist_to_poly
 # Slack (px) on the "is this hit inside the polyline's extent?" test.
@@ -125,9 +125,9 @@ def _chain_segments(lseg: np.ndarray,
         segs, ends = index.near(stub[0])
         if segs.size == 0:
           break
-        d = np.array([
-          is_a_line3(stub, lseg[[e, 1 - e], :, s], cfg)
-          for s, e in zip(segs, ends)])
+        cand = np.stack([lseg[ends, :, segs], lseg[1 - ends, :, segs]],
+                        axis=1)
+        d = is_a_line3_batch(stub, cand, cfg)
         k = int(np.argmin(d))
         if np.isinf(d[k]):
           break
@@ -229,10 +229,9 @@ def _join_polylines(
         segs, ends = index.near(stub[0])
         if segs.size == 0:
           break
-        d = np.array([
-          is_a_line3a(
-            stub, polylines[s][[0, 1] if e == 0 else [-1, -2]], cfg)
-          for s, e in zip(segs, ends)])
+        d = is_a_line3a_batch(stub, np.stack([
+          polylines[s][[0, 1] if e == 0 else [-1, -2]]
+          for s, e in zip(segs, ends)]), cfg)
         k = int(np.argmin(d))
         sole = int(np.isfinite(d).sum()) == 1
         if not (d[k] < _JOIN_ANGLE_DEG

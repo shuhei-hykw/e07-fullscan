@@ -11,6 +11,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from module.graphdet.geom import (
+  is_a_line3, is_a_line3_batch, is_a_line3a, is_a_line3a_batch,
+)
 from module.graphdet import (
   MATLAB_CONFIG, branch_points, detect_branches, detect_lseg_smallregion,
   detect_lseg_view, inflection_nodes, integrate_smallregions,
@@ -26,6 +29,12 @@ MATLAB_DIR = Path(os.environ.get(
 _MAX_ENDPOINT_ERR_PX = 1e-6
 # Sub-regions checked by the fast reference test.
 _QUICK_REGIONS = 16
+# Random stub/candidate sets for the batch-vs-scalar isaline3 check.
+_BATCH_SEED = 0
+_BATCH_TRIALS = 200
+_BATCH_K = 8
+# arccos near 0 deg turns round-off into ~1e-11 deg.
+_ANGLE_TOL_DEG = 1e-9
 
 
 def _line(n, start, step):
@@ -187,6 +196,40 @@ def test_crossing_tracks_stay_separate():
   lseg = np.stack([np.array([hits[0], hits[39]]),
                    np.array([hits[40], hits[79]])], axis=2)
   assert len(integrate_smallregions(hits, lseg)) == 2
+
+
+def test_is_a_line3_batch_matches_the_scalar_port():
+  rng = np.random.default_rng(_BATCH_SEED)
+  for _ in range(_BATCH_TRIALS):
+    stub = rng.normal(size=(2, 3)) * 5
+    d = (stub[0] - stub[1]) / np.linalg.norm(stub[0] - stub[1])
+    base = stub[0] + rng.normal(size=(_BATCH_K, 1)) * 3 * d
+    far = base + d * rng.uniform(1, 10, (_BATCH_K, 1)) \
+      + rng.normal(size=(_BATCH_K, 3))
+    cand = np.stack([base, far], axis=1)
+    cand[0, 1] = cand[0, 0]  # a degenerate segment
+    want = np.array([is_a_line3(stub, c) for c in cand])
+    got = is_a_line3_batch(stub, cand)
+    assert np.array_equal(np.isinf(want), np.isinf(got))
+    fin = np.isfinite(want)
+    assert np.allclose(got[fin], want[fin], rtol=1e-12, atol=0)
+
+
+def test_is_a_line3a_batch_matches_the_scalar_port():
+  rng = np.random.default_rng(_BATCH_SEED)
+  for _ in range(_BATCH_TRIALS):
+    stub = rng.normal(size=(2, 3)) * 3
+    d = (stub[0] - stub[1]) / np.linalg.norm(stub[0] - stub[1])
+    base = stub[0] + rng.normal(size=(_BATCH_K, 3))
+    far = base + d * rng.uniform(1, 6, (_BATCH_K, 1)) \
+      + rng.normal(size=(_BATCH_K, 3))
+    cand = np.stack([base, far], axis=1)
+    cand[0, 1] = cand[0, 0]  # a degenerate stub
+    want = np.array([is_a_line3a(stub, c) for c in cand])
+    got = is_a_line3a_batch(stub, cand)
+    assert np.array_equal(np.isinf(want), np.isinf(got))
+    fin = np.isfinite(want)
+    assert np.allclose(got[fin], want[fin], rtol=0, atol=_ANGLE_TOL_DEG)
 
 
 def test_inflection_nodes_finds_a_single_bend():
