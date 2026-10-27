@@ -43,6 +43,11 @@ _GAP_POLY_PX = 100
 _GAP_START_PX = 40
 _GAP_PX = 30
 _GAP_TOL = 1e-9
+# Steep line for the scaled-sampling check (E07 z scale 3.8 / 0.29).
+_STEEP_SLICES = 3.2
+_STEEP_Z_SCALE = 3.8 / 0.29
+_STEEP_WANT = 0.2 / 3.2
+_STEEP_TOL = 0.015
 
 
 def _line(n, start, step):
@@ -235,6 +240,19 @@ def test_unsupported_fraction_is_the_longest_gap_over_length():
   assert frac[0] == pytest.approx(want, abs=_GAP_TOL)
   kept, keep = filter_polylines([poly], hits, 1.0, want / 2)
   assert kept == [] and not keep[0]
+
+
+def test_unsupported_fraction_samples_steep_polylines_in_scaled_length():
+  # A steep 3.2-slice line with hits only at its ends: the boxes reach
+  # 1.5 slices from each end, leaving 0.2 slices (6.25%) unsupported.
+  poly = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, _STEEP_SLICES]])
+  frac = unsupported_fraction([poly], poly.copy(), _STEEP_Z_SCALE)[0]
+  assert frac == pytest.approx(_STEEP_WANT, abs=_STEEP_TOL)
+  # Splitting the same line at extra vertices changes little
+  split = np.array([[0.0, 0.0, z] for z in (0.0, 1.0, 2.2,
+                                            _STEEP_SLICES)])
+  frac2 = unsupported_fraction([split], poly.copy(), _STEEP_Z_SCALE)[0]
+  assert frac2 == pytest.approx(frac, abs=_STEEP_TOL)
 
 
 def test_is_a_line3a_batch_matches_the_scalar_port():
