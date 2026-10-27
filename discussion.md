@@ -1785,3 +1785,9 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Tune result (10 views, dog3dz K2, z 3.8): dropping polylines whose longest stretch without a dog3dz hit (2 px x 1.5 slice box) exceeds a fraction of their length cuts fake length to 1.57x production (median; max 1.95) at 0.4, with sig best_good 0.344 (unfiltered 0.366, production 0.097) and bg good 0.528 (production 0.002). Hit-count cuts cost more signal. 0.45 being scored for margin.
 - New module/graphdet/support.py (sampling, unsupported fraction, filter); scripts/graphdet_pointcloud.py gets --max-gap-frac (tag _g<frac>, filter time in total_s). Not wired into graphdet_specials.py (production unchanged).
 - Owned files: module/graphdet/support.py, module/graphdet/__init__.py, scripts/graphdet_pointcloud.py, tests/test_graphdet.py, README.md.
+
+## 2026-10-27 17:32 JST Intent (Claude, fullscan): eval3 run, criteria frozen
+- Criteria frozen in analysis-note.md (17:31 entry) before opening eval3. Primary dog3dz K2 + support-gap filter F 0.4 (module/graphdet/support.py), z 3.8; F 0.45 reported only.
+- Inputs: e07-g4-hypernuclei/data/images/v19_synth_eval3_dz4 and v19_embed_eval3_dz4 (10 ev each).
+- Phase 1 (v20 B' keeps running): eval_pointcloud {classifier, otsu_rand, dog3dz} K2 on synth, {classifier, dog3dz} K2 on embed -> results/pointcloud_eval/v19_eval3/; graphdet_pointcloud {production, dog3dz unfiltered} on both sets, two at a time -> results/pointcloud_eval/graphdet_eval3/.
+- Phase 2 (timing): v20 B' paused with SIGSTOP (resumed by trap), sequential {production, dog3dz --max-gap-frac 0.4} on synth, AB then BA per view -> results/pointcloud_eval/graphdet_eval3_timing/{r1,r2}/. B' finishes about 1 h later than it would have.

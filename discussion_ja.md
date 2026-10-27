@@ -1708,3 +1708,9 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - tune の結果（10 視野、dog3dz K2、z 3.8）: dog3dz の hit（2 px × 1.5 スライスの箱）が無い最長区間が長さのある割合を超える折れ線を落とすと、0.4 で偽の長さが production の 1.57 倍（中央値、最大 1.95）、sig best_good 0.344（フィルタなし 0.366、production 0.097）、bg good 0.528（production 0.002）。hit 数での切断は信号の損失が大きい。余裕を見るため 0.45 を採点中。
 - 新規 module/graphdet/support.py（標本化、支持なし割合、フィルタ）。scripts/graphdet_pointcloud.py に --max-gap-frac（タグ _g<割合>、フィルタ時間は total_s に含める）。graphdet_specials.py には入れない（本番は不変）。
 - 担当ファイル: module/graphdet/support.py、module/graphdet/__init__.py、scripts/graphdet_pointcloud.py、tests/test_graphdet.py、README.md。
+
+## 2026-10-27 17:32 JST 意図（Claude, fullscan）: eval3 の実行、基準は凍結済み
+- 基準は eval3 を開ける前に analysis-note.md（17:31 のエントリ）で凍結。主は dog3dz K2 + 支持の切れ目フィルタ F 0.4（module/graphdet/support.py）、z 3.8。F 0.45 は報告のみ。
+- 入力: e07-g4-hypernuclei/data/images/v19_synth_eval3_dz4 と v19_embed_eval3_dz4（各 10 事象）。
+- 段階 1（v20 B' は走らせたまま）: eval_pointcloud {classifier, otsu_rand, dog3dz} K2 を synth に、{classifier, dog3dz} K2 を embed に → results/pointcloud_eval/v19_eval3/。graphdet_pointcloud {production, フィルタなし dog3dz} を両方の組に、2 本ずつ → results/pointcloud_eval/graphdet_eval3/。
+- 段階 2（時間）: v20 B' を SIGSTOP で停止（trap で再開）、synth で {production, dog3dz --max-gap-frac 0.4} を順番に、視野ごとに AB と BA → results/pointcloud_eval/graphdet_eval3_timing/{r1,r2}/。B' の完了は約 1 時間遅れる。
