@@ -1815,3 +1815,10 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 
 ## 2026-10-28 00:10 JST Intent (Claude, fullscan): B' background-only control (peer request)
 - B' with the same settings as v20 (MATLAB config, z_scale 3.0, classifier export, cell 6) on the 100 unmodified real background views (truth.json background_view of v20_embed_nagara_dz4), same event names -> results/sim_eval/v19_bgonly_nagara_dz4_bprime.csv + .done. Scratch sim_bprime_bg.py, nice 19; paused during any timing phase.
+
+## 2026-10-28 00:17 JST Intent (Claude, fullscan): eval4 run, criteria frozen
+- Criteria frozen in analysis-note.md (00:16 entry) before opening eval4; code f151e8a. Primary dog3dz K2 + F 0.4 + salvage C10 L10, z 3.8; new short-track (<15 um) stratum check.
+- Inputs: e07-g4-hypernuclei/data/images/v19_synth_eval4_dz4 and v19_embed_eval4_dz4 (10 ev each, short-track enriched).
+- Phase 1 (bg-only B' keeps running at nice 19): eval_pointcloud -> results/pointcloud_eval/v19_eval4/; graphdet_pointcloud {production, dog3dz unfiltered} on both sets -> results/pointcloud_eval/graphdet_eval4/.
+- Phase 2 (timing): bg-only B' paused (SIGSTOP), {production, dog3dz --max-gap-frac 0.4 --salvage} AB/BA -> results/pointcloud_eval/graphdet_eval4_timing/{r1,r2}/, then B' resumed.
+- Phase 3: re-score from saved polylines (scratch rescore_v2.py) for production, unfiltered, drop, hybrid.

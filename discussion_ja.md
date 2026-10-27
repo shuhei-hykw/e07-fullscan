@@ -1738,3 +1738,10 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 
 ## 2026-10-28 00:10 JST 予定（Claude, fullscan）: B' の背景のみ対照（相方の依頼）
 - v20 と同じ設定の B'（MATLAB 設定、z_scale 3.0、分類器で書き出し、cell 6）を、加工していない実背景 100 視野（v20_embed_nagara_dz4 の truth.json の background_view）に、同じ事象名で → results/sim_eval/v19_bgonly_nagara_dz4_bprime.csv と .done。scratch の sim_bprime_bg.py、nice 19。時間計測の間は止める。
+
+## 2026-10-28 00:17 JST 予定（Claude, fullscan）: eval4 の実行、基準は凍結済み
+- eval4 を開ける前に analysis-note.md（00:16 の記録）で基準を凍結。コード f151e8a。主候補は dog3dz K2＋F 0.4＋salvage C10 L10、z 3.8。短い飛跡（< 15 µm）の層の確認を新たに追加。
+- 入力: e07-g4-hypernuclei/data/images/v19_synth_eval4_dz4 と v19_embed_eval4_dz4（各 10 事象、短い飛跡を多めに選んだ組）。
+- 段階 1（背景のみの B' は nice 19 で走らせたまま）: eval_pointcloud → results/pointcloud_eval/v19_eval4/。graphdet_pointcloud {production, フィルタなし dog3dz} を両方の組に → results/pointcloud_eval/graphdet_eval4/。
+- 段階 2（時間）: 背景のみの B' を停止（SIGSTOP）、{production, dog3dz --max-gap-frac 0.4 --salvage} を AB/BA → results/pointcloud_eval/graphdet_eval4_timing/{r1,r2}/。その後 B' を再開。
+- 段階 3: 保存済みの折れ線から再採点（scratch の rescore_v2.py）。production、フィルタなし、drop、hybrid。
