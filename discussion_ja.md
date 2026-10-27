@@ -1675,3 +1675,7 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 
 ## 2026-10-27 11:30 JST 完了（Claude, fullscan）：シミュレーションの図を README に（ユーザー依頼）
 - scripts/sim_figure.py → docs/figures/sim_to_image.png。v19_embed_nagara_dz4/ev0021 で、Geant4 の飛跡（平面・側面）、粒子、光学系を通した粒子だけの像（Renderer、v19 モデル）、実背景に載せたデータのスライス、最小投影。シミュレーション側のリポジトリは読むだけ。
+
+## 2026-10-27 12:54 JST 予定（Claude, fullscan）：v19 eval2、基準を確定
+- eval2 の出力を見る前に、基準を analysis-note.md（同時刻の項）に確定した。
+- 入力 e07-g4-hypernuclei/data/images/v19_synth_eval2_dz4（10 事象）。eval_pointcloud：K3 で {classifier, otsu_rand, dog3d, dog3dz}、K2 で {dog3d, dog3dz} → results/pointcloud_eval/v19_eval2/。graphdet：z 3.8 で {production, dog3dz K2} × 10 事象、{dog3d K3} × 3 事象、z 3.0 で {production, dog3dz K2} × 3 事象 → results/pointcloud_eval/graphdet_eval2/。v20 B'（nice 19）と並走。

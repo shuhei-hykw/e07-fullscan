@@ -1752,3 +1752,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 
 ## 2026-10-27 11:30 JST Done (Claude, fullscan): sim figure in README (user request)
 - scripts/sim_figure.py -> docs/figures/sim_to_image.png: v19_embed_nagara_dz4/ev0021, Geant4 tracks (plane, side), grains, grains through the optics (Renderer, v19 model), dataset slice on the real background, min projection. Reads the sim repo only.
+
+## 2026-10-27 12:54 JST Intent (Claude, fullscan): v19 eval2, criteria frozen
+- Criteria frozen in analysis-note.md (this time) before any eval2 output.
+- Runs on e07-g4-hypernuclei/data/images/v19_synth_eval2_dz4 (10 ev): eval_pointcloud {classifier, otsu_rand, dog3d, dog3dz} K3 and {dog3d, dog3dz} K2 -> results/pointcloud_eval/v19_eval2/; graphdet z 3.8 {production, dog3dz K2} x 10 ev, {dog3d K3} x 3 ev, z 3.0 {production, dog3dz K2} x 3 ev -> results/pointcloud_eval/graphdet_eval2/. Runs alongside v20 B' (nice 19).
