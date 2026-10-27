@@ -25,8 +25,8 @@ from .simeval import (
 )
 
 __all__ = [
-  "DetectorConfig", "E07_SLICE_UM", "E07_SPACING_PX", "E07_Z_SCALE", "MATLAB_CONFIG",
-  "MATLAB_SPACING_PX", "MATLAB_Z_SCALE",
+  "DetectorConfig", "E07_SLICE_UM", "E07_SPACING_PX", "E07_Z_SCALE",
+  "MATLAB_CONFIG", "MATLAB_SPACING_PX", "MATLAB_Z_SCALE",
   "attachment_codes", "branch_adjacency", "branch_points",
   "detect_branches", "detect_lseg_smallregion", "detect_lseg_view",
   "grow_segments", "inflection_nodes", "integrate_smallregions",
