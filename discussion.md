@@ -1812,3 +1812,6 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Design result (scratch): drop at F 0.4, then keep the supported pieces of dropped polylines (cut at unsupported runs > 10 px, pieces >= 10 px). Added to module/graphdet/support.py (supported_pieces, filter_polylines(salvage=True)) and graphdet_pointcloud.py --salvage (tag _g0.4s). eval4 still closed.
 - Codex round 17: the scorer's sample() double-counted shared vertices and its density depended on vertex count, so dense pieces were over-weighted. Fixed: scoring samples now sit at fixed z-scaled arc-length steps along each polyline (vertex-count invariant, unit test). The filter's own sampling is unchanged.
 - This changes every graphdet quality number. All methods (production, unfiltered, drop, hybrid) on tune and nagara are re-scored from the saved polylines with the new scorer before choosing; old json values are not mixed in.
+
+## 2026-10-28 00:10 JST Intent (Claude, fullscan): B' background-only control (peer request)
+- B' with the same settings as v20 (MATLAB config, z_scale 3.0, classifier export, cell 6) on the 100 unmodified real background views (truth.json background_view of v20_embed_nagara_dz4), same event names -> results/sim_eval/v19_bgonly_nagara_dz4_bprime.csv + .done. Scratch sim_bprime_bg.py, nice 19; paused during any timing phase.

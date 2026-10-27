@@ -1735,3 +1735,6 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - 設計の結果（scratch）: F 0.4 で落とした後、落ちた折れ線の支持された断片（支持のない区間 10 px 超で切り、10 px 以上の断片）を残す。module/graphdet/support.py（supported_pieces、filter_polylines(salvage=True)）と graphdet_pointcloud.py --salvage（タグ _g0.4s）に追加。eval4 は未開封のまま。
 - Codex 17 回目: 採点の sample() は共有頂点を二重に数え、密度が頂点数に依存していたため、密な断片が重く数えられていた。修正: 採点の標本を各折れ線に沿った z 拡大後の弧長の一定間隔に置く（頂点数に依存しない、単体テスト追加）。フィルタ自身の標本化は変えない。
 - これで graphdet の品質の数値はすべて変わる。tune と nagara の全方式（production、フィルタなし、drop、hybrid）を保存済みの折れ線から新しい採点で再採点してから選ぶ。古い json の値は混ぜない。
+
+## 2026-10-28 00:10 JST 予定（Claude, fullscan）: B' の背景のみ対照（相方の依頼）
+- v20 と同じ設定の B'（MATLAB 設定、z_scale 3.0、分類器で書き出し、cell 6）を、加工していない実背景 100 視野（v20_embed_nagara_dz4 の truth.json の background_view）に、同じ事象名で → results/sim_eval/v19_bgonly_nagara_dz4_bprime.csv と .done。scratch の sim_bprime_bg.py、nice 19。時間計測の間は止める。
