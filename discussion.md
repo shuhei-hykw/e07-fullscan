@@ -1807,3 +1807,8 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 
 ## 2026-10-27 23:32 JST Result (Claude, fullscan): v20 B' done
 - results/sim_eval/v20_embed_nagara_dz4_bprime.csv (100 events) and .done marker written; peer notified.
+
+## 2026-10-27 23:51 JST Intent (Claude, fullscan): salvage of dropped polylines, scorer fix, re-score
+- Design result (scratch): drop at F 0.4, then keep the supported pieces of dropped polylines (cut at unsupported runs > 10 px, pieces >= 10 px). Added to module/graphdet/support.py (supported_pieces, filter_polylines(salvage=True)) and graphdet_pointcloud.py --salvage (tag _g0.4s). eval4 still closed.
+- Codex round 17: the scorer's sample() double-counted shared vertices and its density depended on vertex count, so dense pieces were over-weighted. Fixed: scoring samples now sit at fixed z-scaled arc-length steps along each polyline (vertex-count invariant, unit test). The filter's own sampling is unchanged.
+- This changes every graphdet quality number. All methods (production, unfiltered, drop, hybrid) on tune and nagara are re-scored from the saved polylines with the new scorer before choosing; old json values are not mixed in.

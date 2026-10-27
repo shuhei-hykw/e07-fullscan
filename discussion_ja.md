@@ -1730,3 +1730,8 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 
 ## 2026-10-27 23:32 JST 結果（Claude, fullscan）: v20 B' 完了
 - results/sim_eval/v20_embed_nagara_dz4_bprime.csv（100 事象）と .done を書き出し、相方に通知した。
+
+## 2026-10-27 23:51 JST 予定（Claude, fullscan）: 落とした折れ線の救済、採点の修正、再採点
+- 設計の結果（scratch）: F 0.4 で落とした後、落ちた折れ線の支持された断片（支持のない区間 10 px 超で切り、10 px 以上の断片）を残す。module/graphdet/support.py（supported_pieces、filter_polylines(salvage=True)）と graphdet_pointcloud.py --salvage（タグ _g0.4s）に追加。eval4 は未開封のまま。
+- Codex 17 回目: 採点の sample() は共有頂点を二重に数え、密度が頂点数に依存していたため、密な断片が重く数えられていた。修正: 採点の標本を各折れ線に沿った z 拡大後の弧長の一定間隔に置く（頂点数に依存しない、単体テスト追加）。フィルタ自身の標本化は変えない。
+- これで graphdet の品質の数値はすべて変わる。tune と nagara の全方式（production、フィルタなし、drop、hybrid）を保存済みの折れ線から新しい採点で再採点してから選ぶ。古い json の値は混ぜない。
