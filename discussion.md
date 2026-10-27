@@ -1798,3 +1798,9 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Graph detector dog3dz + F 0.4 fails. synth sig best_good 0.326 vs needed 0.335 (prod 0.135) and vs filter-cost floor 0.332 (unfiltered 0.382). embed: filter loses 5 signal tracks (limit unfiltered 0 + 3). Fake ratio 1.24, timing 0.97x median, RSS 1.25x pass.
 - All filter-lost signal tracks are short (6-39 grains). A fractional gap cut hits short tracks; next is an absolute-gap or short-exemption rule, designed on tune, checked on a new unused set (eval4). F 0.45 is not adopted, as frozen.
 - v20 B' was resumed after the timing phase.
+
+## 2026-10-27 21:48 JST Intent (Claude, fullscan): short-sparing gap rule, design on tune + embed_nagara
+- eval4 (v19_synth_eval4_dz4 / v19_embed_eval4_dz4, from the peer) stays closed until the criteria are frozen.
+- Design data: tune (existing dog3dz unfiltered polys) re-scored with rules "drop if fraction > F and absolute gap > G" and absolute-gap-only (scratch rescore_G.py, no new detector runs).
+- Extra signal-rich design set: graphdet_pointcloud {production, dog3dz unfiltered} on v19_embed_nagara_dz4 ev0000-ev0009, two at a time -> results/pointcloud_eval/graphdet_nagara/. v20 B' keeps running (nice 19).
+- Owned: results/pointcloud_eval/graphdet_nagara/, scratch only. No module change until a rule is chosen.

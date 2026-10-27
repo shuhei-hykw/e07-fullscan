@@ -1721,3 +1721,9 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - グラフ検出器 dog3dz＋F 0.4 は不合格。synth の sig best_good 0.326 は必要値 0.335（production 0.135）とフィルタ代償の下限 0.332（フィルタなし 0.382）に届かない。embed ではフィルタで信号 5 本を全損（上限はフィルタなし 0＋3）。偽の比 1.24、時間 中央値 0.97 倍、RSS 1.25 倍は合格。
 - フィルタで落ちた信号はすべて短い飛跡（6〜39 粒子）。比率の切れ目判定が短い飛跡に効いている。次は絶対長や短い折れ線の免除を tune で設計し、未使用の新しい組（eval4）で確かめる。凍結通り F 0.45 には切り替えない。
 - 時間計測の後、v20 B' は再開した。
+
+## 2026-10-27 21:48 JST 予定（Claude, fullscan）: 短い折れ線を守る切れ目判定、tune＋embed_nagara で設計
+- eval4（相方作成の v19_synth_eval4_dz4 / v19_embed_eval4_dz4）は基準を凍結するまで開けない。
+- 設計データ: tune（既存のフィルタなし dog3dz の折れ線）を「比率 > F かつ切れ目の絶対長 > G で落とす」と「絶対長だけ」の規則で再採点（scratch の rescore_G.py、検出器の再実行なし）。
+- 信号の多い設計用の組を追加: graphdet_pointcloud {production, フィルタなし dog3dz} を v19_embed_nagara_dz4 の ev0000〜ev0009 に、2 本ずつ → results/pointcloud_eval/graphdet_nagara/。v20 B' は走らせたまま（nice 19）。
+- 担当: results/pointcloud_eval/graphdet_nagara/ と scratch のみ。規則を決めるまで module は変えない。
