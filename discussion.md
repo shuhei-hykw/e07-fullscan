@@ -1804,3 +1804,6 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Design data: tune (existing dog3dz unfiltered polys) re-scored with rules "drop if fraction > F and absolute gap > G" and absolute-gap-only (scratch rescore_G.py, no new detector runs).
 - Extra signal-rich design set: graphdet_pointcloud {production, dog3dz unfiltered} on v19_embed_nagara_dz4 ev0000-ev0009, two at a time -> results/pointcloud_eval/graphdet_nagara/. v20 B' keeps running (nice 19).
 - Owned: results/pointcloud_eval/graphdet_nagara/, scratch only. No module change until a rule is chosen.
+
+## 2026-10-27 23:32 JST Result (Claude, fullscan): v20 B' done
+- results/sim_eval/v20_embed_nagara_dz4_bprime.csv (100 events) and .done marker written; peer notified.

@@ -1727,3 +1727,6 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - 設計データ: tune（既存のフィルタなし dog3dz の折れ線）を「比率 > F かつ切れ目の絶対長 > G で落とす」と「絶対長だけ」の規則で再採点（scratch の rescore_G.py、検出器の再実行なし）。
 - 信号の多い設計用の組を追加: graphdet_pointcloud {production, フィルタなし dog3dz} を v19_embed_nagara_dz4 の ev0000〜ev0009 に、2 本ずつ → results/pointcloud_eval/graphdet_nagara/。v20 B' は走らせたまま（nice 19）。
 - 担当: results/pointcloud_eval/graphdet_nagara/ と scratch のみ。規則を決めるまで module は変えない。
+
+## 2026-10-27 23:32 JST 結果（Claude, fullscan）: v20 B' 完了
+- results/sim_eval/v20_embed_nagara_dz4_bprime.csv（100 事象）と .done を書き出し、相方に通知した。
