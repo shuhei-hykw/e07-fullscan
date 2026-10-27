@@ -39,9 +39,11 @@ from dataclasses import dataclass, replace
 # distfun1.m scales the slice axis so that one z step is comparable to
 # an x/y pixel: the simulation was made with 3 um slices at 0.29 um/px.
 MATLAB_Z_SCALE = 3.0 / 0.29
-# E07 full-scan data is 1.5 um/slice, so the MATLAB value is twice too
-# large there -- z distances come out doubled.
-E07_Z_SCALE = 1.5 / 0.29
+# E07 slice step, central estimate (analysis-note 2026-10-26; the
+# earlier 1.5 um rested on a grain density that was withdrawn). The
+# MATLAB value stays the default because the reference checks need it.
+E07_SLICE_UM = 3.8
+E07_Z_SCALE = E07_SLICE_UM / 0.29
 
 # Hit spacing the MATLAB constants were tuned at (mabiki block 3).
 MATLAB_SPACING_PX = 3.0

@@ -212,7 +212,7 @@ length), `main_frac`, the share of a polyline's matched samples on its
 main track (low means it joins tracks), and `main_share_all`, the
 length-weighted share of all polyline samples on their main track.
 `--z-um` sets the detector's z scale from the slice step (default:
-MATLAB_Z_SCALE, 3.0 um). The polylines are saved (`_polys.npz`,
+`config.E07_SLICE_UM`, 3.8 um; outputs are tagged `_z<um>`). The polylines are saved (`_polys.npz`,
 `load_polys`) so `track_scores` / `quality` can re-score them without
 a rerun. `toy_twograin.py` renders one or two
 grains with e07-g4-hypernuclei's renderer and optics model and scores
@@ -516,10 +516,12 @@ two things made it affordable:
 ~3 h/view in total, and stage 1 peaks at 0.3 GB, so it belongs on LSF
 queue `h` one view per job. That end-to-end run has not been done yet.
 
-`z_scale` is still the MATLAB `3.0 / 0.29`, which assumes 3 µm slices;
-E07 is 1.5 µm/slice, and `config.E07_Z_SCALE` holds the right value.
-The simulation cannot validate that switch, since 3.0 / 0.29 is correct
-there.
+`DetectorConfig.z_scale` defaults to the MATLAB `3.0 / 0.29` (3 µm
+slices), which the reference checks need. The E07 runners
+(`graphdet_specials.py`, `graphdet_pointcloud.py`) use
+`config.E07_Z_SCALE = 3.8 / 0.29`, the central estimate of the E07
+slice step (the earlier 1.5 µm was withdrawn). On the v19 synthetic
+views 3.0 and 3.8 gave no clear difference.
 
 ## Batch Submission (KEKCC / LSF)
 

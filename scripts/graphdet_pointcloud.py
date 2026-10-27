@@ -45,7 +45,9 @@ from scipy.spatial import cKDTree
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import eval_pointcloud as ep                                  # noqa: E402
-from module.graphdet import MATLAB_CONFIG, integrate_smallregions  # noqa
+from module.graphdet import (                                # noqa: E402
+  E07_SLICE_UM, MATLAB_CONFIG, integrate_smallregions,
+)
 from module.graphdet.detectlseg import (                      # noqa: E402
   detect_lseg_view, iter_regions,
 )
@@ -298,23 +300,20 @@ def main() -> int:
   ap.add_argument("--variant", default="dog3d")
   ap.add_argument("--dog-k", type=float, default=ep.DOG_K)
   ap.add_argument("--workers", type=int, default=WORKERS)
-  ap.add_argument("--z-um", type=float, default=None,
-                  help="slice step (um) for the detector's z scale; "
-                  "default keeps MATLAB_Z_SCALE (3.0 um)")
+  ap.add_argument("--z-um", type=float, default=E07_SLICE_UM,
+                  help="slice step (um) for the detector's z scale")
   ap.add_argument("--out", type=Path,
                   default=Path("results/pointcloud_eval/graphdet"))
   args = ap.parse_args()
   ev = args.event
   tag = args.variant if args.variant == PRODUCTION else \
     f"{args.variant}_k{args.dog_k:g}"
-  if args.z_um is not None:
-    tag += f"_z{args.z_um:g}"
+  tag += f"_z{args.z_um:g}"
   name = f"{ev.parent.name}__{ev.name}__{tag}"
   args.out.mkdir(parents=True, exist_ok=True)
 
-  cfg = MATLAB_CONFIG.for_spacing(float(_GRAPH_CELL_PX))
-  if args.z_um is not None:
-    cfg = replace(cfg, z_scale=args.z_um / PIXEL_UM)
+  cfg = replace(MATLAB_CONFIG.for_spacing(float(_GRAPH_CELL_PX)),
+                z_scale=args.z_um / PIXEL_UM)
   with TreeRSS() as mem:
     t0 = time.time()
     x = hits_for(ev, args.variant, args.dog_k)

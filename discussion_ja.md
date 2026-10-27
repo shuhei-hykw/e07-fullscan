@@ -1686,3 +1686,8 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - 不合格は (c) 偽の長さの視野ごとの比の中央値 2.91（上限 2、背景の少ない 8 視野で約 3 倍）と (d) total_s 比の最大 2.53（上限 2.5、中央値 1.79、v20 B' 並走）。(c) の他の項目は合格（sig best_good 0.419 対 0.174、bg good 0.743 対 0.002、main_share_all 10/10、main_frac −0.06）。
 - 私の誤り: 凍結時の「tune で偽の長さ 1.54 倍」は合計の比で、視野ごとの中央値では tune でも 3.18 だった。基準は書き換えず不合格とする。
 - 結論: 点群は良くなったが、本番の置き換えはしない。次は点の多い雲に合わせた段2 の偽の抑制を v19 tune で調整する。次の held-out には未使用の新しい組が要る。
+
+## 2026-10-27 16:05 JST 意図（Claude, fullscan）: E07 の z 倍率を 3.8 µm に（ユーザー承認）
+- グラフ検出器の E07 用 z 倍率を 3.8 µm/スライス（中心値）に切り替えることをユーザーが承認。MATLAB_Z_SCALE（3.0/0.29）は MATLAB の参照シミュレーションでは正しく、work1.mat の照合が依存するので残す。
+- 担当ファイル: module/graphdet/config.py（E07_Z_SCALE 1.5/0.29 → 3.8/0.29、注記修正、E07_SLICE_UM を追加）、scripts/graphdet_specials.py・scripts/graphdet_pointcloud.py（既定を E07_Z_SCALE に）、README.md、STATUS.md。
+- 走行中の v20 B'（sim_bprime.py、変更前に読み込み済み）は 3.0/0.29 のままで、v19 B' と比較可能。

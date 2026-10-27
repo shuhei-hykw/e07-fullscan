@@ -23,6 +23,7 @@ import argparse
 import json
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -30,7 +31,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from module.graphdet import (
-  MATLAB_CONFIG, attachment_codes, branch_points, detect_branches,
+  E07_Z_SCALE, MATLAB_CONFIG, attachment_codes, branch_points, detect_branches,
   detect_lseg_view, integrate_smallregions,
 )
 from module.graphdet.geom import scale_z
@@ -106,7 +107,8 @@ def run(event: str, specials: Path, out_dir: Path,
   print(f"  export ({method}) in {t1 - t0:.0f} s", flush=True)
 
   x = pl[:, :3]
-  cfg = MATLAB_CONFIG.for_spacing(float(cell))
+  cfg = replace(MATLAB_CONFIG.for_spacing(float(cell)),
+                z_scale=E07_Z_SCALE)
   seg, _ = detect_lseg_view(x, cfg=cfg, workers=workers)
   t2 = time.time()
   print(f"  stage 1: {seg.shape[2]} segments in {t2 - t1:.0f} s", flush=True)

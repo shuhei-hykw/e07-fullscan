@@ -1763,3 +1763,8 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Fails (c) fake length per view, median ratio 2.91 vs production (limit 2; ~3x in the 8 sparse views), and (d) max total_s ratio 2.53 (limit 2.5; median 1.79, v20 B' running alongside). The rest of (c) passes: sig best_good 0.419 vs 0.174, bg good 0.743 vs 0.002, main_share_all 10/10, main_frac -0.06.
 - My error: the freeze note's "fake length 1.54x on tune" was the pooled ratio; per-view median on tune was already 3.18. Criteria not rewritten; counted as fail.
 - Conclusion: better point cloud, but no production replacement. Next: tune stage-2 fake suppression for a denser cloud on v19 tune; a fresh unused set will be needed for the next held-out check.
+
+## 2026-10-27 16:05 JST Intent (Claude, fullscan): E07 z scale 3.8 um (user approved)
+- User approved switching the graph detector's E07 z scale to the 3.8 um/slice central value. MATLAB_Z_SCALE (3.0/0.29) stays: it is right for the MATLAB reference simulation and the work1.mat checks depend on it.
+- Owned files: module/graphdet/config.py (E07_Z_SCALE 1.5/0.29 -> 3.8/0.29, comment fixed, new E07_SLICE_UM), scripts/graphdet_specials.py and scripts/graphdet_pointcloud.py (default to E07_Z_SCALE), README.md, STATUS.md.
+- The running v20 B' (sim_bprime.py, imported before the change) keeps 3.0/0.29, so it stays comparable with v19 B'.
