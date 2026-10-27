@@ -31,7 +31,7 @@
 | 場所 | `/gpfs/group/had/sks/E07/tohoku/fullscan/E07/.../IMAGE00_AREA00` |
 | view 数 | 2,025（45 × 45 グリッド、FOV 間隔 ~0.5 mm）|
 | 1 view | 2048 × 2048 px、**58 スライス** |
-| スケール | **0.29 μm/px**、z 間隔 **1.5 μm/スライス** |
+| スケール | **0.29 μm/px**、z 間隔 **約 3.8 μm/スライス**（中心値。以前の 1.5 μm は撤回、analysis-note 2026-10-26） |
 | 合計 | 259 GB |
 
 読み出しは `module/reader.py` の `load_spng()`（SPNG 形式）。
@@ -207,6 +207,10 @@ bsub ... scripts/kekcc_graphdet_specials.sh "<event,list>" OUT_DIR PROJECT_DIR
 
 `module/graphdet/config.py` の `DetectorConfig` に全距離定数を集約。
 **既定は MATLAB 値そのまま**なので、何も渡さなければ参照を再現する。
+
+z の倍率 `z_scale` も既定は MATLAB の `3.0/0.29`（参照照合用）。E07 の実行スクリプト
+（`graphdet_specials.py`、`graphdet_pointcloud.py`）は `E07_Z_SCALE = 3.8/0.29` を
+渡す（2026-10-27 から）。
 
 定数は3群で、**`for_spacing()` は間隔スケール群だけを直す**:
 
