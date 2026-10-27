@@ -11,6 +11,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from module.graphdet.support import (
+  SUPPORT_XY_PX, filter_polylines, unsupported_fraction,
+)
 from module.graphdet.geom import (
   is_a_line3, is_a_line3_batch, is_a_line3a, is_a_line3a_batch,
 )
@@ -35,6 +38,11 @@ _BATCH_TRIALS = 200
 _BATCH_K = 8
 # arccos near 0 deg turns round-off into ~1e-11 deg.
 _ANGLE_TOL_DEG = 1e-9
+# A straight polyline with one stretch of missing hits (px).
+_GAP_POLY_PX = 100
+_GAP_START_PX = 40
+_GAP_PX = 30
+_GAP_TOL = 1e-9
 
 
 def _line(n, start, step):
@@ -213,6 +221,20 @@ def test_is_a_line3_batch_matches_the_scalar_port():
     assert np.array_equal(np.isinf(want), np.isinf(got))
     fin = np.isfinite(want)
     assert np.allclose(got[fin], want[fin], rtol=1e-12, atol=0)
+
+
+def test_unsupported_fraction_is_the_longest_gap_over_length():
+  poly = np.array([[0.0, 0.0, 5.0], [_GAP_POLY_PX, 0.0, 5.0]])
+  xs = np.r_[np.arange(0, _GAP_START_PX),
+             np.arange(_GAP_START_PX + _GAP_PX, _GAP_POLY_PX + 1)]
+  hits = np.column_stack([xs, np.zeros(xs.size), np.full(xs.size, 5.0)])
+  frac = unsupported_fraction([poly], hits.astype(float), z_scale=1.0)
+  # Hits 39 and 70 bound the gap; samples closer than SUPPORT_XY_PX to
+  # either are supported, the rest (41..68 here) add 1 px each
+  want = (_GAP_PX + 2 - 2 * SUPPORT_XY_PX) / _GAP_POLY_PX
+  assert frac[0] == pytest.approx(want, abs=_GAP_TOL)
+  kept, keep = filter_polylines([poly], hits, 1.0, want / 2)
+  assert kept == [] and not keep[0]
 
 
 def test_is_a_line3a_batch_matches_the_scalar_port():

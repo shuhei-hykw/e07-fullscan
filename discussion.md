@@ -1780,3 +1780,8 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Profile (tune ev0001 dog3dz, z 3.8): stage 2 249 s under cProfile, of which is_a_line3 135 s over 6.0M calls from _chain_segments (one call per candidate).
 - Plan: add a vectorised is_a_line3_batch in module/graphdet/geom.py and call it from _chain_segments in module/graphdet/integrate.py. Must give the same polylines: checked against the scalar path on real dog3dz/production views, plus check_polylines_reference.py and tests/test_graphdet.py.
 - Owned files: module/graphdet/geom.py, module/graphdet/integrate.py, tests/test_graphdet.py (a batch-vs-scalar test).
+
+## 2026-10-27 17:02 JST Intent (Claude, fullscan): polyline support-gap filter
+- Tune result (10 views, dog3dz K2, z 3.8): dropping polylines whose longest stretch without a dog3dz hit (2 px x 1.5 slice box) exceeds a fraction of their length cuts fake length to 1.57x production (median; max 1.95) at 0.4, with sig best_good 0.344 (unfiltered 0.366, production 0.097) and bg good 0.528 (production 0.002). Hit-count cuts cost more signal. 0.45 being scored for margin.
+- New module/graphdet/support.py (sampling, unsupported fraction, filter); scripts/graphdet_pointcloud.py gets --max-gap-frac (tag _g<frac>, filter time in total_s). Not wired into graphdet_specials.py (production unchanged).
+- Owned files: module/graphdet/support.py, module/graphdet/__init__.py, scripts/graphdet_pointcloud.py, tests/test_graphdet.py, README.md.

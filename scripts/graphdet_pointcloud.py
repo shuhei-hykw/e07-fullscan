@@ -48,6 +48,9 @@ import eval_pointcloud as ep                                  # noqa: E402
 from module.graphdet import (                                # noqa: E402
   E07_SLICE_UM, MATLAB_CONFIG, integrate_smallregions,
 )
+from module.graphdet.support import (                        # noqa: E402
+  filter_polylines, sample,
+)
 from module.graphdet.detectlseg import (                      # noqa: E402
   detect_lseg_view, iter_regions,
 )
@@ -63,8 +66,6 @@ WORKERS = 8
 COVER_R_PX = ep.COVER_R_PX
 Z_TOL_SLICES = ep.Z_TOL_SLICES
 MIN_TRACK_GRAINS = ep.MIN_TRACK_GRAINS
-# Polyline sampling step (px, slices counted as px)
-SAMPLE_STEP_PX = 1.0
 # A polyline counts towards a track's fragments once it holds this
 # fraction of the track's covered grains.
 MIN_SHARE = 0.1
@@ -132,20 +133,6 @@ class TreeRSS:
   def __exit__(self, *exc):
     self._stop.set()
     self._t.join()
-
-
-def sample(polys):
-  """Points every SAMPLE_STEP_PX along each polyline, with its index."""
-  pts, ids = [], []
-  for i, p in enumerate(polys):
-    for a, b in zip(p[:-1], p[1:]):
-      n = max(int(np.ceil(np.linalg.norm(b - a) / SAMPLE_STEP_PX)), 1)
-      t = np.linspace(0.0, 1.0, n + 1)[:, None]
-      pts.append(a + t * (b - a))
-      ids.append(np.full(n + 1, i))
-  if not pts:
-    return np.zeros((0, 3)), np.zeros(0, int)
-  return np.vstack(pts), np.concatenate(ids)
 
 
 def near(a_xy, a_z, b_xy, b_z):
@@ -302,6 +289,9 @@ def main() -> int:
   ap.add_argument("--workers", type=int, default=WORKERS)
   ap.add_argument("--z-um", type=float, default=E07_SLICE_UM,
                   help="slice step (um) for the detector's z scale")
+  ap.add_argument("--max-gap-frac", type=float, default=None,
+                  help="drop polylines whose longest unsupported "
+                  "stretch exceeds this fraction of their length")
   ap.add_argument("--out", type=Path,
                   default=Path("results/pointcloud_eval/graphdet"))
   args = ap.parse_args()
@@ -309,6 +299,8 @@ def main() -> int:
   tag = args.variant if args.variant == PRODUCTION else \
     f"{args.variant}_k{args.dog_k:g}"
   tag += f"_z{args.z_um:g}"
+  if args.max_gap_frac is not None:
+    tag += f"_g{args.max_gap_frac:g}"
   name = f"{ev.parent.name}__{ev.name}__{tag}"
   args.out.mkdir(parents=True, exist_ok=True)
 
@@ -324,6 +316,10 @@ def main() -> int:
     t2 = time.time()
     polys = integrate_smallregions(x, seg, cfg)
     t3 = time.time()
+    if args.max_gap_frac is not None:
+      polys, _ = filter_polylines(polys, x, cfg.z_scale,
+                                  args.max_gap_frac)
+    t4 = time.time()
 
   reader = load_spng(ev / "image.json")
   g = dict(np.load(ev / "grains.npz"))
@@ -332,8 +328,8 @@ def main() -> int:
   row = {"event": ev.name, "variant": tag, "n_hits": len(x),
          "region_max": int(n_reg.max()), "sum_n2": float((n_reg ** 2).sum()),
          "hits_s": round(t1 - t0, 1), "stage1_s": round(t2 - t1, 1),
-         "stage2_s": round(t3 - t2, 1),
-         "total_s": round(t3 - t0, 1),
+         "stage2_s": round(t3 - t2, 1), "filter_s": round(t4 - t3, 1),
+         "total_s": round(t4 - t0, 1),
          "rss_tree_peak_mb": round(mem.peak_mb),
          "n_segments": int(seg.shape[2]), "n_polylines": len(polys)}
   row.update(quality(tt, pt))

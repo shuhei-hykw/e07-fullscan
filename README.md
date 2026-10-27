@@ -212,7 +212,14 @@ length), `main_frac`, the share of a polyline's matched samples on its
 main track (low means it joins tracks), and `main_share_all`, the
 length-weighted share of all polyline samples on their main track.
 `--z-um` sets the detector's z scale from the slice step (default:
-`config.E07_SLICE_UM`, 3.8 um; outputs are tagged `_z<um>`). The polylines are saved (`_polys.npz`,
+`config.E07_SLICE_UM`, 3.8 um; outputs are tagged `_z<um>`).
+`--max-gap-frac F` drops, after stage 2, every polyline whose longest
+stretch with no hit within 2 px (x/y) and 1.5 slices (z) is more than
+`F` of its length (`module/graphdet/support.py`, not in the MATLAB
+original; tag `_g<F>`, time in `filter_s` and `total_s`). On a dense
+point cloud such as dog3dz, stage 2 also chains hits of different
+tracks across empty stretches; a hit-count cut would instead drop the
+short signal fragments. The polylines are saved (`_polys.npz`,
 `load_polys`) so `track_scores` / `quality` can re-score them without
 a rerun. `toy_twograin.py` renders one or two
 grains with e07-g4-hypernuclei's renderer and optics model and scores

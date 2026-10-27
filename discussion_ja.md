@@ -1703,3 +1703,8 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - プロファイル（tune ev0001 dog3dz、z 3.8）: cProfile 下で段2 249 s のうち is_a_line3 が 135 s、_chain_segments から 600 万回（候補 1 つごとに 1 回）。
 - 計画: module/graphdet/geom.py に一括版 is_a_line3_batch を足し、module/graphdet/integrate.py の _chain_segments から呼ぶ。出力の折れ線が同じであることを、実の dog3dz / production 視野でスカラー版と比べ、check_polylines_reference.py と tests/test_graphdet.py でも確かめる。
 - 担当ファイル: module/graphdet/geom.py、module/graphdet/integrate.py、tests/test_graphdet.py（一括版とスカラー版の一致テスト）。
+
+## 2026-10-27 17:02 JST 意図（Claude, fullscan）: 折れ線の支持の切れ目フィルタ
+- tune の結果（10 視野、dog3dz K2、z 3.8）: dog3dz の hit（2 px × 1.5 スライスの箱）が無い最長区間が長さのある割合を超える折れ線を落とすと、0.4 で偽の長さが production の 1.57 倍（中央値、最大 1.95）、sig best_good 0.344（フィルタなし 0.366、production 0.097）、bg good 0.528（production 0.002）。hit 数での切断は信号の損失が大きい。余裕を見るため 0.45 を採点中。
+- 新規 module/graphdet/support.py（標本化、支持なし割合、フィルタ）。scripts/graphdet_pointcloud.py に --max-gap-frac（タグ _g<割合>、フィルタ時間は total_s に含める）。graphdet_specials.py には入れない（本番は不変）。
+- 担当ファイル: module/graphdet/support.py、module/graphdet/__init__.py、scripts/graphdet_pointcloud.py、tests/test_graphdet.py、README.md。
