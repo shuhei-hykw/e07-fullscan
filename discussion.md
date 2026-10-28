@@ -1861,3 +1861,9 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - production: D005 214/5387/0.03, D013 362/3219/0.05, IBUKI 94/245/0.25, IRRAWADY 125/226/0.29, KISO 10/305/0.12, MINO 3/647/0.03, NAGARA 186/204/0.43, T004 746/3947/0.04, T011 2/23/0.08. Better than the random median 9/9, top 10 in 3/9, random fraction <= 0.05 in 4/9.
 - dog3dz K2 + F0.4 + salvage: D005 4955/4592/0.64, D013 2038/2098/0.28, IBUKI 423/95/0.88, IRRAWADY 64/139/0.24, KISO 4/132/0.03, MINO 213/68/0.77, NAGARA 117/141/0.40, T004 1016/3334/0.15, T011 55/37/0.62. Better than the random median 5/9, top 10 in 1/9, random fraction <= 0.05 in 1/9. Total length 1.9-6x production.
 - Confirms the 09:31 decision (dog3dz out, production kept) across all events. NAGARA and IRRAWADY/IBUKI are weak even for production (random fraction 0.25-0.43).
+
+## 2026-10-28 14:04 JST Intent (Claude, fullscan): graphdet on v20_embed_tune_dz4, production vs RS (development)
+- Independent of the pending blind review; development only, nothing decided from it. evalA stays closed.
+- Inputs: ~/work/e07-g4-hypernuclei/data/images/v20_embed_tune_dz4 (10 events). Variants: production (classifier export, cell 6) and RS (frozen 10:58 definition: two-scale ridge mask + remove_noise + classifier, same grid export). z 3.8 (default), no support filter.
+- Code: scripts/graphdet_pointcloud.py gets --hits-npz (precomputed hits in export coordinates, tag from the file) so the detector, scoring and outputs stay identical; README updated. RS hits are dumped by a scratch script that reuses place_eval.py's mask code. Module code untouched until the review.
+- Outputs: results/pointcloud_eval/graphdet_v20tune/ (owned by me). Report sig best_good, short-track recovery, fake length, n_polylines, stage timings; rescore on truth polylines if grain scoring misleads for streaks.

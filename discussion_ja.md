@@ -1784,3 +1784,9 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - production: D005 214/5387/0.03、D013 362/3219/0.05、IBUKI 94/245/0.25、IRRAWADY 125/226/0.29、KISO 10/305/0.12、MINO 3/647/0.03、NAGARA 186/204/0.43、T004 746/3947/0.04、T011 2/23/0.08。ランダムの中央値より上 9/9、上位 10 以内 3/9、ランダムの割合 0.05 以下 4/9。
 - dog3dz K2＋F 0.4＋salvage: D005 4955/4592/0.64、D013 2038/2098/0.28、IBUKI 423/95/0.88、IRRAWADY 64/139/0.24、KISO 4/132/0.03、MINO 213/68/0.77、NAGARA 117/141/0.40、T004 1016/3334/0.15、T011 55/37/0.62。ランダムの中央値より上 5/9、上位 10 以内 1/9、ランダムの割合 0.05 以下 1/9。全長は production の 1.9〜6 倍。
 - 09:31 の決定（dog3dz は外し production を維持）を全事象で確認。NAGARA、IRRAWADY、IBUKI は production でも弱い（ランダムの割合 0.25〜0.43）。
+
+## 2026-10-28 14:04 JST 予定（Claude, fullscan）: v20_embed_tune_dz4 で graphdet、production 対 RS（開発用）
+- 保留中の盲検レビューとは独立。開発用で、ここからは何も決めない。evalA は閉じたまま。
+- 入力: ~/work/e07-g4-hypernuclei/data/images/v20_embed_tune_dz4（10 事象）。候補は production（分類器で書き出し、cell 6）と RS（10:58 に固定した定義: 2 尺度の ridge の mask＋remove_noise＋分類器、同じ格子の書き出し）。z 3.8（既定）、支持の切れ目フィルタなし。
+- コード: scripts/graphdet_pointcloud.py に --hits-npz（書き出し座標の hit を読み込む。タグはファイル名から）を足し、検出器・採点・出力は同じにする。README も更新。RS の hit は place_eval.py の mask のコードを使う scratch のスクリプトで書き出す。モジュールのコードはレビューまで触らない。
+- 出力: results/pointcloud_eval/graphdet_v20tune/（私の担当）。sig best_good、短い飛跡の回収、偽の長さ、折れ線の数、段ごとの時間を報告。筋状の信号で粒子による採点が誤解を招くなら、真の折れ線で採点し直す。
