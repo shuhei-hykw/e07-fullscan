@@ -295,12 +295,20 @@ def main() -> int:
   ap.add_argument("--salvage", action="store_true",
                   help="keep the supported pieces of the dropped "
                   "polylines (with --max-gap-frac)")
+  ap.add_argument("--hits-npz", type=Path, default=None,
+                  help="precomputed (N, 3) hits in export coordinates "
+                  "(array 'hits'); the tag is the file stem and "
+                  "--variant is ignored")
   ap.add_argument("--out", type=Path,
                   default=Path("results/pointcloud_eval/graphdet"))
   args = ap.parse_args()
   ev = args.event
-  tag = args.variant if args.variant == PRODUCTION else \
-    f"{args.variant}_k{args.dog_k:g}"
+  if args.hits_npz is not None:
+    tag = args.hits_npz.stem
+  elif args.variant == PRODUCTION:
+    tag = args.variant
+  else:
+    tag = f"{args.variant}_k{args.dog_k:g}"
   tag += f"_z{args.z_um:g}"
   if args.max_gap_frac is not None:
     tag += f"_g{args.max_gap_frac:g}" + ("s" if args.salvage else "")
@@ -311,7 +319,10 @@ def main() -> int:
                 z_scale=args.z_um / PIXEL_UM)
   with TreeRSS() as mem:
     t0 = time.time()
-    x = hits_for(ev, args.variant, args.dog_k)
+    if args.hits_npz is not None:
+      x = np.load(args.hits_npz)["hits"][:, :3].astype(float)
+    else:
+      x = hits_for(ev, args.variant, args.dog_k)
     t1 = time.time()
     n_reg = np.array([r[2].shape[0] for r in iter_regions(x)],
                      dtype=float)

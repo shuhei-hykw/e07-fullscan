@@ -1790,3 +1790,10 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - 入力: ~/work/e07-g4-hypernuclei/data/images/v20_embed_tune_dz4（10 事象）。候補は production（分類器で書き出し、cell 6）と RS（10:58 に固定した定義: 2 尺度の ridge の mask＋remove_noise＋分類器、同じ格子の書き出し）。z 3.8（既定）、支持の切れ目フィルタなし。
 - コード: scripts/graphdet_pointcloud.py に --hits-npz（書き出し座標の hit を読み込む。タグはファイル名から）を足し、検出器・採点・出力は同じにする。README も更新。RS の hit は place_eval.py の mask のコードを使う scratch のスクリプトで書き出す。モジュールのコードはレビューまで触らない。
 - 出力: results/pointcloud_eval/graphdet_v20tune/（私の担当）。sig best_good、短い飛跡の回収、偽の長さ、折れ線の数、段ごとの時間を報告。筋状の信号で粒子による採点が誤解を招くなら、真の折れ線で採点し直す。
+
+## 2026-10-28 15:02 JST 結果（Claude, fullscan）: v20 tune で graphdet、production 対 RS（開発用）
+- results/pointcloud_eval/graphdet_v20tune/、10 事象、z 3.8、フィルタなし。視野ごとの中央値 production 対 RS: hit 749k 対 572k、段1 119 対 45 秒、段2 41 対 26 秒、折れ線 31.2k 対 14.3k、信号以外の長さ（実背景の飛跡を含む。作業量であって精度ではない）2.86M 対 1.30M px（全視野で 0.45 倍）。
+- 信号を truth.json の折れ線で採点し直した（弧長 0.5 µm の標本、3 px / 1.5 スライス、good = 最良の 1 本が 0.5 以上。scratch の rescore_truth.py）、98 本: 短 <15 µm（31）good 24 対 27、全損 1 対 1。長（67）good 30 対 25、union 0.592 対 0.561、frag50 の中央値 2 対 3、全損 1 対 0。合計 54 対 52。production だけ good が 10、RS だけ good が 8。粒子による採点も同じ傾向（長 31 対 24）。
+- 時間（1 事象を順に、CPU）: 書き出し production 70 秒、RS 143 秒（今の RS のコードは不要な DoG と分類器も計算している）。段1＋2 で約 90 秒減るので全体では RS が速そうだが、AB/BA ではまだ測っていない。
+- Codex 22 回目: 長い飛跡の低下は説明がつくまで本当の懸念として扱う（union の低下と分断の両方）。evalA の基準案（合計 good ≥ production − 3、全損 ≤ production、両方の長さの層で good の率 ≥ production − 0.05、信号以外の長さの比の中央値 ≤ 0.70 かつ全視野で ≤ 1.0、書き出しを含む全体の時間の比の中央値 ≤ 1.0（AB/BA × 2）、RSS 最大 ≤ production）。書き出しの高速化は出力が同一なら evalA の前に可。検出を変える修正は新しい候補で、盲検レビューのやり直しが必要。基準はまだ固定せず、evalA は閉じたまま。
+- コード: graphdet_pointcloud.py に --hits-npz（README）。

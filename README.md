@@ -213,6 +213,10 @@ main track (low means it joins tracks), and `main_share_all`, the
 length-weighted share of all polyline samples on their main track.
 `--z-um` sets the detector's z scale from the slice step (default:
 `config.E07_SLICE_UM`, 3.8 um; outputs are tagged `_z<um>`).
+`--hits-npz FILE` runs the detector on precomputed hits instead (array
+`hits`, (N, 3) in export coordinates: 1-based x, y and slice), tagged
+with the file stem, so a placement tried outside the module is scored
+exactly like `production`.
 `--max-gap-frac F` drops, after stage 2, every polyline whose longest
 stretch with no hit within 2 px (x/y) and 1.5 slices (z) is more than
 `F` of its length (`module/graphdet/support.py`, not in the MATLAB
