@@ -1775,3 +1775,6 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - P0 production 697k hit/視野、被覆 0.696（p10 0.131、1.5 px 0.570）、短 0.983、長 0.522、急 0.702。P0 を 509k に間引くと 0.678。R3 ridge: 509k、0.696、短 0.933（3.6〜8 µm の飛跡は ridge の mask の段階で落ちる。沿う方向の kernel が長い）。組み合わせ: RS 2 尺度の ridge（長い kernel k3 か短い kernel σ 4 px・k4）565k、0.709（p10 0.113、1.5 px 0.606）、短 0.956、長 0.560、急 0.730。RU（R3＋production の小さな成分）は短が戻らない（0.933）。DoG の mask は同じ点数で劣る。
 - 組み合わせを回す前に決めた規則（hit 数が P0 以下の中で短の被覆が最良）で RS。RS を候補とし、holdout まで何も変えない。残る差: 短 0.956 対 0.983、p10 0.113 対 0.131。
 - 次: holdout（固定乱数の実 5 視野、scratch の holdout_views.txt）で P0 と RS の hit、視野ごとにランダムな 128 px の 8 領域とランダムなスライス（固定乱数）、ユーザーに盲検の A/B 切り出し（見える筋の取りこぼし／筋から外れた点／二列・塊、同等・不明あり、20% を盲検で再提示）。出力は scratch と results/graphdet_specials_real/crops/holdout/。
+
+## 2026-10-28 11:06 JST 予定（Claude, fullscan）: holdout の盲検レビューを公開
+- holdout の実 5 視野で P0 と RS の盲検 A/B 切り出し 48 項目（40＋A/B を入れ替えた再提示 8）を、ユーザー向けの非公開 artifact として公開（https://claude.ai/artifact/4oQPWYURrbPjY7jVUiKwn9）。回答は db の ratings、対応表は scratch の holdout_key.csv。holdout の hit 数: P0 は 696〜754k、RS は 546〜594k／視野。
