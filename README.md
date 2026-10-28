@@ -234,6 +234,24 @@ length-weighted share of all polyline samples on their main track.
 `hits`, (N, 3) in export coordinates: 1-based x, y and slice), tagged
 with the file stem, so a placement tried outside the module is scored
 exactly like `production`.
+`--variant rs` is the production export with the two-scale ridge mask
+(`module/ridge_mask.py`, `export_hits_grid(mask="rs")`) in place of
+the Otsu mask: a pixel is kept when an oriented line filter on the
+fog-removed slice is above its robust threshold, either the long one
+(2.5 px across, 12 px along, 3 sigma) or the short one (4 px along,
+4 sigma). It puts hits along streaks rather than on blobs.
+Experimental; production stays Otsu.
+
+`scripts/rescore_truth_polylines.py DATASET RUN_DIR [RUN_DIR ...]`
+re-scores saved `_polys.npz` against the `truth.json` track polylines
+(samples every 0.5 um of physical arc; covered within 3 px in x/y and
+`--near-z` slices, default 4 then 1.5). For each track it reports
+union and best single-polyline coverage and frag50; a track is good
+when the best polyline covers half of it. Strata are < 15 um and
+>= 15 um. `--compare BASE CAND` applies the placement gate frozen for
+evalA. Before that it checks that every event has one run per
+RUN_DIR (the timing repetitions) and that the repetitions' polylines
+are identical. Exit status: 0 pass, 1 fail, 2 invalid.
 `--max-gap-frac F` drops, after stage 2, every polyline whose longest
 stretch with no hit within 2 px (x/y) and 1.5 slices (z) is more than
 `F` of its length (`module/graphdet/support.py`, not in the MATLAB

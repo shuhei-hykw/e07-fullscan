@@ -1853,3 +1853,9 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - 実行は相手から「組の確認が済んだ」と連絡が来てから: v20_embed_evalU_dz4 とその --real、次に v19_embed_evalU_dz4、次に v20_embed_evalU_dz3.6。同時に 2 本、nice 19、各 12 workers。出力は results/sim_eval/<set>[_real]_{methodA_production,bprime,events}.csv と .done。自分の時間計測の間は止める（SIGSTOP）。出力を開いたり採点したりはしない。
 - 担当: scripts/union_inputs.py とその出力。
 - 17:12 相手が v20_embed_evalU_dz4 を確認済み（100 事象、未使用の別々の視野 100、dz 4.0）。v20 dz4 とその --real を開始（ログは scratch）。v19 と dz 3.6 はそれぞれの確認の連絡を待つ。
+
+## 2026-10-28 18:47 JST 進捗（Claude, fullscan）: RS を module に、evalA の基準案
+- 下流で必要な深さの精度についてのユーザー判断: 「30 µm はかなり大きいが、まずはそれでやってみよう」。evalA の深さの許容は 4 スライス（物理 30 µm）を主とし、1.5 スライスを歯止めにする。後から選んだことは開示する。
+- コード: module/ridge_mask.py と export_hits_grid(mask="rs")。RS の書き出しから不要な DoG と union の計算を除いた。書き出す点は tune の 10 事象すべてで固定済みの scratch の出力と完全一致（負荷下で 1 事象 178〜253 秒）。graphdet_pointcloud.py に --variant rs を追加（時間は production と同じく書き出しと分類器の学習を含む全体）。scripts/rescore_truth_polylines.py は真の折れ線での採点と関門判定を repo に移したもの。tune の数字を完全に再現。
+- Codex 26 回目: 1.5 スライスの歯止めは合計 good ≥ production − 3、長い飛跡の率 ≥ production − 0.05 にすべき。−6 / −0.10 は tune での低下のすぐ外側に置いただけになっている。完全性の確認（40 回の実行、同じ真の飛跡、有限の値、r1/r2 の折れ線が同一）、折れ線が空のときの扱い、FAIL で 0 以外の終了コード、も入れるべき。すべて反映した。時間計測の間は他の仕事をプロセス群ごと SIGSTOP する。
+- この歯止めだと tune 自体が不合格になる（1.5 スライスで長い飛跡の率 0.448 対 0.373、−0.075）。ユーザーに判断を求めた: このまま固定して evalA を回す（不合格の見込みが高い）か、先に graphdet 側で折れ線ごとの深さの再当てはめを tune で試すか。evalA は未開封で、まだ何も固定していない。

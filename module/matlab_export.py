@@ -72,6 +72,7 @@ from module.preprocess import (
   remove_noise,
 )
 from module.reader import load_spng
+from module.ridge_mask import rs_mask
 
 # MATLAB column layout for the hit pixel list (see detect_tracks.m).
 _PL_VARNAMES = ["x", "y", "z", "n", "sheet", "id"]
@@ -455,6 +456,7 @@ def export_hits_grid(
   denoise_method: str = "legacy",
   classifier=None,
   z_range: tuple[int, int] | None = None,
+  mask: str = "otsu",
 ) -> np.ndarray:
   """Build the MATLAB hit pixel list ``pl`` (N x 6) via component-grouped
   grid binning (see ``weighted_grid_hits``).
@@ -480,7 +482,13 @@ def export_hits_grid(
     across every slice -- refitting per slice would be needlessly
     slow and would let each slice silently use a slightly different
     decision boundary).
+
+  ``mask`` picks the per-slice binary before that filter: ``"otsu"``
+  (production) or ``"rs"``, the two-scale ridge mask of
+  ``module.ridge_mask`` (experimental).
   """
+  if mask not in ("otsu", "rs"):
+    raise ValueError(f"unknown mask: {mask!r}")
   if denoise_method == "classifier" and classifier is None:
     raise ValueError(
       "denoise_method='classifier' requires a fitted classifier "
@@ -492,10 +500,14 @@ def export_hits_grid(
   lo, hi = z_range or (0, len(reader))
   cols = []
   for z in range(max(lo, 0), min(hi, len(reader))):
-    fog, binary = _binarize_slice(
-      reader, z, fog_ksize, noise_amin, noise_amax, noise_cmp,
-      noise_amax_upper,
-    )
+    if mask == "rs":
+      fog = fog_remove(reader.read(z), fog_ksize)
+      binary = rs_mask(fog)
+    else:
+      fog, binary = _binarize_slice(
+        reader, z, fog_ksize, noise_amin, noise_amax, noise_cmp,
+        noise_amax_upper,
+      )
     if denoise_method == "legacy":
       binary = remove_unaligned_noise(binary, cell=noise_cell)
     elif denoise_method in ("threshold", "classifier"):

@@ -73,6 +73,8 @@ FAKE_PURITY = 0.3
 REC_GOOD = 0.5
 KB_PER_MB = 1024.0
 PRODUCTION = "production"
+# Same export with the two-scale ridge mask (module.ridge_mask)
+RS = "rs"
 PIXEL_UM = 0.29        # the graph detector's MATLAB pixel size
 RSS_POLL_S = 0.5
 
@@ -80,10 +82,11 @@ RSS_POLL_S = 0.5
 def hits_for(ev, variant, dog_k):
   """(N, 3) hits in export coordinates (1-based x, y and slice)."""
   path = ev / "image.json"
-  if variant == PRODUCTION:
+  if variant in (PRODUCTION, RS):
     clf = train_classifier(*build_training_set(ep._LABELS_DIR))
     pl = export_hits_grid(path, cell=_GRAPH_CELL_PX,
-                          denoise_method="classifier", classifier=clf)
+                          denoise_method="classifier", classifier=clf,
+                          mask="rs" if variant == RS else "otsu")
     return pl[:, :3].astype(float)
   ep.DOG_K = dog_k
   hits, _ = ep.build_hits(load_spng(path), (variant,), None,
@@ -305,7 +308,7 @@ def main() -> int:
   ev = args.event
   if args.hits_npz is not None:
     tag = args.hits_npz.stem
-  elif args.variant == PRODUCTION:
+  elif args.variant in (PRODUCTION, RS):
     tag = args.variant
   else:
     tag = f"{args.variant}_k{args.dog_k:g}"
