@@ -1756,3 +1756,8 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - graphdet_specials.py を拡張: --variant dog3dz（80 スライス窓の 3D DoG の hit）、--max-gap-frac/--salvage（元の折れ線の番号と切断端を保存）、順位をステージ z（従来）と現像後の深さ（スライス差 × 3.8 µm ≤ 30 µm）の両方で、上位 K、ランダム位置の対照（1000 点、固定乱数）、一致した分岐点の枝（元の折れ線の数）、切断端の近くの分岐点の数。supported_pieces(with_parent=True) を追加。
 - 実行（順番に、z 3.8）: production（分類器で書き出し、cell 6 固定）と dog3dz K2＋F 0.4＋salvage を、GT のある E07 の 7 事象（D005 D013 IBUKI IRRAWADY MINO T004 T011）と KISO・NAGARA（E373、別に報告）に → results/graphdet_specials_real/。
 - その後、GT の vertex 周りの切り出し画像（薄い z 範囲、最小値投影、重ね描きなしの画像も）を作って見る。B（実 fullscan 視野、人による盲検レビュー）はこの後。
+
+## 2026-10-28 09:31 JST 結果（Claude, fullscan）: 実データ確認、dog3dz は不採用
+- 実 E07 の画像で dog3dz は失敗。実際の飛跡は粒子に分かれない連続した暗い筋に見え、DoG の極大は筋の上にまばら（z の抑制後で筋 1 px あたり 0.69、production 2.30）。孤立した暗点が hit になり、段2 がそれらを全方向の直線につなぐ（T011 で全長 4.16 M px 対 1.18 M px、GT の順位は偶然と区別できない）。v19 は飛跡を粒子の列として描くので、eval2〜4 の合格は実画像に移らない。図は results/graphdet_specials_real/crops/。詳細は analysis-note（2026-10-28 09:31 の記録）。Codex 19 回目も同意。
+- 決定: dog3dz＋hybrid を本番候補から外し、production を維持。specials の実行は記録のために続ける。
+- 次: 実画像で筋に沿って点を置く方式を数視野だけで比べる。相方にレンダラーの飛跡の見え方の実データ合わせを依頼。
