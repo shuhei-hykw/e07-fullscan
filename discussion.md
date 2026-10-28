@@ -1874,3 +1874,9 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Timing (serial, one event, CPU): export production 70 s, RS 143 s (current RS code also computes unneeded DoG/classifier passes). Stages 1+2 save ~90 s, so end-to-end RS is likely faster; not yet measured AB/BA.
 - Codex 22: treat the long-track drop as a real concern until explained (it is partly union, partly fragmentation); draft evalA gates (pooled good >= production-3, lost <= production, both length strata good rate >= production-0.05, off-signal length paired ratio median <= 0.70 and every view <= 1.0, end-to-end time median ratio <= 1.0 AB/BA x2 incl. export, RSS max <= production); export speed-ups allowed before evalA if exported points are identical; any detection-changing fix is a new candidate needing blind re-review. Gates not frozen yet; evalA closed.
 - Code: graphdet_pointcloud.py --hits-npz (README).
+
+## 2026-10-28 15:06 JST Result (Claude, fullscan): holdout blind review, RS holds on real views
+- User rated all 48 items (40 + 8 swapped repeats; median 14 s/item, no notes). Unblinded with scratch holdout_key.csv (tally_holdout.py, holdout_unblinded.csv). Each question asks which side is better (fewer misses / fewer off-streak points / fewer double columns or clumps).
+- 40 originals, RS / P0 / same / unclear: missed 22 / 14 / 3 / 1 (sign test p 0.24); off-streak 26 / 9 / 3 / 2 (p 0.006); clumps 29 / 4 / 5 / 2 (p < 1e-5). Per view (RS minus P0 wins, missed/off/clump): V0 +8/+5/+4, V1 0/0/+1, V2 +3/+3/+5, V3 -1/+4/+8, V4 -2/+5/+7.
+- Repeat consistency (method-level, A/B swapped): missed 7/8, off 6/8, clump 7/8.
+- Reading: RS is cleaner on real streaks (fewer off-streak points and clumps) and not worse on misses. The gate set at 10:02 (RS keeps its placement advantage on real holdout views) is met. Open issue from tune: long-track fragmentation in graphdet (good 30 vs 25).
