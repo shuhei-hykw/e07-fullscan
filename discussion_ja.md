@@ -1745,3 +1745,8 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - 段階 1（背景のみの B' は nice 19 で走らせたまま）: eval_pointcloud → results/pointcloud_eval/v19_eval4/。graphdet_pointcloud {production, フィルタなし dog3dz} を両方の組に → results/pointcloud_eval/graphdet_eval4/。
 - 段階 2（時間）: 背景のみの B' を停止（SIGSTOP）、{production, dog3dz --max-gap-frac 0.4 --salvage} を AB/BA → results/pointcloud_eval/graphdet_eval4_timing/{r1,r2}/。その後 B' を再開。
 - 段階 3: 保存済みの折れ線から再採点（scratch の rescore_v2.py）。production、フィルタなし、drop、hybrid。
+
+## 2026-10-28 09:06 JST 結果（Claude, fullscan）: eval4 の判定、背景のみ B' 完了
+- eval4（凍結した基準、analysis-note 00:16、コード f151e8a）: dog3dz K2＋F 0.4＋salvage C10 L10 で全項目合格。synth の sig best_good 0.511（production 0.159、フィルタなし 0.534）、偽の比 中央値 0.94（最大 2.02）、時間 中央値 0.84 倍、RSS 1.26 倍、短 <15 µm の best_good 36/48（フィルタなし 38/48）。embed 0.506（production 0.217）、全損 2（production 27）、短 32/46（34/46）。詳細は analysis-note（2026-10-28 09:06 の記録）。eval4 は使い切り。結論は短い飛跡を増やした v19 の組まで。
+- 背景のみの B' 対照が完了: results/sim_eval/v19_bgonly_nagara_dz4_bprime.csv（100 事象）と .done。
+- fullscan の次: 本番の置き換えの前に実データで確認。

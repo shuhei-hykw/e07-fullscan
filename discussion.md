@@ -1822,3 +1822,8 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Phase 1 (bg-only B' keeps running at nice 19): eval_pointcloud -> results/pointcloud_eval/v19_eval4/; graphdet_pointcloud {production, dog3dz unfiltered} on both sets -> results/pointcloud_eval/graphdet_eval4/.
 - Phase 2 (timing): bg-only B' paused (SIGSTOP), {production, dog3dz --max-gap-frac 0.4 --salvage} AB/BA -> results/pointcloud_eval/graphdet_eval4_timing/{r1,r2}/, then B' resumed.
 - Phase 3: re-score from saved polylines (scratch rescore_v2.py) for production, unfiltered, drop, hybrid.
+
+## 2026-10-28 09:06 JST Result (Claude, fullscan): eval4 verdict, B' bg-only done
+- eval4 (frozen criteria, analysis-note 00:16, code f151e8a): all items pass for dog3dz K2 + F 0.4 + salvage C10 L10. synth sig best_good 0.511 (prod 0.159, unfiltered 0.534), fake ratio median 0.94 (max 2.02), timing 0.84x median, RSS 1.26x, short <15 um best_good 36/48 (unfiltered 38/48); embed 0.506 (prod 0.217), lost 2 (prod 27), short 32/46 (34/46). Details in analysis-note (2026-10-28 09:06 entry). eval4 is used up; conclusion limited to the short-track-enriched v19 set.
+- B' background-only control finished: results/sim_eval/v19_bgonly_nagara_dz4_bprime.csv (100 events) + .done.
+- Next for fullscan: real-data checks before any production switch.
