@@ -1761,3 +1761,11 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - 実 E07 の画像で dog3dz は失敗。実際の飛跡は粒子に分かれない連続した暗い筋に見え、DoG の極大は筋の上にまばら（z の抑制後で筋 1 px あたり 0.69、production 2.30）。孤立した暗点が hit になり、段2 がそれらを全方向の直線につなぐ（T011 で全長 4.16 M px 対 1.18 M px、GT の順位は偶然と区別できない）。v19 は飛跡を粒子の列として描くので、eval2〜4 の合格は実画像に移らない。図は results/graphdet_specials_real/crops/。詳細は analysis-note（2026-10-28 09:31 の記録）。Codex 19 回目も同意。
 - 決定: dog3dz＋hybrid を本番候補から外し、production を維持。specials の実行は記録のために続ける。
 - 次: 実画像で筋に沿って点を置く方式を数視野だけで比べる。相方にレンダラーの飛跡の見え方の実データ合わせを依頼。
+
+## 2026-10-28 10:02 JST 予定（Claude, fullscan）: 筋状の信号での点の置き方（案 1、ユーザー承認）
+- 確認済み: v19 と v20 の embed nagara ev0000〜0004（同じ背景）で、信号飛跡 1 px あたりの hit は v19 で dog3dz 0.10・production 0.04、v20 で dog3dz 0.11・production 0.82。v20 の信号は実の筋のように振る舞うので、信号側の点の置き方の設計用に使う（代表的な評価基盤ではない、Codex 20 回目）。
+- 数字を見る前に固定した設計。設計データ: v20_embed_nagara_dz4 ev0000〜0009。候補はすべて production と同じ格子の書き出し（weighted_grid_hits、cell 6、重みは fog 画像、連結成分＋骨格化）、z の選択なし:
+  P0 production（Otsu＋remove_noise＋分類器）、P1 Otsu＋remove_noise・分類器なし、D2/D3/D4 DoG 応答（fog 画像に σ 1.2/3.0）> 中央値＋k ロバスト σ（k 2/3/4）＋remove_noise＋分類器、R3/R4 ridge 応答（eval_pointcloud.ridge_response）> k ロバスト σ（k 3/4）＋remove_noise＋分類器。
+- 指標: 信号飛跡（cls 1〜3）ごとに、粒子を飛跡に沿って並べた真の経路を物理弧長 0.5 µm ごとに標本化。被覆 = xy 3 px・1.5 スライス以内に hit がある標本の割合。被覆の p10、全損（被覆 0）、被覆のない最長区間（µm）。層は長さ <15 µm / ≥15 µm と急傾斜（|dz|/長さ > 0.7）。視野あたりの hit 数、領域あたりの最大 hit 数、ΣN²。信号以外の hit は数を報告するが偽とは呼ばない。
+- 実データの確認: 実 fullscan 視野の切り出しを目視。holdout は、どの embed の背景にも手動ラベルにも使っていない実 E07 fullscan 視野から固定乱数で選ぶ 5 視野で、候補を選んだ後に初めて見る。そこでも筋への点の置き方の優位が保たれることを、graphdet に進む条件にする。
+- 出力: scratch のみ（place_eval.py、place_*.csv、切り出しは results/graphdet_specials_real/crops/place_*）。
