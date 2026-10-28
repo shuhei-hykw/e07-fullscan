@@ -161,6 +161,23 @@ view with its fog, beam tracks, other tracks and noise. (f) Minimum
 projection over the event's slices with the true vertices. Made by
 `python scripts/sim_figure.py [--event ev0021]`.
 
+Candidate lists for the method A + graph-detector (B') union study,
+which e07-g4-hypernuclei scores:
+
+```bash
+python scripts/union_inputs.py v20_embed_evalU_dz4          # embedded
+python scripts/union_inputs.py v20_embed_evalU_dz4 --real   # real views
+```
+
+Each event gets the production method-A candidates and the B' branch
+points (classifier export, cell 6, z 3.8 um). Outputs go to
+`results/sim_eval/<set>[_real]_{methodA_production,bprime}.csv`, plus
+`_events.csv` with one row per finished event, so a view with no
+candidates is told apart from one not yet run; `<set>.done` appears
+when every event is listed. A rerun skips listed events. `--real`
+reads each event's `truth.json` `background_view` instead of the
+embedded image.
+
 ### Measuring the point cloud (input to the graph detector)
 
 ```bash
