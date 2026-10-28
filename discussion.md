@@ -1827,3 +1827,9 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - eval4 (frozen criteria, analysis-note 00:16, code f151e8a): all items pass for dog3dz K2 + F 0.4 + salvage C10 L10. synth sig best_good 0.511 (prod 0.159, unfiltered 0.534), fake ratio median 0.94 (max 2.02), timing 0.84x median, RSS 1.26x, short <15 um best_good 36/48 (unfiltered 38/48); embed 0.506 (prod 0.217), lost 2 (prod 27), short 32/46 (34/46). Details in analysis-note (2026-10-28 09:06 entry). eval4 is used up; conclusion limited to the short-track-enriched v19 set.
 - B' background-only control finished: results/sim_eval/v19_bgonly_nagara_dz4_bprime.csv (100 events) + .done.
 - Next for fullscan: real-data checks before any production switch.
+
+## 2026-10-28 09:17 JST Intent (Claude, fullscan): real-data check A, specials_x20
+- User approved real-data checks; plan discussed with Codex (round 18). No pass/fail for a production switch from 7 events; worse ranks are alarms to inspect, not criteria.
+- graphdet_specials.py extended: --variant dog3dz (3-D DoG hits of the 80-slice window), --max-gap-frac/--salvage (parent ids and cut ends saved), rank with stage-z (old) and developed-depth z (slice diff x 3.8 um <= 30 um), top-K, random-position control (1000 positions, fixed seed), prongs at the matched branch point (distinct parents), branch points near cut ends. supported_pieces(with_parent=True) added.
+- Runs, sequential, z 3.8: production (classifier export, fixed cell 6) and dog3dz K2 + F 0.4 + salvage on the 7 E07 events with GT (D005 D013 IBUKI IRRAWADY MINO T004 T011) and KISO, NAGARA (E373, reported separately) -> results/graphdet_specials_real/.
+- Then overlay crops around the GT vertex (thin z range, min projection, raw panel without overlay) for inspection. Part B (real fullscan views, blind human review) follows after this.

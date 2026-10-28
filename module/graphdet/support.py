@@ -114,24 +114,39 @@ def unsupported_fraction(polys: list, x: np.ndarray, z_scale: float,
 def supported_pieces(polys: list, x: np.ndarray, z_scale: float,
                      cut: float = SALVAGE_CUT_PX,
                      min_len: float = SALVAGE_MIN_PX,
-                     step: float = SAMPLE_STEP_PX) -> list:
+                     step: float = SAMPLE_STEP_PX,
+                     with_parent: bool = False):
   """Polylines split at unsupported runs longer than ``cut``; pieces
-  shorter than ``min_len`` are dropped. Pieces are the samples."""
+  shorter than ``min_len`` are dropped. Pieces are the samples.
+
+  With ``with_parent`` also returns, per piece, the index of the
+  polyline it came from and whether its start / end is a cut (not an
+  end of that polyline), shape (n, 2)."""
   if not len(polys):
-    return []
-  sp, _, step_len, start, run_len = _support(polys, x, z_scale, step)
+    return ([], np.zeros(0, int), np.zeros((0, 2), bool)) \
+      if with_parent else []
+  sp, sid, step_len, start, run_len = _support(polys, x, z_scale, step)
   bad = run_len > cut
   keep = ~bad
   # A piece starts at each polyline start and after removed samples
   new = keep & (start | np.r_[True, bad[:-1]])
   pid = np.cumsum(new)[keep]
   pts, seg = sp[keep], np.where(new, 0.0, step_len)[keep]
+  # A sample is a polyline end if the next / previous sample is not on
+  # the same polyline
+  last = np.r_[sid[1:] != sid[:-1], True][keep]
+  first = start[keep]
+  parent = sid[keep]
   bounds = np.flatnonzero(np.diff(pid)) + 1
-  out = []
+  out, par, cut_end = [], [], []
   for idx in np.split(np.arange(len(pid)), bounds):
     if len(idx) >= 2 and seg[idx].sum() >= max(min_len, MIN_LENGTH_PX):
       out.append(pts[idx])
-  return out
+      par.append(parent[idx[0]])
+      cut_end.append((not first[idx[0]], not last[idx[-1]]))
+  if not with_parent:
+    return out
+  return out, np.array(par, int), np.array(cut_end, bool).reshape(-1, 2)
 
 
 def filter_polylines(polys: list, x: np.ndarray, z_scale: float,

@@ -278,6 +278,10 @@ def test_supported_pieces_split_at_the_gap():
   long_only = supported_pieces([poly], hits, 1.0, cut=_GAP_PX / 2,
                                min_len=np.mean(_PIECE_LENS_PX))
   assert len(long_only) == 1
+  _, parent, cut = supported_pieces([poly], hits, 1.0, cut=_GAP_PX / 2,
+                                    min_len=0.0, with_parent=True)
+  assert parent.tolist() == [0, 0]
+  assert cut.tolist() == [[False, True], [True, False]]
   kept, keep = filter_polylines([poly], hits, 1.0, 0.0, salvage=True)
   assert not keep[0] and len(kept) == len(_PIECE_LENS_PX)
 

@@ -1750,3 +1750,9 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - eval4（凍結した基準、analysis-note 00:16、コード f151e8a）: dog3dz K2＋F 0.4＋salvage C10 L10 で全項目合格。synth の sig best_good 0.511（production 0.159、フィルタなし 0.534）、偽の比 中央値 0.94（最大 2.02）、時間 中央値 0.84 倍、RSS 1.26 倍、短 <15 µm の best_good 36/48（フィルタなし 38/48）。embed 0.506（production 0.217）、全損 2（production 27）、短 32/46（34/46）。詳細は analysis-note（2026-10-28 09:06 の記録）。eval4 は使い切り。結論は短い飛跡を増やした v19 の組まで。
 - 背景のみの B' 対照が完了: results/sim_eval/v19_bgonly_nagara_dz4_bprime.csv（100 事象）と .done。
 - fullscan の次: 本番の置き換えの前に実データで確認。
+
+## 2026-10-28 09:17 JST 予定（Claude, fullscan）: 実データ確認 A、specials_x20
+- ユーザーが実データでの確認を承認。計画は Codex と議論済み（18 回目）。7 事象から本番の置き換えの合否は出さない。順位の悪化は精査の警報で、基準にはしない。
+- graphdet_specials.py を拡張: --variant dog3dz（80 スライス窓の 3D DoG の hit）、--max-gap-frac/--salvage（元の折れ線の番号と切断端を保存）、順位をステージ z（従来）と現像後の深さ（スライス差 × 3.8 µm ≤ 30 µm）の両方で、上位 K、ランダム位置の対照（1000 点、固定乱数）、一致した分岐点の枝（元の折れ線の数）、切断端の近くの分岐点の数。supported_pieces(with_parent=True) を追加。
+- 実行（順番に、z 3.8）: production（分類器で書き出し、cell 6 固定）と dog3dz K2＋F 0.4＋salvage を、GT のある E07 の 7 事象（D005 D013 IBUKI IRRAWADY MINO T004 T011）と KISO・NAGARA（E373、別に報告）に → results/graphdet_specials_real/。
+- その後、GT の vertex 周りの切り出し画像（薄い z 範囲、最小値投影、重ね描きなしの画像も）を作って見る。B（実 fullscan 視野、人による盲検レビュー）はこの後。
