@@ -82,7 +82,7 @@ specials_x20 はすべてダブル超核イベントであり、ほかにも多�
 
 ## 開発ログ（最新が上）
 
-## 2026-10-28 15:20 JST — v20 tune で graphdet: production 対 RS（開発用）
+## 2026-10-28 15:02 JST — v20 tune で graphdet: production 対 RS（開発用）
 
 holdout の盲検レビュー待ちの間に、点の置き方の候補 RS（10:58 に固定）を graphdet の段1・2 に
 通した。v20_embed_tune_dz4 の 10 事象、z 3.8、フィルタなし。RS の hit は scratch で書き出し、
@@ -111,7 +111,7 @@ graphdet_pointcloud.py の新しい --hits-npz で読ませた（検出器と採
 - 時間: 1 事象の書き出しは production 70 秒、RS 143 秒（今の RS のコードは不要な DoG と分類器も
   計算する）。段1＋2 で約 90 秒減るので全体では RS が速そうだが、AB/BA では未測定。
 - Codex 22 回目: 長い飛跡の低下は説明がつくまで懸念として扱う。evalA の基準案は discussion
-  15:20 の記録。基準は盲検レビューの結果を見てから固定する。evalA は閉じたまま。
+  15:02 の記録。基準は盲検レビューの結果を見てから固定する。evalA は閉じたまま。
 
 ## 2026-10-28 14:05 JST — specials の一括実行（production と dog3dz、9 事象）
 
