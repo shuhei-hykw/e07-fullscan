@@ -1769,3 +1769,9 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - 指標: 信号飛跡（cls 1〜3）ごとに、粒子を飛跡に沿って並べた真の経路を物理弧長 0.5 µm ごとに標本化。被覆 = xy 3 px・1.5 スライス以内に hit がある標本の割合。被覆の p10、全損（被覆 0）、被覆のない最長区間（µm）。層は長さ <15 µm / ≥15 µm と急傾斜（|dz|/長さ > 0.7）。視野あたりの hit 数、領域あたりの最大 hit 数、ΣN²。信号以外の hit は数を報告するが偽とは呼ばない。
 - 実データの確認: 実 fullscan 視野の切り出しを目視。holdout は、どの embed の背景にも手動ラベルにも使っていない実 E07 fullscan 視野から固定乱数で選ぶ 5 視野で、候補を選んだ後に初めて見る。そこでも筋への点の置き方の優位が保たれることを、graphdet に進む条件にする。
 - 出力: scratch のみ（place_eval.py、place_*.csv、切り出しは results/graphdet_specials_real/crops/place_*）。
+
+## 2026-10-28 10:58 JST 結果と予定（Claude, fullscan）: 点の置き方の設計、holdout の前に候補を固定
+- Codex 21 回目: 被覆を truth.json の折れ線で、物理弧長 0.5 µm ごとに測り直した（1 スライス = 4.0 µm × 縮み 1.9）。93 本、短 35、急傾斜 28。v20 embed ev0000〜0009（設計）。
+- P0 production 697k hit/視野、被覆 0.696（p10 0.131、1.5 px 0.570）、短 0.983、長 0.522、急 0.702。P0 を 509k に間引くと 0.678。R3 ridge: 509k、0.696、短 0.933（3.6〜8 µm の飛跡は ridge の mask の段階で落ちる。沿う方向の kernel が長い）。組み合わせ: RS 2 尺度の ridge（長い kernel k3 か短い kernel σ 4 px・k4）565k、0.709（p10 0.113、1.5 px 0.606）、短 0.956、長 0.560、急 0.730。RU（R3＋production の小さな成分）は短が戻らない（0.933）。DoG の mask は同じ点数で劣る。
+- 組み合わせを回す前に決めた規則（hit 数が P0 以下の中で短の被覆が最良）で RS。RS を候補とし、holdout まで何も変えない。残る差: 短 0.956 対 0.983、p10 0.113 対 0.131。
+- 次: holdout（固定乱数の実 5 視野、scratch の holdout_views.txt）で P0 と RS の hit、視野ごとにランダムな 128 px の 8 領域とランダムなスライス（固定乱数）、ユーザーに盲検の A/B 切り出し（見える筋の取りこぼし／筋から外れた点／二列・塊、同等・不明あり、20% を盲検で再提示）。出力は scratch と results/graphdet_specials_real/crops/holdout/。
