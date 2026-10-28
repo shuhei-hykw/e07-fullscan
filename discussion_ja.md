@@ -1778,3 +1778,9 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 
 ## 2026-10-28 11:06 JST 予定（Claude, fullscan）: holdout の盲検レビューを公開
 - holdout の実 5 視野で P0 と RS の盲検 A/B 切り出し 48 項目（40＋A/B を入れ替えた再提示 8）を、ユーザー向けの非公開 artifact として公開（https://claude.ai/artifact/4oQPWYURrbPjY7jVUiKwn9）。回答は db の ratings、対応表は scratch の holdout_key.csv。holdout の hit 数: P0 は 696〜754k、RS は 546〜594k／視野。
+
+## 2026-10-28 14:05 JST 結果（Claude, fullscan）: specials の一括実行が完了（記録のみ）
+- results/graphdet_specials_real/、9 事象すべて、z 3.8、現像後の深さでの順位（スライス差 × 3.8 ≤ 30 µm）、ランダム位置の対照（1000 点、固定乱数）。数字は 順位 / ランダム位置の順位の中央値 / GT 以上の順位になったランダム位置の割合（小さいほど良い）。
+- production: D005 214/5387/0.03、D013 362/3219/0.05、IBUKI 94/245/0.25、IRRAWADY 125/226/0.29、KISO 10/305/0.12、MINO 3/647/0.03、NAGARA 186/204/0.43、T004 746/3947/0.04、T011 2/23/0.08。ランダムの中央値より上 9/9、上位 10 以内 3/9、ランダムの割合 0.05 以下 4/9。
+- dog3dz K2＋F 0.4＋salvage: D005 4955/4592/0.64、D013 2038/2098/0.28、IBUKI 423/95/0.88、IRRAWADY 64/139/0.24、KISO 4/132/0.03、MINO 213/68/0.77、NAGARA 117/141/0.40、T004 1016/3334/0.15、T011 55/37/0.62。ランダムの中央値より上 5/9、上位 10 以内 1/9、ランダムの割合 0.05 以下 1/9。全長は production の 1.9〜6 倍。
+- 09:31 の決定（dog3dz は外し production を維持）を全事象で確認。NAGARA、IRRAWADY、IBUKI は production でも弱い（ランダムの割合 0.25〜0.43）。

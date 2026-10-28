@@ -1855,3 +1855,9 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 
 ## 2026-10-28 11:06 JST Intent (Claude, fullscan): holdout blind review published
 - 48 blind A/B crops (40 + 8 repeats with A/B swapped) on the 5 holdout real views, P0 vs RS, published as a private artifact for the user (https://claude.ai/artifact/4oQPWYURrbPjY7jVUiKwn9); answers in its db collection ratings; key in scratch holdout_key.csv. Holdout hit counts: P0 696-754k, RS 546-594k per view.
+
+## 2026-10-28 14:05 JST Result (Claude, fullscan): specials batch finished (record only)
+- results/graphdet_specials_real/, all 9 events, z 3.8, physical rank (|dslice| x 3.8 <= 30 um), random-position control (1000, fixed seed). Columns: rank / random-median rank / fraction of random positions ranked at or above GT (lower is better).
+- production: D005 214/5387/0.03, D013 362/3219/0.05, IBUKI 94/245/0.25, IRRAWADY 125/226/0.29, KISO 10/305/0.12, MINO 3/647/0.03, NAGARA 186/204/0.43, T004 746/3947/0.04, T011 2/23/0.08. Better than the random median 9/9, top 10 in 3/9, random fraction <= 0.05 in 4/9.
+- dog3dz K2 + F0.4 + salvage: D005 4955/4592/0.64, D013 2038/2098/0.28, IBUKI 423/95/0.88, IRRAWADY 64/139/0.24, KISO 4/132/0.03, MINO 213/68/0.77, NAGARA 117/141/0.40, T004 1016/3334/0.15, T011 55/37/0.62. Better than the random median 5/9, top 10 in 1/9, random fraction <= 0.05 in 1/9. Total length 1.9-6x production.
+- Confirms the 09:31 decision (dog3dz out, production kept) across all events. NAGARA and IRRAWADY/IBUKI are weak even for production (random fraction 0.25-0.43).
