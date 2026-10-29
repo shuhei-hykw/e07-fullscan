@@ -199,7 +199,8 @@ one. It costs about 7 min per view on e07-srv. `fullscan_union.py`
 merges the per-slice method-A catalogue (`results/vertex_v7`) across
 slices, as `rank_specials.py` does. It adds the top B' points and
 writes `results/fullscan_union/union.parquet`, with a `source` column
-of A or Bprime.
+of A or Bprime. `--partial` builds it from the views whose B' is already
+finished, for an early look.
 
 ### Measuring the point cloud (input to the graph detector)
 
