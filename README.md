@@ -178,6 +178,29 @@ when every event is listed. A rerun skips listed events. `--real`
 reads each event's `truth.json` `background_view` instead of the
 embedded image.
 
+The union rule itself is in `module/pipeline/union.py`. It was adopted
+on 2026-10-29 after the evalU gate: each view keeps every method-A
+candidate and adds the 770 B' branch points with the highest local
+darkness. Local darkness is the minimum projection over ±3 slices
+minus its Gaussian background (σ 8 px), averaged over the 13 × 13 px
+square around the point. Ties are broken at random with a fixed seed.
+This is the same definition as e07-g4-hypernuclei
+`module/rankstudy.py`, which scored the rule.
+
+```bash
+python scripts/union_candidates.py v20_embed_evalU_dz4   # -> _union.csv
+python scripts/fullscan_bprime.py --first 0 --last 100   # B' per view
+python scripts/fullscan_union.py                          # all views
+```
+
+`fullscan_bprime.py` writes one CSV per full-scan view to
+`results/fullscan_bprime/`; a rerun skips views that already have
+one. It costs about 7 min per view on e07-srv. `fullscan_union.py`
+merges the per-slice method-A catalogue (`results/vertex_v7`) across
+slices, as `rank_specials.py` does. It adds the top B' points and
+writes `results/fullscan_union/union.parquet`, with a `source` column
+of A or Bprime.
+
 ### Measuring the point cloud (input to the graph detector)
 
 ```bash
