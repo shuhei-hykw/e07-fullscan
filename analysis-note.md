@@ -94,11 +94,14 @@ evalA を見て直すことはしない。
   （再当てはめなしは 25、production は 30）。G 1〜3 が平らなので、その中央の G = 2 を選んだ。
   重なった複製を消す処理も試したが、被覆が落ちたので入れない。production に当てても改善しない
   （1.5 スライスで長い飛跡 29）ので、RS のきれいな偽の線に効く処理。偽の長さは変わらない。
-- **候補**: （tag rs_z3.8_rf2）。
+- **候補**: `graphdet_pointcloud.py --variant rs --depth-refit 2`（tag rs_z3.8_rf2）。
   **基準**: （production_z3.8）。どちらも z 3.8、フィルタなし、workers 8。
-- **実行**: 。AB/BA を 2 回。計測の間は他の仕事
+- **実行**: `PY=~/work/.venv/bin/python scripts/placement_gate_ab.sh <evalA>
+  results/pointcloud_eval/evalA "--variant production" "--variant rs --depth-refit 2"`。
+  AB/BA を 2 回。計測の間は他の仕事
   （和集合の入力の実行）をプロセス群ごと SIGSTOP する。
-- **採点と判定**: 。終了コード 0 は合格、1 は不合格、2 は無効（実行の欠けや不一致）。
+- **採点と判定**: `rescore_truth_polylines.py <evalA> evalA/r1 evalA/r2 --compare
+  production_z3.8 rs_z3.8_rf2`。終了コード 0 は合格、1 は不合格、2 は無効（実行の欠けや不一致）。
   - 主（4 スライス = 物理 30 µm）: 合計 good ≥ production − 3、lost ≤ production、
     短（< 15 µm）・長の両層で good 率 ≥ production − 0.05。
   - 歯止め（1.5 スライス）: 合計 good ≥ production − 3、長い飛跡の good 率 ≥ production − 0.05。
