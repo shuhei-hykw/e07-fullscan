@@ -1965,3 +1965,10 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - User: run B' on all 2,025 full-scan views on e07-srv after the v19 / dz 3.6 union input runs finish; two processes (views 0-1012, 1013-2024), nice 10, 12 workers each, ~5-6 days. scripts/fullscan_bprime.py -> results/fullscan_bprime/<view>.csv (V00000000 copied from the identical smoke run). Queued by scratch fsb_chain.sh (waits for the union runs to exit). Then fullscan_union.py -> results/fullscan_union/union.parquet. Paused if a timing phase needs the CPU. Owned: results/fullscan_bprime/, results/fullscan_union/.
 - User: RS closed. Production kept; RS (--variant rs, export_hits_grid(mask="rs")) and --depth-refit stay in the code as experimental options, no further development.
 - 18:24 full-scan B' started (18:1x, ~390 s/view per process, ~4.6 days); fullscan_union.py queued to run automatically when both halves exit (scratch fsu_chain.sh). Logs in scratch fsb_a/fsb_b/fsu.log.
+
+## 2026-10-29 20:41 JST Result (peer e07-g4-hypernuclei-e9, logged by Claude, fullscan): union sensitivity checks
+- Same evalU views as the gate, scored once each; the lower bound stays above zero in both and no A find is lost.
+- v19 signal appearance (v19_embed_evalU_dz4): capture at 12 um, inclusive, union 48% vs A 40% (real 35/33), G = +6% [+2, +11]; LL event G = +8% [+3, +14].
+- dz 3.6 step (v20_embed_evalU_dz3.6): union 67% vs A 55% (real 35/32), G = +9% [+2, +16]; LL event G = +21% [+12, +31].
+- Primary gate (v20 dz4) for reference: G = +9% [+3, +15]. Union adoption stands.
+- Files: e07-g4-hypernuclei output/unionstudy_evalU_dz4_v19.txt, output/unionstudy_evalU_dz3.6_v20.txt. Peer has no heavy jobs running.

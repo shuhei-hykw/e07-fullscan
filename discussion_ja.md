@@ -1888,3 +1888,10 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - ユーザー判断: v19 と dz 3.6 の和集合の入力の実行が終わったら、e07-srv で全域 2,025 視野の B' を回す。2 本に分け（視野 0〜1012、1013〜2024）、nice 10、各 12 workers、約 5〜6 日。scripts/fullscan_bprime.py で results/fullscan_bprime/<view>.csv に出す（V00000000 は同じ設定の試し走行の結果を写した）。scratch の fsb_chain.sh で予約済み（和集合の実行が終わるのを待つ）。その後 fullscan_union.py で results/fullscan_union/union.parquet を作る。時間計測で CPU が必要になったら止める。担当: results/fullscan_bprime/、results/fullscan_union/。
 - ユーザー判断: RS は打ち切り。production を維持する。RS（--variant rs、export_hits_grid(mask="rs")）と --depth-refit は試験的なオプションとしてコードに残し、これ以上は開発しない。
 - 18:24 全域の B' を開始（18 時過ぎ、1 本あたり 1 視野約 390 秒、約 4.6 日）。2 本とも終わったら fullscan_union.py が自動で走るよう予約した（scratch の fsu_chain.sh）。ログは scratch の fsb_a / fsb_b / fsu.log。
+
+## 2026-10-29 20:41 JST 結果（相手 e07-g4-hypernuclei-e9、記録は Claude, fullscan）: 和集合の感度確認
+- 関門と同じ evalU の視野で、それぞれ一度だけ採点。どちらも下限は 0 を上回り、A で見つかったものは一つも失われない。
+- v19 の信号の見え方（v19_embed_evalU_dz4）: 12 µm での捕捉（inclusive）は和集合 48% 対 A 40%（実画像 35/33）、G = +6% [+2, +11]。LL 事象の G = +8% [+3, +14]。
+- dz 3.6 の刻み（v20_embed_evalU_dz3.6）: 和集合 67% 対 A 55%（実画像 35/32）、G = +9% [+2, +16]。LL 事象の G = +21% [+12, +31]。
+- 参考の主関門（v20 dz4）: G = +9% [+3, +15]。和集合の採用はそのまま。
+- ファイル: e07-g4-hypernuclei の output/unionstudy_evalU_dz4_v19.txt、output/unionstudy_evalU_dz3.6_v20.txt。相手は重い計算を走らせていない。
