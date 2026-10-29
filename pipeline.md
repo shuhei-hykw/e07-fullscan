@@ -64,9 +64,11 @@
 
 **④の候補は A ＋ 暗さ順 B' の和集合に決定**（2026-10-29、evalU の関門を通過）:
 1 視野の A の本番候補すべて＋B' の分岐点を暗さ順に上位 K = 770（P0 の書き出し、
-z 3.8）。規則は discussion.md 2026-10-28 16:49。**結合のコードはまだ無い**（入力は
-`scripts/union_inputs.py`、採点は g4 側の `unionstudy`）。全域では B' の graphdet を
-1 視野約 7 分ずつ走らせる費用がかかる。
+z 3.8）。規則は discussion.md 2026-10-28 16:49。結合は `module/pipeline/union.py`。
+全域は `scripts/fullscan_bprime.py`（視野ごとの B'、`results/fullscan_bprime/`）→
+`scripts/fullscan_union.py`（`results/vertex_v7` をスライス間でまとめた A＋上位 B' →
+`results/fullscan_union/union.parquet`）。**全域の B' は未実行**（1 視野約 6.5 分、
+2,025 視野で直列約 9 日）。シミュレーションの組は `union_inputs.py` → `union_candidates.py`。
 
 ---
 

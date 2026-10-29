@@ -1956,3 +1956,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - 4 slices: pooled good 51 vs 54 (pass), lost 0 vs 0, short (29) 0.931 vs 0.862 (-0.069, FAIL: 27 vs 25), long (60) 0.400 vs 0.483 (pass). 1.5 slices: pooled 40 vs 46, long 0.300 vs 0.367 (pass). Off-signal ratio median 0.449 / max 0.673, time ratio median 0.617, RSS max 10770 vs 9222 MB (pass).
 - Short-track changes: RS+refit lost 3 (6.6, 13.4, 10.3 um; best 0.33 / 0.21 / 0.46), gained 1 (11.8 um).
 - As frozen: RS stays experimental, production kept, no evalA-driven fixes. A future RS candidate needs a fresh unused set. Union runs resumed (SIGCONT) at the end of the timing phase.
+
+## 2026-10-29 17:37 JST Result (Claude, fullscan): union code checked
+- module/pipeline/union.py: darkness identical to g4 rankstudy given the same slice index (max diff 0.0, ev0124, 31k B' points). The top-770 differs by 4-7 points per view on evalU because B' points often sit on exact half slices and g4 derives the slice from a float32-based stage step; fullscan snaps to 1e-6 and rounds half to even. Peer informed.
+- Full-scan path tested on one view (V00000000): fullscan_bprime 382 s (with the union runs at nice 19 alongside), 32,816 branch points; fullscan_union gives A 775 + B' 770. Not launched on all views (2,025 x ~6.5 min ~ 9 days serial on e07-srv): user decision.
