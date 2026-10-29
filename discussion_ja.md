@@ -1859,3 +1859,7 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - コード: module/ridge_mask.py と export_hits_grid(mask="rs")。RS の書き出しから不要な DoG と union の計算を除いた。書き出す点は tune の 10 事象すべてで固定済みの scratch の出力と完全一致（負荷下で 1 事象 178〜253 秒）。graphdet_pointcloud.py に --variant rs を追加（時間は production と同じく書き出しと分類器の学習を含む全体）。scripts/rescore_truth_polylines.py は真の折れ線での採点と関門判定を repo に移したもの。tune の数字を完全に再現。
 - Codex 26 回目: 1.5 スライスの歯止めは合計 good ≥ production − 3、長い飛跡の率 ≥ production − 0.05 にすべき。−6 / −0.10 は tune での低下のすぐ外側に置いただけになっている。完全性の確認（40 回の実行、同じ真の飛跡、有限の値、r1/r2 の折れ線が同一）、折れ線が空のときの扱い、FAIL で 0 以外の終了コード、も入れるべき。すべて反映した。時間計測の間は他の仕事をプロセス群ごと SIGSTOP する。
 - この歯止めだと tune 自体が不合格になる（1.5 スライスで長い飛跡の率 0.448 対 0.373、−0.075）。ユーザーに判断を求めた: このまま固定して evalA を回す（不合格の見込みが高い）か、先に graphdet 側で折れ線ごとの深さの再当てはめを tune で試すか。evalA は未開封で、まだ何も固定していない。
+
+## 2026-10-29 14:43 JST 結果と予定（Claude, fullscan）: 和集合を採用、graphdet の深さ再当てはめを tune で
+- 和集合の関門（相手が固定した規則、unionstudy g4 8b13fdd で 1 回だけ採点）: v20_embed_evalU_dz4 で捕獲点 12 µm inclusive は和集合 72% 対 A 61%（実画像 35% 対 33%）、G +9% [+3, +15]、救済 11、A の発見の喪失 0。6 µm で G +10% [+5, +16]。LL 崩壊点 12 µm で G +10% [+4, +18]。LL 事象 52% 対 36%、G +13% [+6, +21]。開発時の参考値（+19%）の約半分で、主に A 単独が良かったため。STATUS.md と pipeline.md で和集合を採用に移した。結合のコードはまだ無い（この後の fullscan の仕事）。v19 と dz 3.6 の入力は実行中（感度の幅）。
+- ユーザーの選択（evalA）: 何かを固定する前に、graphdet 側で折れ線ごとの深さの再当てはめを tune で試す。点の置き方（RS）は変えないので新しい盲検レビューは不要だが、検出の新しい候補になる。設計は v20_embed_tune_dz4 だけで、15:02 に保存した折れ線と hit から行う（scratch）。evalA は閉じたまま。規則を選ぶまでは scratch だけ。
