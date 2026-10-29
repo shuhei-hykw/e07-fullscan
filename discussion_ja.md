@@ -1863,3 +1863,8 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 ## 2026-10-29 14:43 JST 結果と予定（Claude, fullscan）: 和集合を採用、graphdet の深さ再当てはめを tune で
 - 和集合の関門（相手が固定した規則、unionstudy g4 8b13fdd で 1 回だけ採点）: v20_embed_evalU_dz4 で捕獲点 12 µm inclusive は和集合 72% 対 A 61%（実画像 35% 対 33%）、G +9% [+3, +15]、救済 11、A の発見の喪失 0。6 µm で G +10% [+5, +16]。LL 崩壊点 12 µm で G +10% [+4, +18]。LL 事象 52% 対 36%、G +13% [+6, +21]。開発時の参考値（+19%）の約半分で、主に A 単独が良かったため。STATUS.md と pipeline.md で和集合を採用に移した。結合のコードはまだ無い（この後の fullscan の仕事）。v19 と dz 3.6 の入力は実行中（感度の幅）。
 - ユーザーの選択（evalA）: 何かを固定する前に、graphdet 側で折れ線ごとの深さの再当てはめを tune で試す。点の置き方（RS）は変えないので新しい盲検レビューは不要だが、検出の新しい候補になる。設計は v20_embed_tune_dz4 だけで、15:02 に保存した折れ線と hit から行う（scratch）。evalA は閉じたまま。規則を選ぶまでは scratch だけ。
+
+## 2026-10-29 15:12 JST 予定（Claude, fullscan）: evalA を固定して実行
+- 深さの再当てはめを tune で設計した（module/graphdet/depthrefit.py）。折れ線全体を z 方向に 5 スライスまで、最も暗い深さへずらす。利得は両方の深さでスタック内にある標本で比べ、G を超えたときだけ移す。tune で RS の長い飛跡の good（1.5 スライス）は G 0/1/1.5/2/3/4 で 28/30/31/30/29/26（再当てはめなしは 25、production は 30）。平らな範囲の中央の G 2 を選んだ。複製を消す処理は被覆が落ちたので使わない。production には効かない。偽の長さは変わらない。Codex 27 回目は同意（G 2、点の置き方の盲検レビューなしで新しい検出の候補として扱ってよい）。指摘された 2 点のコード修正（元の深さが無効なら移さない、利得は共通の標本で比べる。json と npz を全部照合する）は反映済み。
+- 固定（analysis-note 2026-10-29 15:12、コード 49c7459）: 候補は --variant rs --depth-refit 2、基準は --variant production、データは v20_embed_evalA_dz4。scripts/placement_gate_ab.sh（AB/BA を 2 回）で results/pointcloud_eval/evalA/{r1,r2} に出し、rescore_truth_polylines.py --compare production_z3.8 rs_z3.8_rf2 で採点する。関門: 4 スライスで合計 ≥ −3、lost ≤、両層 ≥ −0.05。1.5 スライスで合計 ≥ −3、長い飛跡 ≥ −0.05。偽の長さの中央値 ≤ 0.70、全視野 ≤ 1.0。時間の比の中央値 ≤ 1.0。RSS の最大 ≤ production。
+- 時間計測の間（約 3 時間）は和集合の入力の実行（union_chain のプロセス群）を SIGSTOP し、終わったら再開する。担当: results/pointcloud_eval/evalA/。
