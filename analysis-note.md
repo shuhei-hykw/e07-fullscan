@@ -95,7 +95,7 @@ evalA を見て直すことはしない。
   重なった複製を消す処理も試したが、被覆が落ちたので入れない。production に当てても改善しない
   （1.5 スライスで長い飛跡 29）ので、RS のきれいな偽の線に効く処理。偽の長さは変わらない。
 - **候補**: `graphdet_pointcloud.py --variant rs --depth-refit 2`（tag rs_z3.8_rf2）。
-  **基準**: （production_z3.8）。どちらも z 3.8、フィルタなし、workers 8。
+  **基準**: `--variant production`（production_z3.8）。どちらも z 3.8、フィルタなし、workers 8。
 - **実行**: `PY=~/work/.venv/bin/python scripts/placement_gate_ab.sh <evalA>
   results/pointcloud_eval/evalA "--variant production" "--variant rs --depth-refit 2"`。
   AB/BA を 2 回。計測の間は他の仕事
