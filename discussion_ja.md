@@ -1868,3 +1868,14 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - 深さの再当てはめを tune で設計した（module/graphdet/depthrefit.py）。折れ線全体を z 方向に 5 スライスまで、最も暗い深さへずらす。利得は両方の深さでスタック内にある標本で比べ、G を超えたときだけ移す。tune で RS の長い飛跡の good（1.5 スライス）は G 0/1/1.5/2/3/4 で 28/30/31/30/29/26（再当てはめなしは 25、production は 30）。平らな範囲の中央の G 2 を選んだ。複製を消す処理は被覆が落ちたので使わない。production には効かない。偽の長さは変わらない。Codex 27 回目は同意（G 2、点の置き方の盲検レビューなしで新しい検出の候補として扱ってよい）。指摘された 2 点のコード修正（元の深さが無効なら移さない、利得は共通の標本で比べる。json と npz を全部照合する）は反映済み。
 - 固定（analysis-note 2026-10-29 15:12、コード 49c7459）: 候補は --variant rs --depth-refit 2、基準は --variant production、データは v20_embed_evalA_dz4。scripts/placement_gate_ab.sh（AB/BA を 2 回）で results/pointcloud_eval/evalA/{r1,r2} に出し、rescore_truth_polylines.py --compare production_z3.8 rs_z3.8_rf2 で採点する。関門: 4 スライスで合計 ≥ −3、lost ≤、両層 ≥ −0.05。1.5 スライスで合計 ≥ −3、長い飛跡 ≥ −0.05。偽の長さの中央値 ≤ 0.70、全視野 ≤ 1.0。時間の比の中央値 ≤ 1.0。RSS の最大 ≤ production。
 - 時間計測の間（約 3 時間）は和集合の入力の実行（union_chain のプロセス群）を SIGSTOP し、終わったら再開する。担当: results/pointcloud_eval/evalA/。
+
+## 2026-10-29 15:53 JST 予定（Claude, fullscan）: 和集合を作るコード
+- module/pipeline/union.py（16:49 に固定した規則: A すべて＋局所の暗さで上位 770 の B'。定義は g4 の module/rankstudy.py から写した: FFT のガウス背景、±3 スライスの最小投影、13 × 13 の平均、同点の乱数 seed 0）。scripts/union_candidates.py（シミュレーションの組用、union_inputs の出力から作る）。scripts/fullscan_bprime.py（全域の視野ごとに B'、1 視野 1 CSV、途中から再開できる）。scripts/fullscan_union.py（results/vertex_v7 の A を rank_specials と同じくスライス間でまとめ、上位の B' を加えて results/fullscan_union/union.parquet に書く）。
+- evalA の時間計測が終わってから確認する: 自分の上位 770 の選び方を g4 の rankstudy（別プロセスで実行）と、v20_embed_evalU_dz4 の事象で比べる（採点済みの組で、選択だけを見る）。
+- まだ始めていない: 全域 2,025 視野の B' は 1 視野約 7 分（e07-srv で直列なら約 10 日）かかる。始めるかはユーザーに判断を求める。
+
+## 2026-10-29 17:25 JST 結果（Claude, fullscan）: evalA の判定は不合格
+- 固定した関門（15:12、49c7459）を 1 回だけ当てた。evalA は使い切り。40 回の実行はすべて揃い、r1/r2 の折れ線は同一。出力は results/pointcloud_eval/evalA/（gate.txt、rescore_tracks.csv）。
+- 4 スライス: 合計 good 51 対 54（合格）、lost 0 対 0、短（29 本）0.931 対 0.862（−0.069 で不合格: 27 対 25）、長（60 本）0.400 対 0.483（合格）。1.5 スライス: 合計 40 対 46、長 0.300 対 0.367（合格）。偽の長さの比は中央値 0.449 / 最大 0.673、時間の比の中央値 0.617、RSS の最大 10770 対 9222 MB（合格）。
+- 短い飛跡の入れ替わり: RS＋再当てはめで落ちたのが 3 本（6.6、13.4、10.3 µm。最良の被覆 0.33 / 0.21 / 0.46）、拾えたのが 1 本（11.8 µm）。
+- 固定したとおり、RS は試験扱いのまま production を維持し、evalA を見て直すことはしない。今後 RS を候補にするなら、新しい未使用の組が要る。時間計測が終わった時点で和集合の実行を再開した（SIGCONT）。
