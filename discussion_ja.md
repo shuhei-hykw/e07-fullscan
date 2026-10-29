@@ -1887,3 +1887,4 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 ## 2026-10-29 17:48 JST 予定（Claude, fullscan）: ユーザー判断。全域の B' を予約、RS は打ち切り
 - ユーザー判断: v19 と dz 3.6 の和集合の入力の実行が終わったら、e07-srv で全域 2,025 視野の B' を回す。2 本に分け（視野 0〜1012、1013〜2024）、nice 10、各 12 workers、約 5〜6 日。scripts/fullscan_bprime.py で results/fullscan_bprime/<view>.csv に出す（V00000000 は同じ設定の試し走行の結果を写した）。scratch の fsb_chain.sh で予約済み（和集合の実行が終わるのを待つ）。その後 fullscan_union.py で results/fullscan_union/union.parquet を作る。時間計測で CPU が必要になったら止める。担当: results/fullscan_bprime/、results/fullscan_union/。
 - ユーザー判断: RS は打ち切り。production を維持する。RS（--variant rs、export_hits_grid(mask="rs")）と --depth-refit は試験的なオプションとしてコードに残し、これ以上は開発しない。
+- 18:24 全域の B' を開始（18 時過ぎ、1 本あたり 1 視野約 390 秒、約 4.6 日）。2 本とも終わったら fullscan_union.py が自動で走るよう予約した（scratch の fsu_chain.sh）。ログは scratch の fsb_a / fsb_b / fsu.log。
