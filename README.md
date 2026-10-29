@@ -241,6 +241,22 @@ fog-removed slice is above its robust threshold, either the long one
 (2.5 px across, 12 px along, 3 sigma) or the short one (4 px along,
 4 sigma). It puts hits along streaks rather than on blobs.
 Experimental; production stays Otsu.
+`--depth-refit GAIN` adds a step after stage 2 (and the filter),
+`module/graphdet/depthrefit.py`, which is not in the MATLAB original.
+It moves each whole polyline up to 5 slices in z, to the depth where
+the mean darkness along it peaks: fog-removed and 3×3 box-averaged,
+compared on the samples inside the stack at both depths. It moves only
+when that beats the polyline's own depth by more than GAIN grey
+levels. An out-of-focus track still darkens neighbouring slices, and
+with the clean RS point cloud stage 2 builds copies of a track at the
+wrong depth. The step's time is in `refit_s` and `total_s`, and the
+tag gets `_rf<GAIN>`.
+
+`scripts/placement_gate_ab.sh DATASET OUT "ARGS_A" "ARGS_B"` runs two
+variants on every event, twice, in AB/BA order: repetition 1 puts A
+first on even events, repetition 2 reverses. Outputs go to `OUT/r1` and
+`OUT/r2`, ready for `rescore_truth_polylines.py --compare`. `PY` picks
+the interpreter.
 
 `scripts/rescore_truth_polylines.py DATASET RUN_DIR [RUN_DIR ...]`
 re-scores saved `_polys.npz` against the `truth.json` track polylines

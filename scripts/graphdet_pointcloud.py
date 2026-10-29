@@ -46,7 +46,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import eval_pointcloud as ep                                  # noqa: E402
 from module.graphdet import (                                # noqa: E402
-  E07_SLICE_UM, MATLAB_CONFIG, integrate_smallregions,
+  E07_SLICE_UM, MATLAB_CONFIG, darkness_stack, integrate_smallregions,
+  refit_depth,
 )
 from module.graphdet.support import (                        # noqa: E402
   filter_polylines, sample,
@@ -298,6 +299,12 @@ def main() -> int:
   ap.add_argument("--salvage", action="store_true",
                   help="keep the supported pieces of the dropped "
                   "polylines (with --max-gap-frac)")
+  ap.add_argument("--depth-refit", type=float, default=None,
+                  metavar="GAIN",
+                  help="after stage 2 (and the filter), move each "
+                  "polyline in z to its darkest depth when that gains "
+                  "more than GAIN grey levels (module/graphdet/"
+                  "depthrefit.py; default gain 2)")
   ap.add_argument("--hits-npz", type=Path, default=None,
                   help="precomputed (N, 3) hits in export coordinates "
                   "(array 'hits'); the tag is the file stem and "
@@ -315,6 +322,8 @@ def main() -> int:
   tag += f"_z{args.z_um:g}"
   if args.max_gap_frac is not None:
     tag += f"_g{args.max_gap_frac:g}" + ("s" if args.salvage else "")
+  if args.depth_refit is not None:
+    tag += f"_rf{args.depth_refit:g}"
   name = f"{ev.parent.name}__{ev.name}__{tag}"
   args.out.mkdir(parents=True, exist_ok=True)
 
@@ -337,6 +346,14 @@ def main() -> int:
       polys, _ = filter_polylines(polys, x, cfg.z_scale,
                                   args.max_gap_frac, args.salvage)
     t4 = time.time()
+    n_shift = 0
+    if args.depth_refit is not None:
+      dark = darkness_stack(load_spng(ev / "image.json"))
+      polys, shift = refit_depth(polys, dark, cfg.z_scale,
+                                 args.depth_refit, offset=_ORIGIN_OFFSET)
+      n_shift = int((shift != 0).sum())
+      del dark
+    t5 = time.time()
 
   reader = load_spng(ev / "image.json")
   g = dict(np.load(ev / "grains.npz"))
@@ -346,7 +363,8 @@ def main() -> int:
          "region_max": int(n_reg.max()), "sum_n2": float((n_reg ** 2).sum()),
          "hits_s": round(t1 - t0, 1), "stage1_s": round(t2 - t1, 1),
          "stage2_s": round(t3 - t2, 1), "filter_s": round(t4 - t3, 1),
-         "total_s": round(t4 - t0, 1),
+         "refit_s": round(t5 - t4, 1), "n_shifted": n_shift,
+         "total_s": round(t5 - t0, 1),
          "rss_tree_peak_mb": round(mem.peak_mb),
          "n_segments": int(seg.shape[2]), "n_polylines": len(polys)}
   row.update(quality(tt, pt))

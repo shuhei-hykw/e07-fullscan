@@ -198,10 +198,11 @@ def gate(t, js, base, cand, zs):
   return ok
 
 
-def complete(t, js, run_dirs, base, cand, n_events):
-  """Refuse to judge unless every run is present once, both variants saw
-  the same truth tracks, numbers are finite, and the repetitions'
-  polylines are identical."""
+def complete(t, js, dataset, run_dirs, base, cand, n_events):
+  """Refuse to judge unless every event of the dataset has a json and
+  polylines for both variants in every run dir, each run is present
+  once, both variants saw the same truth tracks, numbers are finite,
+  and the repetitions' polylines are identical."""
   bad = []
   ev = sorted(js.event.unique())
   if len(ev) != n_events:
@@ -218,12 +219,20 @@ def complete(t, js, run_dirs, base, cand, n_events):
                      .drop_duplicates().to_numpy())) for v in (base, cand)}
   if keys[base] != keys[cand]:
     bad.append("truth track sets differ between variants")
+  for e in sorted(p.name for p in dataset.glob("ev*")):
+    for v in (base, cand):
+      if not ((t.event == e) & (t.variant == v)).any():
+        bad.append(f"{e} {v}: no scored truth tracks")
+      for d in run_dirs:
+        for suf in (".json", "_polys.npz"):
+          f = d / f"{dataset.name}__{e}__{v}{suf}"
+          if not f.exists():
+            bad.append(f"missing {f}")
   for f in sorted(run_dirs[0].glob("*_polys.npz")):
     a = np.load(f)
     for d in run_dirs[1:]:
       g = d / f.name
       if not g.exists():
-        bad.append(f"missing {g}")
         continue
       b = np.load(g)
       if not (np.array_equal(a["n"], b["n"])
@@ -265,7 +274,8 @@ def main():
     js = pd.concat([runs(d) for d in args.run_dirs])
     js = js[js.variant.isin(args.compare)]
     n_ev = args.n_events or len(list(args.dataset.glob("ev*")))
-    if not complete(t, js, args.run_dirs, *args.compare, n_ev):
+    if not complete(t, js, args.dataset, args.run_dirs, *args.compare,
+                    n_ev):
       return 2
     return 0 if gate(t, js, *args.compare, args.near_z) else 1
   return 0
