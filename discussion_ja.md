@@ -1883,3 +1883,7 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 ## 2026-10-29 17:37 JST 結果（Claude, fullscan）: 和集合のコードを確認
 - module/pipeline/union.py: 同じスライス番号を渡せば、暗さは g4 の rankstudy と完全に一致する（最大差 0.0、ev0124、B' 31k 点）。evalU では上位 770 の選択が 1 視野あたり 4〜7 点違う。B' の点はちょうど半スライスに乗ることが多く、g4 は float32 由来のステップからスライス番号を出しているため。fullscan 側は 1e-6 に丸めてから、半分は偶数側へ丸める。相手に伝えた。
 - 全域用の経路を 1 視野（V00000000）で試した: fullscan_bprime は 382 秒（和集合の実行を nice 19 で並べた状態）、分岐点 32,816。fullscan_union で A 775＋B' 770。全視野ではまだ走らせていない（2,025 × 約 6.5 分で、e07-srv の直列で約 9 日）。始めるかはユーザー判断。
+
+## 2026-10-29 17:48 JST 予定（Claude, fullscan）: ユーザー判断。全域の B' を予約、RS は打ち切り
+- ユーザー判断: v19 と dz 3.6 の和集合の入力の実行が終わったら、e07-srv で全域 2,025 視野の B' を回す。2 本に分け（視野 0〜1012、1013〜2024）、nice 10、各 12 workers、約 5〜6 日。scripts/fullscan_bprime.py で results/fullscan_bprime/<view>.csv に出す（V00000000 は同じ設定の試し走行の結果を写した）。scratch の fsb_chain.sh で予約済み（和集合の実行が終わるのを待つ）。その後 fullscan_union.py で results/fullscan_union/union.parquet を作る。時間計測で CPU が必要になったら止める。担当: results/fullscan_bprime/、results/fullscan_union/。
+- ユーザー判断: RS は打ち切り。production を維持する。RS（--variant rs、export_hits_grid(mask="rs")）と --depth-refit は試験的なオプションとしてコードに残し、これ以上は開発しない。

@@ -1960,3 +1960,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 ## 2026-10-29 17:37 JST Result (Claude, fullscan): union code checked
 - module/pipeline/union.py: darkness identical to g4 rankstudy given the same slice index (max diff 0.0, ev0124, 31k B' points). The top-770 differs by 4-7 points per view on evalU because B' points often sit on exact half slices and g4 derives the slice from a float32-based stage step; fullscan snaps to 1e-6 and rounds half to even. Peer informed.
 - Full-scan path tested on one view (V00000000): fullscan_bprime 382 s (with the union runs at nice 19 alongside), 32,816 branch points; fullscan_union gives A 775 + B' 770. Not launched on all views (2,025 x ~6.5 min ~ 9 days serial on e07-srv): user decision.
+
+## 2026-10-29 17:48 JST Intent (Claude, fullscan): user decisions; full-scan B' queued, RS closed
+- User: run B' on all 2,025 full-scan views on e07-srv after the v19 / dz 3.6 union input runs finish; two processes (views 0-1012, 1013-2024), nice 10, 12 workers each, ~5-6 days. scripts/fullscan_bprime.py -> results/fullscan_bprime/<view>.csv (V00000000 copied from the identical smoke run). Queued by scratch fsb_chain.sh (waits for the union runs to exit). Then fullscan_union.py -> results/fullscan_union/union.parquet. Paused if a timing phase needs the CPU. Owned: results/fullscan_bprime/, results/fullscan_union/.
+- User: RS closed. Production kept; RS (--variant rs, export_hits_grid(mask="rs")) and --depth-refit stay in the code as experimental options, no further development.
