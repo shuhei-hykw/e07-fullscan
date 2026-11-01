@@ -421,7 +421,9 @@ def refine_endpoints(
     if dl[-1] < cfg.refine_dl_min:
       break
 
-  return lseg[:, :, ~np.isnan(lseg[0, 0, :])]
+  # A segment shifted onto its other end has no direction (0/0); its
+  # far end turns NaN. Drop it whole, as a fully NaN one already is.
+  return lseg[:, :, ~np.isnan(lseg).any(axis=(0, 1))]
 
 
 def detect_lseg_smallregion(

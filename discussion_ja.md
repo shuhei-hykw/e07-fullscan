@@ -1905,3 +1905,8 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 ## 2026-11-01 18:57 JST 結果（Claude, fullscan）: 和集合の specials 確認
 - scripts/union_specials.py → results/union_specials.csv。和集合はどの許容（200 / 100 / 50 px、z は範囲 ±30 µm）でも 9/9 で正解を含み、すべて A 経由（A だけで 9/9）。B' だけの救済は 0。B' の上位 770 に入るのは 200 px で 8/9、50 px で 7/9。KISO と NAGARA（E373）は 770 位より後ろ（暗さ順 968〜1755 位）。B' の順位が A より良いのは T004（6 対 13）と T011（200 px で 17 対 57）。
 - 注意: B' は 1 視野 1〜7 万点と密なので偶然の一致がありうる。specials は A で見つけた事象なので、この組では B' の上積みは測れない（それは evalU で測った）。
+
+## 2026-11-01 21:38 JST 予定（Claude, fullscan）: 段 1 の NaN の修正、全域の B' の後半を再開
+- 全域の B' の後半（視野 1013〜2024）が V00001866 で停止（1,694/2,025 済み）。integrate._EndpointIndex の cKDTree で "data must be finite"。原因: 段 1 の調整（detectlseg.py）で、端点 0 がちょうど端点 1 に重なるまで動いた線分は方向が 0/0 になり、端点 1 だけ NaN になる。最後の選別は端点 0 の NaN しか見ていなかった。
+- 修正（module/graphdet/detectlseg.py）: どこかに NaN がある線分は捨てる。全部 NaN の線分は以前から捨てられ、一部だけ NaN の線分は必ず段 2 で落ちていたので、これまで走った視野の出力は変わらない。MATLAB は NaN を黙って持ち越すはずで、退化した場合だけの違い。
+- 再開: scripts/fullscan_bprime.py --first 1013（済んだ視野は飛ばす）、同じ設定、ログは scratch の fsb_b2.log。和集合の予約をかけ直す（scratch の fsu_chain2.sh）。2 本とも終わったら fullscan_union.py、続けて fullscan_union_summary.py。担当は従来どおり＋module/graphdet/detectlseg.py（この行）。
