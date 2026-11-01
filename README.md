@@ -202,6 +202,16 @@ writes `results/fullscan_union/union.parquet`, with a `source` column
 of A or Bprime. `--partial` builds it from the views whose B' is already
 finished, for an early look.
 
+`union_specials.py` applies the same rule to the confirmed specials
+events from saved inputs (`results/specials_merged`,
+`results/graphdet_specials_real`) and writes `results/union_specials.csv`:
+for each event and xy tolerance, the best A rank, the best B' dark rank
+in the union and among all B' points.
+
+```bash
+python scripts/union_specials.py
+```
+
 ### Measuring the point cloud (input to the graph detector)
 
 ```bash

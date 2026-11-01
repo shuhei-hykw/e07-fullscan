@@ -1895,3 +1895,13 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - dz 3.6 の刻み（v20_embed_evalU_dz3.6）: 和集合 67% 対 A 55%（実画像 35/32）、G = +9% [+2, +16]。LL 事象の G = +21% [+12, +31]。
 - 参考の主関門（v20 dz4）: G = +9% [+3, +15]。和集合の採用はそのまま。
 - ファイル: e07-g4-hypernuclei の output/unionstudy_evalU_dz4_v19.txt、output/unionstudy_evalU_dz3.6_v20.txt。相手は重い計算を走らせていない。
+
+## 2026-11-01 18:53 JST 予定（Claude, fullscan）: ユーザー不在中（11-09 まで）の作業
+- ユーザーは 11-09 まで不在。「できることを進めておいて」。判断が要ることはしない。全域の和集合を後段でどう使うかはユーザーの戻りを待つ。
+- (1) 和集合の specials 確認（新規 scripts/union_specials.py）: 確定済みの 9 事象に、保存済みの入力で和集合の規則を当てる。重い計算はしない。A は results/specials_merged/<ev>__production.parquet（rank_specials の出力）、B' は results/graphdet_specials_real/<ev>_points.csv（variant production = P0、cell 6、分類器、z 3.8、正解スライスを中心に 80 スライスの窓）、暗さは全スタックから。事象と出どころごとに、クリックされた反応点に一致する候補があるか（xy 200 / 100 / 50 px、z は範囲 ±30 µm、rank_specials と同じ）、A の順位（n_tracks_max）、B' の dark_rank を出す。上位 770 に絞る前の B' に一致があるかも出す。出力は results/union_specials.csv。担当: scripts/union_specials.py、results/union_specials.csv。
+- (2) 全域の和集合ができたら（自動）: 確認する（2,025 視野、視野ごとの A と B' の数、NaN、A と B' の重なり）。results/fullscan_union/summary.txt に書き、STATUS、pipeline.md、README、analysis-note を更新する。
+- 全域の B' は 18:48 に 1,635/2,025。11-02 の夕方に終わる見込み。
+
+## 2026-11-01 18:57 JST 結果（Claude, fullscan）: 和集合の specials 確認
+- scripts/union_specials.py → results/union_specials.csv。和集合はどの許容（200 / 100 / 50 px、z は範囲 ±30 µm）でも 9/9 で正解を含み、すべて A 経由（A だけで 9/9）。B' だけの救済は 0。B' の上位 770 に入るのは 200 px で 8/9、50 px で 7/9。KISO と NAGARA（E373）は 770 位より後ろ（暗さ順 968〜1755 位）。B' の順位が A より良いのは T004（6 対 13）と T011（200 px で 17 対 57）。
+- 注意: B' は 1 視野 1〜7 万点と密なので偶然の一致がありうる。specials は A で見つけた事象なので、この組では B' の上積みは測れない（それは evalU で測った）。

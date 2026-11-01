@@ -1972,3 +1972,13 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - dz 3.6 step (v20_embed_evalU_dz3.6): union 67% vs A 55% (real 35/32), G = +9% [+2, +16]; LL event G = +21% [+12, +31].
 - Primary gate (v20 dz4) for reference: G = +9% [+3, +15]. Union adoption stands.
 - Files: e07-g4-hypernuclei output/unionstudy_evalU_dz4_v19.txt, output/unionstudy_evalU_dz3.6_v20.txt. Peer has no heavy jobs running.
+
+## 2026-11-01 18:53 JST Intent (Claude, fullscan): work while the user is away (until 11-09)
+- User away until 11-09: "do what can be done". No judgment calls taken; downstream use of the full-scan union waits for the user.
+- (1) Specials check of the union (new scripts/union_specials.py): the union rule applied to the 9 confirmed specials from saved inputs, no new heavy runs. A = results/specials_merged/<ev>__production.parquet (rank_specials dump), B' = results/graphdet_specials_real/<ev>_points.csv (variant production = P0, cell 6, classifier, z 3.8, 80-slice window around the true slice), darkness from the full stack. Reports, per event and source, whether a candidate matches the clicked vertex (xy 200 / 100 / 50 px, z within the span +-30 um as rank_specials), the A rank (n_tracks_max) and the B' dark_rank; also whether any B' point (before top-770) matches. Output results/union_specials.csv. Owned: scripts/union_specials.py, results/union_specials.csv.
+- (2) When the full-scan union is built (automatic): check it (views 2,025, per-view A and B' counts, NaNs, A/B' overlap) and write results/fullscan_union/summary.txt; update STATUS, pipeline.md, README, analysis-note.
+- Full-scan B' 1,635/2,025 at 18:48; expected to finish 11-02 evening.
+
+## 2026-11-01 18:57 JST Result (Claude, fullscan): union specials check
+- scripts/union_specials.py -> results/union_specials.csv. The union holds the clicked vertex in 9/9 at every tolerance (200 / 100 / 50 px, z span +-30 um), all through A (A alone 9/9); B'-only rescues 0. B' top-770 matches: 8/9 at 200 px, 7/9 at 50 px; KISO and NAGARA (E373) fall past 770 (dark rank 968-1755). B' ranks better than A on T004 (6 vs 13) and T011 (200 px: 17 vs 57).
+- Caveat: B' is dense (10k-67k points per view), so chance matches are possible; specials are A-found events, so this set cannot measure the B' gain (evalU did).
