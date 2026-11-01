@@ -1987,3 +1987,6 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Full-scan B' second half (views 1013-2024) crashed at V00001866 (1,694/2,025 done): cKDTree "data must be finite" in integrate._EndpointIndex. Cause: in the stage-1 refinement (detectlseg.py) a segment whose endpoint 0 was shifted exactly onto endpoint 1 gets a zero direction (0/0), so endpoint 1 turns NaN while endpoint 0 stays finite; the final filter only dropped segments with NaN in endpoint 0.
 - Fix (module/graphdet/detectlseg.py): drop a segment with NaN anywhere. A fully-NaN segment was already dropped and a partly-NaN one always crashed stage 2, so every view that ran before gives identical output. MATLAB would carry the NaN silently; this only affects the degenerate case.
 - Restart: scripts/fullscan_bprime.py --first 1013 (skips finished views), same settings, log scratch fsb_b2.log. Re-arm the union build (scratch fsu_chain2.sh) to run fullscan_union.py then fullscan_union_summary.py after both halves exit. Owned files unchanged plus module/graphdet/detectlseg.py (this line).
+
+## 2026-11-02 01:40 JST Note (Claude, fullscan): scripts/monitor-e07-srv.sh
+- User request: a CLI view of e07-srv like the first row of Grafana's System dashboard, for a tmux pane. New scripts/monitor-e07-srv.sh (reads /proc and nvidia-smi, no root). Owned: that file.

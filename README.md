@@ -138,6 +138,14 @@ python run.py map ...             # spatial vertex distribution map
 python run.py click ...           # click ground-truth vertices
 ```
 
+For a quick look at e07-srv itself (CPU busy, load, RAM, swap, root FS,
+GPU; like the first row of Grafana's Node Exporter dashboard), leave
+this running in a tmux pane; it reads /proc only:
+
+```bash
+scripts/monitor-e07-srv.sh [INTERVAL_S]   # default 5 s, Ctrl-C quits
+```
+
 Each command delegates to `python -m module.<target>` with the same arguments.
 
 ### Synthetic events: from Geant4 tracks to the microscope image
