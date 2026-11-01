@@ -212,6 +212,15 @@ in the union and among all B' points.
 python scripts/union_specials.py
 ```
 
+`fullscan_union_summary.py` checks the built union and writes
+`results/fullscan_union/summary.txt`: view count, per-view A and B'
+counts, non-finite or off-image positions, and the share of B' rows
+within 50 px of an A candidate next to the share for random points.
+
+```bash
+python scripts/fullscan_union_summary.py
+```
+
 ### Measuring the point cloud (input to the graph detector)
 
 ```bash
