@@ -1913,3 +1913,9 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 
 ## 2026-11-02 01:40 JST メモ（Claude, fullscan）: scripts/monitor-e07-srv.sh
 - ユーザー依頼: Grafana の System の最初の行のような e07-srv の表示を CLI で、tmux で走らせっぱなしにする用。新規 scripts/monitor-e07-srv.sh（/proc と nvidia-smi を読むだけ、root 不要）。担当: このファイル。
+
+## 2026-11-02 13:05 JST 結果（Claude, fullscan）: 全域の和集合が完成
+- 全域の B' が終わり（2,025/2,025、11-02 12:55 ごろ）、fullscan_union.py と fullscan_union_summary.py が自動で走った: results/fullscan_union/union.parquet（131 MB）と summary.txt。
+- 2,025/2,025 視野。A 1,554,446（視野あたり 638〜855、中央値 769）、B' 1,559,250（全視野で 770）。NaN なし。画像外の A 20,238（線の交点が縁をはみ出す）、画像外の B' 0。B' のうち A の候補から 50 px 以内は 92.4%、ランダムな点では 82.7%（A から 50 px より離れた B' は約 12 万点）。
+- A の件数が vertices_merged.parquet（1,516,569）と違うのはまとめ方の条件の違い: 和集合は視野ごとに min_slices 1（rank_specials、evalU の規則と同じ）、vertices_merged は min_slices 2、min_tracks 8。
+- 相手 e07-g4-hypernuclei-e9 に読むだけの点検を頼む。後段での使い方はユーザーの判断待ち。

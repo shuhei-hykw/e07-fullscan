@@ -1990,3 +1990,9 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 
 ## 2026-11-02 01:40 JST Note (Claude, fullscan): scripts/monitor-e07-srv.sh
 - User request: a CLI view of e07-srv like the first row of Grafana's System dashboard, for a tmux pane. New scripts/monitor-e07-srv.sh (reads /proc and nvidia-smi, no root). Owned: that file.
+
+## 2026-11-02 13:05 JST Result (Claude, fullscan): full-scan union built
+- Full-scan B' finished (2,025/2,025, 11-02 ~12:55) and fullscan_union.py + fullscan_union_summary.py ran automatically: results/fullscan_union/union.parquet (131 MB) and summary.txt.
+- 2,025/2,025 views; A 1,554,446 (per view 638-855, median 769), B' 1,559,250 (770 in every view); no non-finite positions; off-image A 20,238 (line crossings past the edge), off-image B' 0. B' within 50 px of an A candidate 92.4% vs 82.7% for random points (~120k B' rows farther than 50 px from any A).
+- A count differs from vertices_merged.parquet (1,516,569) by the merge settings: the union merges per view with min_slices 1 (as rank_specials and the evalU rule), vertices_merged used min_slices 2, min_tracks 8.
+- Peer e07-g4-hypernuclei-e9 invited to a read-only audit. Downstream use waits for the user.

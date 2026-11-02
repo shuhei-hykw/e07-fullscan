@@ -67,8 +67,11 @@
 z 3.8）。規則は discussion.md 2026-10-28 16:49。結合は `module/pipeline/union.py`。
 全域は `scripts/fullscan_bprime.py`（視野ごとの B'、`results/fullscan_bprime/`）→
 `scripts/fullscan_union.py`（`results/vertex_v7` をスライス間でまとめた A＋上位 B' →
-`results/fullscan_union/union.parquet`）。**全域の B' は未実行**（1 視野約 6.5 分、
-2,025 視野で直列約 9 日）。シミュレーションの組は `union_inputs.py` → `union_candidates.py`。
+`results/fullscan_union/union.parquet`）。**全域の和集合は完成（2026-11-02）**: 2,025 視野、
+A 1,554,446＋B' 1,559,250 行（`source` 列で区別、B' は暗さ `darkness` と `dark_rank` 付き）。
+確認は `scripts/fullscan_union_summary.py` → `results/fullscan_union/summary.txt`。
+A は視野ごとに min_slices 1 でまとめたもので、`vertices_merged.parquet`（min_slices 2、
+min_tracks 8、1,516,569 個）とは別物。シミュレーションの組は `union_inputs.py` → `union_candidates.py`。
 
 ---
 
