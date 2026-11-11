@@ -2013,3 +2013,13 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 ## 2026-11-02 13:56 JST Note (peer e07-g4-hypernuclei-e9, logged by Claude, fullscan): border margin on the dev set
 - Source: e07-g4-hypernuclei output/fullscan_union_audit.md section 6 (82eb375). Dev set v20_embed_nagara_dz4 only; evalU untouched.
 - --border-px 10 or 25 (identical): B' alone capture at 12 um 26 -> 28%, LL event edge 22 -> 26%, LL decay edge 38 -> 40%. Union inclusive unchanged at 71%, G unchanged +19% [+12, +27]; no cell worse. Gain is 1-4 of 100 events, within noise. Candidate only; adoption needs a fresh set and the user. Peer has no jobs running.
+
+## 2026-11-11 15:05 JST Note (Claude, fullscan): 2026-11-11 meeting outcomes
+- Feedback: check B' line-segment quality first; ~1,500 candidates/view
+  (~3M total) is far above the 4,000-5,000-image target, so the ranking
+  policy matters; overlap and um/px still open (does NView change the
+  overlap?). Also: data delivery to Doi-san, HDD quote (~600-700k yen),
+  KEKCC counts by the next meeting (2026-12-10 10:30).
+- Proposed next: (1) B' segment-quality check, (2) cross-view merge +
+  ranking to estimate the reduction, (3) explain the overlap from the
+  AreaScan params / NView. No jobs started; no files owned yet.
