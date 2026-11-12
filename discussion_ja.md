@@ -1997,3 +1997,9 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   0.453 対 0.495）。直した z（3.8/0.507）: best_good 0.558 だが上位 770 の捕獲 5/10。カット採用の根拠なし。z の修正は
   nagara（100 事象）で判断。出力 results/grid_consensus_v25_z029/、_z0507/、v20 の途中分は results/grid_consensus_v20/。
 - v25 nagara の和集合の入力は実行中（20:42 で 14/100）。
+
+## 2026-11-12 21:40 JST メモ（Claude、fullscan）: 和集合の視野をまたいだ重複のまとめ
+- scripts/union_dedup.py で results/fullscan_union/union.parquet（読むだけ）を処理。乾板座標で別の視野の候補を
+  xy 5 µm・z 15 µm 以内でつなぐ。311 万 → 196 万（対照 0.90 倍）。B' の暗い点 0.50 倍（対照 0.95 倍）、A 0.84 倍（0.93 倍）。
+  正しい倍率では A の視野間の一致は 5 µm で 28%（対照 6%）で、11-02 の点検の 4.2%（0.289 µm/px）ではない。
+  まとめだけでは約 200 万が残るので、順位づけが要る。

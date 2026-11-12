@@ -186,6 +186,12 @@ when every event is listed. A rerun skips listed events. `--real`
 reads each event's `truth.json` `background_view` instead of the
 embedded image.
 
+`union_dedup.py` counts how many union candidates are one object seen
+in several overlapping views: candidates go to plate coordinates (stage
+x/y/z and 0.507 um/px) and are linked across views within 5 or 10 um in
+xy and 15 um in z; a 40 um shifted link gives the chance level
+(`results/fullscan_union/dedup.txt`).
+
 The union rule itself is in `module/pipeline/union.py`. It was adopted
 on 2026-10-29 after the evalU gate: each view keeps every method-A
 candidate and adds the 770 B' branch points with the highest local

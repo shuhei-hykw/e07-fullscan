@@ -2128,3 +2128,11 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   nagara (100 events). Outputs results/grid_consensus_v25_z029/,
   _z0507/, partial v20 in results/grid_consensus_v20/.
 - v25 nagara union inputs running (14/100 at 20:42).
+
+## 2026-11-12 21:40 JST Note (Claude, fullscan): cross-view dedup of the union
+- scripts/union_dedup.py on results/fullscan_union/union.parquet (read
+  only): link candidates of different views within 5 um xy / 15 um z in
+  plate coordinates. 3.11 M -> 1.96 M objects (control 0.90x); B' darkest
+  points 0.50x (control 0.95x), A 0.84x (0.93x). With the true scale, A
+  matches across views 28 % at 5 um (control 6 %), not the 4.2 % of the
+  11-02 audit (0.289 um/px). Dedup alone leaves ~2 M; ranking needed.
