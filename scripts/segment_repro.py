@@ -22,6 +22,8 @@ offsets of matched samples per pair as a check of this mapping.
   python scripts/segment_repro.py score
   python scripts/segment_repro.py figure [--pair 22 22 23 22]
   python scripts/segment_repro.py stages [--pair 21 22 21 23]
+  python scripts/segment_repro.py gridshift --pair 21 22 0 0
+  python scripts/segment_repro.py consensus --pair 21 22 0 0
 
 stages splits the B' result by step for one pair: export hits (cached
 as <stem>_hits.npy), stage-1 segments and stage-2 polylines, each
@@ -75,6 +77,8 @@ LEN_BINS_UM = (0, 10, 25, 50, 100, np.inf)
 MIN_OWN_UM = 10.0       # owner length inside the overlap to be scored
 OWN_REPRO = 0.5         # owner reproduced: this fraction of it matched
 SLAB_UM = 20.0          # depth slab drawn by figure
+GRID_SHIFT_PX = 64      # half a stage-1 sub-region
+CONS_R_PX = 4.0         # consensus match radius (B' xy is coarse)
 RAND_SEED = 0
 OWN_EDGE_PX = 10        # B' piles up at the image border
 LOOSE_DZ_UM = 30.0      # depth window for the mapping check
@@ -541,10 +545,143 @@ def stages(args):
   print(f)
 
 
+def gridshift(args):
+  """Rerun stages 1 and 2 on one view's own hits with the sub-region grid
+  moved by GRID_SHIFT_PX in x and y, and score how much of the original
+  output the shifted run reproduces (same image, only the grid moved).
+  Only the part away from both grids' edges is scored."""
+  from module.graphdet import (E07_Z_SCALE, MATLAB_CONFIG,
+                               integrate_smallregions)
+  from module.graphdet.detectlseg import (N_REGIONS, REGION_PX,
+                                          detect_lseg_view)
+  from module.matlab_export import _ORIGIN_OFFSET
+
+  paths = view_paths(args.vx, args.vy)
+  k = tuple(args.pair[:2])
+  path = paths[k]
+  cfg = replace(MATLAB_CONFIG.for_spacing(float(CELL_PX)),
+                z_scale=E07_Z_SCALE)
+  f = OUT / f"{path.stem}_gridshift.npz"
+  if not f.exists():
+    x = load_hits(path) + _ORIGIN_OFFSET
+    sh = np.array([GRID_SHIFT_PX, GRID_SHIFT_PX, 0.0])
+    seg, _ = detect_lseg_view(x + sh, cfg=cfg, workers=WORKERS)
+    polys = integrate_smallregions(x + sh, seg, cfg)
+    seg = seg - sh[None, :, None]
+    polys = [q - sh for q in polys]
+    np.savez_compressed(
+      f, poly_xyz=np.concatenate(polys), poly_len=[len(q) for q in polys],
+      lseg=seg)
+  g = stage_of(path)
+  fb = OUT / f"{path.stem}_bprime.npz"
+  sets = {"lseg": (sample(load_lseg(fb)), sample(load_lseg(f))),
+          "poly": (sample(load_bprime(fb)), sample(load_bprime(f)))}
+  grid_end = REGION_PX * N_REGIONS - GRID_SHIFT_PX
+  lines = [f"{path.stem}: grid shifted by {GRID_SHIFT_PX} px, scored in "
+           f"x, y [{GRID_SHIFT_PX + EDGE_PX}, {grid_end - EDGE_PX}) px"]
+  for name, (s0, s1) in sets.items():
+    for tag, a, b in (("orig->shift", s0, s1), ("shift->orig", s1, s0)):
+      keep = ((a[:, :2] >= GRID_SHIFT_PX + EDGE_PX)
+              & (a[:, :2] < grid_end - EDGE_PX)).all(axis=1)
+      pa = to_plate(a[keep], *g)
+      pb = to_plate(b, *g)
+      dst = (cKDTree(pb[0]), pb[1], pb[2])
+      w, owner = a[keep, 6], a[keep, 5].astype(int)
+      parts = [f"{name} {tag}"]
+      for r in MATCH_PX[1:]:
+        r_um = r * UM_PER_PX
+        d, _ = best_match(pa, dst, r_um, MATCH_DZ_UM)
+        own, _ = owner_repro(owner, w, d <= r_um, d <= r_um)
+        parts.append(f"r {r:g} px: length {wfrac(w, d <= r_um):.1%}, "
+                     f"items {np.mean(own[0]):.1%}")
+      lines.append("; ".join(parts))
+  text = "\n".join(lines) + "\n"
+  print(text, end="")
+  (OUT / f"gridshift_{path.stem}.txt").write_text(text)
+
+
+def consensus(args):
+  """Cross-view consensus for one view's B' polylines: for each polyline,
+  the other views of the block that image most of it (>= OWN_REPRO of
+  its length inside them, away from their edges) and how many of those
+  reproduce >= OWN_REPRO of it (r CONS_R_PX, MATCH_DEG, MATCH_DZ_UM).
+  Kept: reproduced by >= 1 view, or imaged by no other view. Stage 3 is
+  rerun on all and on the kept polylines to compare branch points.
+  Writes consensus_<stem>.csv (per polyline) and .txt."""
+  from module.graphdet import (E07_Z_SCALE, MATLAB_CONFIG,
+                               attachment_codes, branch_points)
+  from module.matlab_export import _ORIGIN_OFFSET
+
+  paths = view_paths(args.vx, args.vy)
+  labelled = {f.name.split("__")[-2].split(".")[0]
+              for f in LABELS.glob("*.json")}
+  k = tuple(args.pair[:2])
+  others = [o for o in paths if o != k and paths[o].stem not in labelled
+            and (OUT / f"{paths[o].stem}_bprime.npz").exists()]
+  polys = load_bprime(OUT / f"{paths[k].stem}_bprime.npz")
+  s = sample(polys)
+  gk = stage_of(paths[k])
+  src = to_plate(s, *gk)
+  owner, w = s[:, 5].astype(int), s[:, 6]
+  n = len(polys)
+  tot = np.bincount(owner, weights=w, minlength=n)
+  n_cover = np.zeros(n, int)
+  n_repro = np.zeros(n, int)
+  r_um = CONS_R_PX * UM_PER_PX
+  for o in others:
+    go = stage_of(paths[o])
+    so = sample(load_bprime(OUT / f"{paths[o].stem}_bprime.npz"))
+    po = to_plate(so, *go)
+    ins = inside(src[0], go[0], EDGE_PX)
+    cover = np.bincount(owner, weights=w * ins, minlength=n) / tot
+    d, _ = best_match(tuple(v[ins] for v in src),
+                      (cKDTree(po[0]), po[1], po[2]), r_um, MATCH_DZ_UM)
+    rep = np.bincount(owner[ins], weights=w[ins] * (d <= r_um),
+                      minlength=n) / tot
+    c = cover >= OWN_REPRO
+    n_cover += c
+    n_repro += c & (rep >= OWN_REPRO * cover)
+  length = tot * UM_PER_PX
+  keep = (n_repro >= 1) | (n_cover == 0)
+  pd.DataFrame({"length_um": length, "n_cover": n_cover,
+                "n_repro": n_repro, "keep": keep}).to_csv(
+    OUT / f"consensus_{paths[k].stem}.csv", index=False)
+
+  cfg = replace(MATLAB_CONFIG.for_spacing(float(CELL_PX)),
+                z_scale=E07_Z_SCALE)
+  x = load_hits(paths[k]) + _ORIGIN_OFFSET
+  raw = [q + _ORIGIN_OFFSET for q in polys]
+  bp = {}
+  for tag, sel in (("all", raw),
+                   ("kept", [q for q, g in zip(raw, keep) if g])):
+    pts, _ = branch_points(sel, x, attachment_codes(sel, x, cfg), cfg)
+    bp[tag] = len(pts)
+  cov = n_cover >= 1
+  lines = [f"{paths[k].stem}: {n} polylines, other views "
+           f"{[o for o in others]}, r {CONS_R_PX} px, dz {MATCH_DZ_UM} um",
+           f"imaged by >= 1 other view: {cov.sum()} ({cov.mean():.1%}); "
+           f"of those reproduced by >= 1: "
+           f"{(n_repro[cov] >= 1).mean():.1%}",
+           f"kept {keep.sum()} ({keep.mean():.1%}), kept length "
+           f"{length[keep].sum() / UM_PER_MM:.0f} of "
+           f"{length.sum() / UM_PER_MM:.0f} mm",
+           f"branch points: all {bp['all']}, kept {bp['kept']}"]
+  for lo, hi in zip(LEN_BINS_UM[:-1], LEN_BINS_UM[1:]):
+    m = cov & (length >= lo) & (length < hi)
+    if m.any():
+      lines.append(f"  length {lo:g}-{hi:g} um: {m.sum()} imaged, "
+                   f"reproduced {(n_repro[m] >= 1).mean():.1%}, "
+                   f"by >= 2 {(n_repro[m] >= 2).mean():.1%}")
+  text = "\n".join(lines) + "\n"
+  print(text, end="")
+  (OUT / f"consensus_{paths[k].stem}.txt").write_text(text)
+
+
 def main():
   ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
   ap.add_argument("step", choices=["extract", "score", "figure",
-                                       "stages"])
+                                       "stages", "gridshift",
+                                       "consensus"])
   ap.add_argument("--pair", type=int, nargs=4, default=(22, 22, 23, 22),
                   help="figure: VX VY of two neighbouring views")
   ap.add_argument("--patch-px", type=int, default=300)
@@ -554,7 +691,8 @@ def main():
   ap.add_argument("--vy", type=int, nargs=2, default=(21, 23))
   args = ap.parse_args()
   {"extract": extract, "score": score, "figure": figure,
-   "stages": stages}[args.step](args)
+   "stages": stages, "gridshift": gridshift,
+   "consensus": consensus}[args.step](args)
 
 
 if __name__ == "__main__":

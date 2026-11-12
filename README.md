@@ -246,6 +246,8 @@ python scripts/segment_repro.py extract --vx 21 23 --vy 21 23  # ~4 min/view
 python scripts/segment_repro.py score     # results/segment_eval/scores.txt
 python scripts/segment_repro.py figure --pair 21 22 21 23   # overlay crops
 python scripts/segment_repro.py stages --pair 21 22 21 23   # hits/stage 1/2
+python scripts/segment_repro.py gridshift --pair 21 22 0 0  # grid moved
+python scripts/segment_repro.py consensus --pair 21 22 0 0  # cross-view cut
 ```
 
 ### Measuring the point cloud (input to the graph detector)

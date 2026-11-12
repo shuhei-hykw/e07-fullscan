@@ -2066,3 +2066,14 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   Overlay: stage 1 joins distant hit clusters by long straight lines and
   fans out of dense blobs. Candidates: cross-view consensus cut, hit
   continuity filter, shifted-grid rerun of stage 1. No jobs running.
+
+## 2026-11-12 14:40 JST Note (Claude, fullscan): grid instability and cross-view consensus
+- gridshift (VX21 VY22, same hits, stage-1 grid moved 64 px): only 46 %
+  of stage-1 segments / 41 % of polylines come back (2 px). Stage 1 is
+  grid-dependent; with the hit differences this explains the low
+  cross-view reproduction.
+- consensus (same view vs 7 others in the block): 31 % of polylines
+  reproduced by >= 1 view; stage 3 on those gives 6,929 branch points
+  vs 30,944. Efficiency on truth not checked yet (short tracks reproduce
+  less). Grid-shift consensus works on single views, so it can be
+  validated on specials / sim. No jobs running.
