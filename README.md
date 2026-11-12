@@ -245,6 +245,7 @@ left out of the scores.
 python scripts/segment_repro.py extract --vx 21 23 --vy 21 23  # ~4 min/view
 python scripts/segment_repro.py score     # results/segment_eval/scores.txt
 python scripts/segment_repro.py figure --pair 21 22 21 23   # overlay crops
+python scripts/segment_repro.py stages --pair 21 22 21 23   # hits/stage 1/2
 ```
 
 ### Measuring the point cloud (input to the graph detector)

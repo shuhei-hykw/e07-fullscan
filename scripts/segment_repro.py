@@ -21,6 +21,12 @@ offsets of matched samples per pair as a check of this mapping.
   python scripts/segment_repro.py extract [--vx 21 23 --vy 21 23]
   python scripts/segment_repro.py score
   python scripts/segment_repro.py figure [--pair 22 22 23 22]
+  python scripts/segment_repro.py stages [--pair 21 22 21 23]
+
+stages splits the B' result by step for one pair: export hits (cached
+as <stem>_hits.npy), stage-1 segments and stage-2 polylines, each
+scored for reproduction by the other view and for support (share of
+its length with an own hit within CELL_PX); figure stages_*.png.
 
 Outputs under results/segment_eval/: <stem>_bprime.npz (polylines,
 stage-1 segments, hit count), <stem>_A.parquet (Hough segments),
@@ -189,7 +195,8 @@ def inside(xy, stage_xy, margin_px):
   return ((px >= margin_px) & (px < IMAGE_PX - margin_px)).all(axis=1)
 
 
-def best_match(src, dst, r_um, dz_tol, shift=(0.0, 0.0), dz0=0.0):
+def best_match(src, dst, r_um, dz_tol, shift=(0.0, 0.0), dz0=0.0,
+               deg=None):
   """Per src sample: xy distance to the nearest dst sample within r_um
   that also agrees in direction (MATCH_DEG) and depth (|dz - dz0| <=
   dz_tol), inf if none, and that sample's (dx, dy, dz)."""
@@ -200,7 +207,8 @@ def best_match(src, dst, r_um, dz_tol, shift=(0.0, 0.0), dz0=0.0):
   jj = np.where(ok, j, 0)
   dz = z_dst[jj] - z[:, None]
   cos = np.abs(np.einsum("nkc,nc->nk", u_dst[jj], u))
-  ok &= (np.abs(dz - dz0) <= dz_tol) & (cos >= np.cos(np.radians(MATCH_DEG)))
+  deg = MATCH_DEG if deg is None else deg
+  ok &= (np.abs(dz - dz0) <= dz_tol) & (cos >= np.cos(np.radians(deg)))
   d = np.where(ok, d, np.inf)
   k = d.argmin(axis=1)
   n = np.arange(len(xy))
@@ -397,9 +405,146 @@ def figure(args):
   print(f)
 
 
+def load_hits(path):
+  """Export hits of a view (pixel x, pixel y, slice), cached."""
+  from module.matlab_export import _ORIGIN_OFFSET, export_hits_grid
+  from module.track_classifier import build_training_set, train_classifier
+  f = OUT / f"{path.stem}_hits.npy"
+  if not f.exists():
+    clf = train_classifier(*build_training_set(LABELS))
+    pl = export_hits_grid(path, cell=CELL_PX, denoise_method="classifier",
+                          classifier=clf)
+    np.save(f, (pl[:, :3] - _ORIGIN_OFFSET).astype(np.float32))
+  return np.load(f).astype(float)
+
+
+def load_lseg(f):
+  from module.matlab_export import _ORIGIN_OFFSET
+  e = np.load(f)["lseg"] - _ORIGIN_OFFSET
+  return [e[:, :, m] for m in range(e.shape[2])]
+
+
+def hit_samples(h):
+  # Points as zero-direction samples: own id, unit weight.
+  n = len(h)
+  return np.column_stack([h, np.ones(n), np.zeros(n), np.arange(n),
+                          np.ones(n)])
+
+
+def stage_sets(path):
+  fb = OUT / f"{path.stem}_bprime.npz"
+  h = load_hits(path)
+  return {"hits": ([p[None] for p in h], hit_samples(h)),
+          "lseg": (load_lseg(fb), sample(load_lseg(fb))),
+          "poly": (load_bprime(fb), sample(load_bprime(fb)))}
+
+
+def stages(args):
+  import matplotlib
+  matplotlib.use("Agg")
+  import matplotlib.pyplot as plt
+  from module.reader import load_spng
+
+  paths = view_paths(args.vx, args.vy)
+  a, b = tuple(args.pair[:2]), tuple(args.pair[2:])
+  geo = {k: stage_of(paths[k]) for k in (a, b)}
+  sets = {k: stage_sets(paths[k]) for k in (a, b)}
+  lines = [f"pair {a} {b}, dz {MATCH_DZ_UM} um, angle {MATCH_DEG} deg "
+           f"(hits: none), support radius {CELL_PX} px"]
+  for name in ("hits", "lseg", "poly"):
+    deg = 90.0 if name == "hits" else None
+    for k, o in ((a, b), (b, a)):
+      src, dst, w, owner = overlap(sets[k][name][1], sets[o][name][1],
+                                   geo[k], geo[o])
+      # Support: own hits near the sample, any direction.
+      hk = to_plate(sets[k]["hits"][1], *geo[k])
+      hdst = (cKDTree(hk[0]), hk[1], hk[2])
+      sup, _ = best_match(src, hdst, CELL_PX * UM_PER_PX, MATCH_DZ_UM,
+                          deg=90.0)
+      parts = [f"{name} {k}->{o}: n {len(sets[k][name][0])}"]
+      for r in MATCH_PX[1:]:
+        r_um = r * UM_PER_PX
+        d, _ = best_match(src, dst, r_um, MATCH_DZ_UM, deg=deg)
+        dc, _ = best_match(src, dst, r_um, MATCH_DZ_UM, deg=deg,
+                           shift=(CONTROL_SHIFT_UM, CONTROL_SHIFT_UM))
+        own, own_c = owner_repro(owner, w, d <= r_um, dc <= r_um)
+        parts.append(f"r {r:g} px: length {wfrac(w, d <= r_um):.1%} "
+                     f"(ctl {wfrac(w, dc <= r_um):.1%}), items "
+                     f"{np.mean(own[0]):.1%} (ctl {np.mean(own_c[0]):.1%})")
+      parts.append(f"support {wfrac(w, np.isfinite(sup)):.1%}")
+      lines.append("; ".join(parts))
+  text = "\n".join(lines) + "\n"
+  print(text, end="")
+  (OUT / f"stages_VX{a[0]}VY{a[1]}_VX{b[0]}VY{b[1]}.txt").write_text(text)
+
+  # Figure: patches in the overlap, depth slab around view a's middle.
+  z_mid = np.median(geo[a][1])
+  slab = (z_mid - SLAB_UM / 2, z_mid + SLAB_UM / 2)
+  rng = np.random.default_rng(RAND_SEED)
+  half = args.patch_px / 2 * UM_PER_PX
+  lo = np.maximum(geo[a][0], geo[b][0]) - (IMAGE_PX / 2 - EDGE_PX) * UM_PER_PX
+  hi = np.minimum(geo[a][0], geo[b][0]) + (IMAGE_PX / 2 - EDGE_PX) * UM_PER_PX
+  centres = rng.uniform(lo + half, hi - half, (args.n_patch, 2))
+  r_um = args.r_px * UM_PER_PX
+  imgs = {}
+  for k in (a, b):
+    sz = geo[k][1]
+    ks = np.flatnonzero((sz >= slab[0]) & (sz <= slab[1]))
+    imgs[k] = load_spng(paths[k]).read_stack()[ks].min(axis=0)
+  cols = [(k, n) for k in (a, b) for n in ("hits", "lseg", "poly")]
+  fig, axes = plt.subplots(args.n_patch, len(cols),
+                           figsize=(4 * len(cols), 4 * args.n_patch),
+                           squeeze=False)
+  for row, c in zip(axes, centres):
+    for ax, (k, name) in zip(row, cols):
+      o = b if k == a else a
+      items, s = sets[k][name]
+      xy, z, u = to_plate(s, *geo[k])
+      m = ((np.abs(xy - c) <= half).all(axis=1)
+           & (z >= slab[0]) & (z <= slab[1]))
+      pb = to_plate(sets[o][name][1], *geo[o])
+      d, _ = best_match((xy[m], z[m], u[m]), (cKDTree(pb[0]), pb[1], pb[2]),
+                        r_um, MATCH_DZ_UM,
+                        deg=90.0 if name == "hits" else None)
+      owner = s[m, 5].astype(int)
+      w = s[m, 6]
+      n = owner.max() + 1 if len(owner) else 0
+      tot = np.bincount(owner, weights=w, minlength=n)
+      hit = np.bincount(owner, weights=w * (d <= r_um), minlength=n)
+      px0 = to_px(c[None], geo[k][0])[0]
+      x0, y0 = (px0 - args.patch_px / 2).astype(int)
+      ax.imshow(imgs[k][y0:y0 + args.patch_px, x0:x0 + args.patch_px],
+                cmap="gray", extent=(x0, x0 + args.patch_px,
+                                     y0 + args.patch_px, y0))
+      js = np.flatnonzero(tot > 0)
+      ok = hit[js] / tot[js] >= OWN_REPRO
+      if name == "hits":
+        p = np.array([items[j][0] for j in js]).reshape(-1, 3)
+        ax.scatter(p[:, 0], p[:, 1], s=2, lw=0,
+                   c=np.where(ok, "lime", "red"))
+      else:
+        for j, g in zip(js, ok):
+          q = items[j]
+          ax.plot(q[:, 0], q[:, 1], "-", color="lime" if g else "red",
+                  lw=0.8, alpha=0.8)
+      ax.set_xlim(x0, x0 + args.patch_px)
+      ax.set_ylim(y0 + args.patch_px, y0)
+      ax.set_title(f"{name} VX{k[0]} VY{k[1]}: {ok.sum()}/{len(js)} "
+                   "reproduced", fontsize=9)
+      ax.set_xticks([])
+      ax.set_yticks([])
+  fig.suptitle(f"depth slab {slab[0]:.0f}..{slab[1]:.0f} um, "
+               f"r {args.r_px:g} px, dz {MATCH_DZ_UM:g} um")
+  fig.tight_layout()
+  f = OUT / f"stages_VX{a[0]}VY{a[1]}_VX{b[0]}VY{b[1]}.png"
+  fig.savefig(f, dpi=100)
+  print(f)
+
+
 def main():
   ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-  ap.add_argument("step", choices=["extract", "score", "figure"])
+  ap.add_argument("step", choices=["extract", "score", "figure",
+                                       "stages"])
   ap.add_argument("--pair", type=int, nargs=4, default=(22, 22, 23, 22),
                   help="figure: VX VY of two neighbouring views")
   ap.add_argument("--patch-px", type=int, default=300)
@@ -408,7 +553,8 @@ def main():
   ap.add_argument("--vx", type=int, nargs=2, default=(21, 23))
   ap.add_argument("--vy", type=int, nargs=2, default=(21, 23))
   args = ap.parse_args()
-  {"extract": extract, "score": score, "figure": figure}[args.step](args)
+  {"extract": extract, "score": score, "figure": figure,
+   "stages": stages}[args.step](args)
 
 
 if __name__ == "__main__":

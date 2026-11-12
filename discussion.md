@@ -2051,3 +2051,18 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   lines across bright background, not on visible tracks.
 - Next: hits overlay to locate where B' false lines arise; then
   cross-view duplicate merge. No jobs running.
+
+## 2026-11-12 13:23 JST Plan (Claude, fullscan): where B' false lines arise
+- User: go ahead with step 1. For views VX21 VY21-23, re-export the hits
+  (same production export) and score hits, stage-1 segments and stage-2
+  polylines for cross-view reproducibility, plus overlay figure of
+  each stage. New step "stages" in scripts/segment_repro.py; outputs
+  results/segment_eval/<stem>_hits.npy, stages.txt, stages_*.png.
+
+## 2026-11-12 13:50 JST Note (Claude, fullscan): B' false lines come from stage 1
+- stages on VX21 VY22/VY23: hits reproduced 54-67 % at 2 px (control
+  16-18 %), stage-1 segments 16-25 % (2-3 %), stage-2 polylines 12-19 %
+  (2-3 %). Reproducibility drops at stage 1; stage 2 inherits it.
+  Overlay: stage 1 joins distant hit clusters by long straight lines and
+  fans out of dense blobs. Candidates: cross-view consensus cut, hit
+  continuity filter, shifted-grid rerun of stage 1. No jobs running.
