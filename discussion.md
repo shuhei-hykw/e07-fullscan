@@ -2077,3 +2077,54 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   vs 30,944. Efficiency on truth not checked yet (short tracks reproduce
   less). Grid-shift consensus works on single views, so it can be
   validated on specials / sim. No jobs running.
+
+## 2026-11-12 15:15 JST Plan (Claude, fullscan): grid-shift consensus on v20 tune truth
+- User: keep going until a decision is needed. Validate a grid-shift
+  consensus filter for B' on truth before any adoption: per event of
+  e07-g4-hypernuclei/data/images/v20_embed_tune_dz4 (10 events, the
+  development set; evalA/evalU untouched), production hits, stages 1-2
+  at grid offsets (0,0), (64,0), (0,64), (64,64) (17x17 regions so no
+  hit is lost), keep base polylines reproduced in >= M shifted runs
+  (r 4 px, dz 15 um, 10 deg). Score all / kept / random same-count:
+  per-track recovery (graphdet_pointcloud.track_scores), stage-3 branch
+  points and truth-vertex capture (12 um).
+- New script scripts/grid_consensus.py; outputs results/grid_consensus/;
+  log logs/grid_consensus.log. Owned: those files only.
+
+## 2026-11-12 17:00 JST Note (Claude, fullscan): v20 embed scale mismatch; switch to v25
+- v20 embed draws the signal at 0.289 um/px on real full-scan
+  backgrounds (0.507 um/px): signal 1.75x too large in xy. Peer agrees
+  and re-renders as v25 at 0.507 (same events/seeds/backgrounds; z stays
+  4.0 um per slice). Synthetic efficiencies so far carry the mismatch.
+- grid_consensus on v20 tune, 4/10 events: M <= 2 keeps signal
+  best_good, branch points x0.43 at M=2; capture darkness rank mixed.
+  12 um capture is chance-dominated at ~30k branch points/view (2.6
+  expected), so the darkness rank vs top 770 is scored instead.
+- Plan: when v25_embed_tune_dz4 is ready, stop the v20 run and run
+  grid_consensus on v25 tune with detector z 3.8/0.29 (production) and
+  3.8/0.507 (corrected): results/grid_consensus_v25_z029/, _z0507/.
+  v25 evalA/evalU stay closed.
+
+## 2026-11-12 18:25 JST Plan (Claude, fullscan): v25 union inputs for the peer
+- (The 17:00 header of the previous entry was a guess; it was written
+  at about 16:15.)
+- Peer asked for production candidates on v25 (signal at 0.507 um/px):
+  scripts/union_inputs.py v25_embed_nagara_dz4 (dev) now, then
+  v25_embed_evalU_dz4 only after telling the peer (one-shot). Production
+  settings unchanged (classifier export, cell 6, z 3.8/0.29), so the
+  validated union rule stays the same. Outputs
+  results/sim_eval/v25_embed_{nagara,evalU}_dz4_{methodA_production,
+  bprime,events}.csv and .done; logs logs/union_inputs_v25_*.log.
+  --real is not rerun (same background views as v20).
+- grid_consensus on v25 tune keeps running (4/10 events each).
+
+## 2026-11-12 20:55 JST Note (Claude, fullscan): grid-shift consensus on v25 tune — not adopted
+- v25 tune, 10 events, 95 signal tracks. Production z (3.8/0.29):
+  M >= 2 cuts branch points to 0.42x but signal best_good 0.505 ->
+  0.463; capture vertex in the darkness top 770: 6/10 -> 7/10 (no
+  real gain). Random same-count cut is worse than consensus at M >= 1
+  (0.453 vs 0.495). Corrected z (3.8/0.507): best_good 0.558 but top-770
+  capture 5/10. No basis to adopt the cut; z correction to be judged on
+  nagara (100 events). Outputs results/grid_consensus_v25_z029/,
+  _z0507/, partial v20 in results/grid_consensus_v20/.
+- v25 nagara union inputs running (14/100 at 20:42).

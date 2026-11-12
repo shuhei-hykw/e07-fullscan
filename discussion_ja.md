@@ -1960,3 +1960,40 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 ## 2026-11-12 14:40 JST メモ（Claude, fullscan）: 格子の不安定さと視野間の一致
 - gridshift（VX21 VY22、同じ hit、段1 の格子を 64 px ずらす）: 段1 の線分は 46%、折れ線は 41% しか戻らない（2 px）。段1 は格子に依存し、hit の違いと合わせて視野間の再現の低さを説明する。
 - consensus（同じ視野とブロック内の他の 7 視野）: 1 視野以上で再現された折れ線は 31%。それだけで段3 を解くと分岐点は 30,944 → 6,929。正解付きの組での効率は未確認（短い飛跡ほど再現が低い）。格子ずらしの一致は 1 視野で使えるので、specials や合成で検証できる。走っている計算はない。
+
+## 2026-11-12 15:15 JST 計画（Claude、fullscan）: 格子ずらし一致を v20 tune の正解で検証
+- ユーザー: 判断が要るところまで進める。B' の格子ずらし一致フィルタを、採用前に正解付きで
+  確かめる。e07-g4-hypernuclei/data/images/v20_embed_tune_dz4（10 事象、開発用。evalA/evalU
+  は触らない）の各事象で、production の hit に段1・2 を格子のずらし (0,0)、(64,0)、(0,64)、
+  (64,64) で実行（17×17 領域にして hit を落とさない）。元の折れ線のうち、ずらした実行の
+  M 回以上で再現されたもの（4 px、dz 15 µm、10°）を残す。全部・残したもの・同数の無作為で、
+  飛跡ごとの回収（graphdet_pointcloud.track_scores）、段3 の分岐点、正解の反応点の捕獲
+  （12 µm）を比べる。
+- 新規 scripts/grid_consensus.py、出力 results/grid_consensus/、ログ
+  logs/grid_consensus.log。触るのはこれらのみ。
+
+## 2026-11-12 17:00 JST メモ（Claude、fullscan）: v20 embed の倍率のずれ、v25 に切り替え
+- v20 embed は信号を 0.289 µm/px で、実の全域スキャンの背景（0.507 µm/px）に描いている。信号が xy で
+  1.75 倍大きい。相手も同意し、0.507 で v25 として描き直す（同じ事象・種・背景、z は 4.0 µm/スライスのまま）。
+  これまでの合成の効率はこのずれを含む。
+- v20 tune で grid_consensus、10 事象中 4 事象: M ≤ 2 で信号の best_good は変わらず、M=2 で分岐点 0.43 倍。
+  捕獲点の暗さ順位はまちまち。分岐点が約 3 万/視野だと 12 µm の捕獲は偶然で決まる（期待 2.6 個）ので、
+  暗さ順の上位 770 に入るかで採点する。
+- 計画: v25_embed_tune_dz4 ができたら v20 の実行を止め、v25 tune で検出器の z を 3.8/0.29（本番）と
+  3.8/0.507（修正）の 2 通りで実行。出力 results/grid_consensus_v25_z029/、_z0507/。v25 の evalA/evalU は開けない。
+
+## 2026-11-12 18:25 JST 計画（Claude、fullscan）: 相手向けの v25 の和集合の入力
+- （前の項目の 17:00 は推測で、実際は 16:15 ごろに書いた。）
+- 相手の依頼で v25（信号 0.507 µm/px）に本番の候補を出す。scripts/union_inputs.py を
+  v25_embed_nagara_dz4（開発用）で今すぐ、v25_embed_evalU_dz4 は相手に伝えてから（一度きり）。
+  設定は本番のまま（分類器のエクスポート、cell 6、z 3.8/0.29）なので、検証済みの和集合の規則も同じ。
+  出力 results/sim_eval/v25_embed_{nagara,evalU}_dz4_{methodA_production,bprime,events}.csv と .done、
+  ログ logs/union_inputs_v25_*.log。--real は v20 と背景が同じなので再実行しない。
+- v25 tune の grid_consensus はそのまま実行中（それぞれ 4/10 事象）。
+
+## 2026-11-12 20:55 JST メモ（Claude、fullscan）: v25 tune で格子ずらし一致 — 採用しない
+- v25 tune、10 事象、信号の飛跡 95 本。本番の z（3.8/0.29）: M ≥ 2 で分岐点 0.42 倍だが信号の best_good 0.505 →
+  0.463、捕獲点が暗さ上位 770 に入るのは 6/10 → 7/10（実質差なし）。同数の無作為より一致の方が信号を残す（M ≥ 1 で
+  0.453 対 0.495）。直した z（3.8/0.507）: best_good 0.558 だが上位 770 の捕獲 5/10。カット採用の根拠なし。z の修正は
+  nagara（100 事象）で判断。出力 results/grid_consensus_v25_z029/、_z0507/、v20 の途中分は results/grid_consensus_v20/。
+- v25 nagara の和集合の入力は実行中（20:42 で 14/100）。

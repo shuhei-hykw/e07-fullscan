@@ -250,6 +250,28 @@ python scripts/segment_repro.py gridshift --pair 21 22 0 0  # grid moved
 python scripts/segment_repro.py consensus --pair 21 22 0 0  # cross-view cut
 ```
 
+`grid_consensus.py` checks the single-view counterpart on synthetic
+truth. It reruns B' stages 1-2 with the stage-1 grid moved by 64 px
+(three shifts), keeps the polylines that at least M shifted runs
+reproduce, and compares all / kept / a random subset of the same size
+by per-track recovery, stage-3 branch points and truth-vertex capture
+(12 um).
+
+```bash
+python scripts/grid_consensus.py \
+  ../e07-g4-hypernuclei/data/images/v25_embed_tune_dz4 \
+  --detector-px-um 0.29 --out results/grid_consensus_v25_z029
+```
+
+The pixel size and slice step come from each event's `truth.json`
+(`pixel_um`, `physical_dz_um`; v20 records neither and falls back to
+0.289 um and 4 um). `--detector-px-um` sets the detector's z scale
+(3.8 um per slice over it): 0.29 is what production uses, 0.507 the
+true full-scan pixel. Since ~30k branch points per view put ~1 random
+point within 12 um of any spot, the darkness rank of the branch points
+near the capture vertex (top 770 kept, as in the union) is the main
+vertex score.
+
 ### Measuring the point cloud (input to the graph detector)
 
 ```bash
