@@ -229,6 +229,24 @@ within 50 px of an A candidate next to the share for random points.
 python scripts/fullscan_union_summary.py
 ```
 
+### Segment quality across overlapping views
+
+Neighbouring full-scan views overlap by about 52 % per axis, so the
+same plate spot is imaged about four times. `segment_repro.py` measures
+segment quality without truth. For a block of views it rebuilds the B'
+polylines and the method-A Hough segments, then maps them to plate
+coordinates: stage x/y/z from the JSON plus 0.507 um/px, with the
+camera's x flip and a ~2.6 mrad rotation. It then scores how much of
+each view's segment length the overlapping view reproduces, against a
+shifted control. Views whose labels trained the export classifier are
+left out of the scores.
+
+```bash
+python scripts/segment_repro.py extract --vx 21 23 --vy 21 23  # ~4 min/view
+python scripts/segment_repro.py score     # results/segment_eval/scores.txt
+python scripts/segment_repro.py figure --pair 21 22 21 23   # overlay crops
+```
+
 ### Measuring the point cloud (input to the graph detector)
 
 ```bash

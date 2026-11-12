@@ -2023,3 +2023,31 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Proposed next: (1) B' segment-quality check, (2) cross-view merge +
   ranking to estimate the reduction, (3) explain the overlap from the
   AreaScan params / NView. No jobs started; no files owned yet.
+
+## 2026-11-11 15:16 JST Plan (Claude, fullscan): segment quality before branch points
+- User (11-11): evaluate the line segments first; duplicates across views
+  can be up to 4x and should be merged from the stage x/y/z in the JSON;
+  the pixel scale follows from the stage; the overlap is by design
+  (ScanArea 0-22 mm, 45 views, ~0.5 mm step). Peer ed8b6da: 0.507 um/px.
+- Truth-free check on real data: in a 3x3 block (VX/VY 21-23), rebuild
+  B' polylines (stage 1+2, production settings) and A Hough segments
+  per view, map them to plate coordinates (stage x/y + px x 0.507 um,
+  stage z of the slice) and measure how much segment length in one view
+  is reproduced by the overlapping view (distance, angle, dz), against
+  a shifted control; plus overlay crops for visual review.
+- New: scripts/segment_repro.py. Output: results/segment_eval/ (per-view
+  polylines .npz, A segments .parquet, scores, figures). e07-srv, 12
+  workers, ~1 h. Reads fullscan-image only; no shared files touched.
+
+## 2026-11-12 13:05 JST Note (Claude, fullscan): segment reproducibility across views
+- scripts/segment_repro.py on VX/VY 21-23 (8 views scored, V00001012
+  left out as classifier-label view; 24 pairs). Mapping: stage x/y/z +
+  0.507 um/px with x flip and ~2.6 mrad rotation; B' matched offsets
+  within 0.1 um in xy, median dz 0.0 um (per pair -3.6..+3.4), so
+  absolute stage z lines views up.
+- Segments >= 50 % reproduced by the neighbour (r 2 px, 10 deg, dz
+  15 um): A 54 % (control 19 %), B' 15 % (control 2 %); r 4 px B' 28 %,
+  long (>100 um) 42 %. Overlays: most B' polylines are long straight
+  lines across bright background, not on visible tracks.
+- Next: hits overlay to locate where B' false lines arise; then
+  cross-view duplicate merge. No jobs running.

@@ -1,0 +1,415 @@
+"""Truth-free line-segment quality on the full scan: does the overlapping
+view see the same segments?
+
+Neighbouring full-scan views overlap by ~52 % per axis (0.5 mm stage
+step, ~1.04 mm field), so the interior is imaged about four times. A
+real track segment should come back at the same plate position in each
+image; a noise segment should not. This script rebuilds, for a block of
+views, the B' polylines (export -> stage 1 -> stage 2, production
+settings of fullscan_bprime.py) and the method-A Hough segments
+(find_tracks on every slice), maps them to plate coordinates and scores
+how much segment length of one view is reproduced by its neighbour.
+
+Plate coordinates: x, y in um = stage x/y (JSON encoder readback, mm)
+x 1000 + PX_TO_UM @ (pixel - centre); z in um = stage z of the
+(fractional) slice. PX_TO_UM is solved from the neighbour image shifts
+measured by e07-g4-hypernuclei (VX+1: (+987.5, -2.6) px, VY+1:
+(-1.1, -987.4) px; x flipped, ~2.6 mrad camera rotation) and scaled to
+UM_PER_PX (encoder check, ed8b6da). score prints the median xy and z
+offsets of matched samples per pair as a check of this mapping.
+
+  python scripts/segment_repro.py extract [--vx 21 23 --vy 21 23]
+  python scripts/segment_repro.py score
+  python scripts/segment_repro.py figure [--pair 22 22 23 22]
+
+Outputs under results/segment_eval/: <stem>_bprime.npz (polylines,
+stage-1 segments, hit count), <stem>_A.parquet (Hough segments),
+scores.csv / scores.txt, crops_*.png.
+"""
+import argparse
+import glob
+import sys
+import time
+from dataclasses import replace
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from scipy.spatial import cKDTree
+
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(REPO / "scripts"))
+from fullscan_bprime import VIEWS  # noqa: E402
+
+OUT = REPO / "results/segment_eval"
+# The export noise classifier is trained on these views' labels, so
+# their hits are not independent of it: left out of the scores.
+LABELS = REPO / "results/manual_labels"
+UM_PER_PX = 0.507
+# Neighbour image shifts (px) for one view step in x and in y, and the
+# nominal stage step (um) they correspond to.
+SHIFT_VX_PX = (987.5, -2.6)
+SHIFT_VY_PX = (-1.1, -987.4)
+NOMINAL_STEP_UM = 500.0
+IMAGE_PX = 2048
+CENTRE_PX = (IMAGE_PX - 1) / 2
+UM_PER_MM = 1000.0
+CELL_PX = 6
+WORKERS = 12
+STEP_PX = 2.0           # arc-length sampling step
+EDGE_PX = 30            # keep samples this far inside the other view
+MATCH_PX = (1.0, 2.0, 4.0)
+MATCH_DEG = 10.0
+# Control-subtracted B' matches spread with sigma ~8 um in depth
+# (V00000966/V00001011, 2026-11-11), so two sigma.
+MATCH_DZ_UM = 15.0
+CONTROL_SHIFT_UM = 40.0
+LEN_BINS_UM = (0, 10, 25, 50, 100, np.inf)
+MIN_OWN_UM = 10.0       # owner length inside the overlap to be scored
+OWN_REPRO = 0.5         # owner reproduced: this fraction of it matched
+SLAB_UM = 20.0          # depth slab drawn by figure
+RAND_SEED = 0
+OWN_EDGE_PX = 10        # B' piles up at the image border
+LOOSE_DZ_UM = 30.0      # depth window for the mapping check
+K_NEAREST = 32
+MAX_SAMPLES = 300_000   # per pair and source (A is dense)
+
+
+def view_paths(vx, vy):
+  out = {}
+  for x in range(vx[0], vx[1] + 1):
+    for y in range(vy[0], vy[1] + 1):
+      p = glob.glob(str(VIEWS / f"V*_L0_VX{x:04d}_VY{y:04d}_0_058.json"))
+      if p:
+        out[(x, y)] = Path(p[0])
+  return out
+
+
+def extract(args):
+  import rank_specials as rs
+  from module.graphdet import (E07_Z_SCALE, MATLAB_CONFIG,
+                               integrate_smallregions)
+  from module.graphdet.detectlseg import detect_lseg_view
+  from module.matlab_export import export_hits_grid
+  from module.track_classifier import build_training_set, train_classifier
+
+  OUT.mkdir(parents=True, exist_ok=True)
+  clf = train_classifier(*build_training_set(REPO / "results/manual_labels"))
+  cfg = replace(MATLAB_CONFIG.for_spacing(float(CELL_PX)),
+                z_scale=E07_Z_SCALE)
+  for (x, y), path in sorted(view_paths(args.vx, args.vy).items()):
+    fb = OUT / f"{path.stem}_bprime.npz"
+    fa = OUT / f"{path.stem}_A.parquet"
+    t0 = time.time()
+    if not fb.exists():
+      pl = export_hits_grid(path, cell=CELL_PX, denoise_method="classifier",
+                            classifier=clf)
+      hits = pl[:, :3]
+      seg, _ = detect_lseg_view(hits, cfg=cfg, workers=WORKERS)
+      polys = integrate_smallregions(hits, seg, cfg)
+      lens = np.array([len(p) for p in polys], int)
+      np.savez_compressed(
+        fb, poly_xyz=np.concatenate(polys) if polys else np.zeros((0, 3)),
+        poly_len=lens, lseg=np.asarray(seg), n_hits=len(hits))
+    t1 = time.time()
+    if not fa.exists():
+      rs.tracks_of(path).drop(columns=["view_id"]).to_parquet(fa)
+    print(f"{path.stem}: B' {t1 - t0:.0f} s, A {time.time() - t1:.0f} s",
+          flush=True)
+
+
+# ---------------------------------------------------------------- scoring
+
+def stage_of(path):
+  from module.reader import load_spng
+  r = load_spng(path)
+  e = r._entries[0]
+  return (np.array([e.x, e.y]) * UM_PER_MM,
+          r.z_positions() * UM_PER_MM)
+
+
+def load_bprime(f):
+  from module.matlab_export import _ORIGIN_OFFSET
+  d = np.load(f)
+  xyz = d["poly_xyz"] - _ORIGIN_OFFSET  # pixel x, pixel y, slice index
+  return np.split(xyz, np.cumsum(d["poly_len"])[:-1])
+
+
+def load_a(f):
+  a = pd.read_parquet(f, columns=["px1", "py1", "px2", "py2", "slice_idx"])
+  s = a.slice_idx.to_numpy(float)
+  return [np.array([[r.px1, r.py1, z], [r.px2, r.py2, z]], float)
+          for r, z in zip(a.itertuples(), s)]
+
+
+def sample(polys):
+  """Points every STEP_PX along each polyline: (x, y, slice, ux, uy,
+  owner id, length weight), in pixels."""
+  rows = []
+  for k, p in enumerate(polys):
+    for a, b in zip(p[:-1], p[1:]):
+      d = b[:2] - a[:2]
+      n = np.hypot(*d)
+      if n == 0:
+        continue
+      m = max(int(np.ceil(n / STEP_PX)), 1)
+      t = (np.arange(m) + 0.5) / m
+      pts = a + t[:, None] * (b - a)
+      u = np.broadcast_to(d / n, (m, 2))
+      rows.append(np.column_stack([pts, u, np.full(m, k),
+                                   np.full(m, n / m)]))
+  return np.concatenate(rows) if rows else np.zeros((0, 7))
+
+
+def px_to_um():
+  # Same plate point: A @ (p_next - p) = stage - stage_next.
+  d = np.column_stack([SHIFT_VX_PX, SHIFT_VY_PX])
+  a = -NOMINAL_STEP_UM * np.linalg.inv(d)
+  return a / np.sqrt(abs(np.linalg.det(a))) * UM_PER_PX
+
+
+PX_TO_UM = px_to_um()
+UM_TO_PX = np.linalg.inv(PX_TO_UM)
+
+
+def to_plate(s, stage_xy, stage_z):
+  xy = stage_xy + (s[:, :2] - CENTRE_PX) @ PX_TO_UM.T
+  z = np.interp(s[:, 2], np.arange(len(stage_z)), stage_z)
+  u = s[:, 3:5] @ PX_TO_UM.T
+  return xy, z, u / np.linalg.norm(u, axis=1, keepdims=True)
+
+
+def to_px(xy, stage_xy):
+  return (xy - stage_xy) @ UM_TO_PX.T + CENTRE_PX
+
+
+def inside(xy, stage_xy, margin_px):
+  px = to_px(xy, stage_xy)
+  return ((px >= margin_px) & (px < IMAGE_PX - margin_px)).all(axis=1)
+
+
+def best_match(src, dst, r_um, dz_tol, shift=(0.0, 0.0), dz0=0.0):
+  """Per src sample: xy distance to the nearest dst sample within r_um
+  that also agrees in direction (MATCH_DEG) and depth (|dz - dz0| <=
+  dz_tol), inf if none, and that sample's (dx, dy, dz)."""
+  tree, z_dst, u_dst = dst
+  xy, z, u = src
+  d, j = tree.query(xy + shift, k=K_NEAREST, distance_upper_bound=r_um)
+  ok = j < tree.n
+  jj = np.where(ok, j, 0)
+  dz = z_dst[jj] - z[:, None]
+  cos = np.abs(np.einsum("nkc,nc->nk", u_dst[jj], u))
+  ok &= (np.abs(dz - dz0) <= dz_tol) & (cos >= np.cos(np.radians(MATCH_DEG)))
+  d = np.where(ok, d, np.inf)
+  k = d.argmin(axis=1)
+  n = np.arange(len(xy))
+  off = np.column_stack([tree.data[jj[n, k]] - xy - shift, dz[n, k]])
+  return d[n, k], off
+
+
+def overlap(sa, sb, ga, gb):
+  """View-a samples (plate coordinates) inside view b, away from both
+  borders, their length weights and owners; view b as a search tree."""
+  pa = to_plate(sa, *ga)
+  pb = to_plate(sb, *gb)
+  keep = (inside(pa[0], gb[0], EDGE_PX)
+          & inside(pa[0], ga[0], OWN_EDGE_PX))
+  if keep.sum() > MAX_SAMPLES:
+    # Subsample whole owners, so per-owner fractions stay exact.
+    owners = sa[:, 5].astype(int)
+    pick = np.random.default_rng(RAND_SEED).random(owners.max() + 1)
+    keep &= pick[owners] < MAX_SAMPLES / keep.sum()
+  idx = np.flatnonzero(keep)
+  src = tuple(v[idx] for v in pa)
+  dst = (cKDTree(pb[0]), pb[1], pb[2])
+  return src, dst, sa[idx, 6], sa[idx, 5].astype(int)
+
+
+def score(args):
+  paths = view_paths(args.vx, args.vy)
+  geo = {k: stage_of(p) for k, p in paths.items()}
+  labelled = {f.name.split("__")[-2].split(".")[0]
+              for f in LABELS.glob("*.json")}
+  segs = {}
+  for k, p in paths.items():
+    if p.stem in labelled:
+      print(f"skip {p.stem} (classifier training labels)")
+      continue
+    fb = OUT / f"{p.stem}_bprime.npz"
+    fa = OUT / f"{p.stem}_A.parquet"
+    if fb.exists() and fa.exists():
+      segs[k] = {"Bprime": sample(load_bprime(fb)), "A": sample(load_a(fa))}
+  pairs = [(a, b) for a in segs for b in segs
+           if a != b and abs(a[0] - b[0]) <= 1 and abs(a[1] - b[1]) <= 1]
+  if not pairs:
+    sys.exit("no neighbouring views extracted")
+  r_max = max(MATCH_PX) * UM_PER_PX
+  rows = []
+  for a, b in pairs:
+    # Mapping check on B': offsets of matches with a loose depth window.
+    src, dst, w, _ = overlap(segs[a]["Bprime"], segs[b]["Bprime"],
+                             geo[a], geo[b])
+    d, off = best_match(src, dst, r_max, LOOSE_DZ_UM)
+    m = np.isfinite(d)
+    dz0 = float(np.median(off[m, 2])) if m.any() else 0.0
+    q = np.percentile(off[m], (16, 50, 84), axis=0) if m.any() else None
+    print(f"{a}->{b}: B' offset median dx {q[1, 0]:+.2f} dy {q[1, 1]:+.2f}"
+          f" dz {q[1, 2]:+.2f} um (16-84 % dz {q[0, 2]:+.1f}..{q[2, 2]:+.1f})"
+          if q is not None else f"{a}->{b}: no B' match", flush=True)
+    for src_name in ("Bprime", "A"):
+      src, dst, w, owner = overlap(segs[a][src_name], segs[b][src_name],
+                                   geo[a], geo[b])
+      d_abs, _ = best_match(src, dst, r_max, MATCH_DZ_UM)
+      d, _ = best_match(src, dst, r_max, MATCH_DZ_UM, dz0=dz0)
+      dc, _ = best_match(src, dst, r_max, MATCH_DZ_UM, dz0=dz0,
+                         shift=(CONTROL_SHIFT_UM, CONTROL_SHIFT_UM))
+      for r in MATCH_PX:
+        r_um = r * UM_PER_PX
+        row = {"source": src_name, "view": a, "other": b, "r_px": r,
+               "dz0_um": dz0, "repro": wfrac(w, d <= r_um),
+               "repro_abs_z": wfrac(w, d_abs <= r_um),
+               "control": wfrac(w, dc <= r_um)}
+        own, own_c = owner_repro(owner, w, d <= r_um, dc <= r_um)
+        row["own_repro"] = np.mean(own[0]) if len(own[0]) else np.nan
+        row["own_control"] = (np.mean(own_c[0]) if len(own_c[0])
+                              else np.nan)
+        for lo, hi in zip(LEN_BINS_UM[:-1], LEN_BINS_UM[1:]):
+          s = (own[1] >= lo) & (own[1] < hi)
+          row[f"own_{lo:g}-{hi:g}um"] = (np.mean(own[0][s]) if s.any()
+                                         else np.nan)
+        rows.append(row)
+  out = pd.DataFrame(rows)
+  out.to_csv(OUT / "scores.csv", index=False)
+  lines = [f"{UM_PER_PX} um/px, step {STEP_PX} px, angle {MATCH_DEG} deg,"
+           f" dz {MATCH_DZ_UM} um around the pair's median B' dz,"
+           f" control shift {CONTROL_SHIFT_UM} um, {len(pairs)} pairs",
+           "median per-pair dz0 {:+.2f} um (range {:+.2f}..{:+.2f})".format(
+             out.dz0_um.median(), out.dz0_um.min(), out.dz0_um.max())]
+  for (src, r), g in out.groupby(["source", "r_px"]):
+    cols = [c for c in g.columns if c.startswith("own_")
+            and c[4].isdigit()]
+    lines.append(f"{src} r {r:g} px: length reproduced "
+                 f"{g.repro.mean():.1%} (absolute z "
+                 f"{g.repro_abs_z.mean():.1%}, control "
+                 f"{g.control.mean():.1%}); segments >= {OWN_REPRO:.0%} "
+                 f"reproduced {g.own_repro.mean():.1%} (control "
+                 f"{g.own_control.mean():.1%}), by length "
+                 + ", ".join(f"{c[4:]} {g[c].mean():.1%}" for c in cols))
+  for s in ("Bprime", "A"):
+    c = [len(np.unique(segs[k][s][:, 5])) for k in segs]
+    tot = [segs[k][s][:, 6].sum() * UM_PER_PX / UM_PER_MM for k in segs]
+    lines.append(f"{s}: segments per view median {np.median(c):.0f}, "
+                 f"total length per view median {np.median(tot):.0f} mm")
+  text = "\n".join(lines) + "\n"
+  print(text, end="")
+  (OUT / "scores.txt").write_text(text)
+
+
+def owner_repro(owner, w, hit, hit_c):
+  """Per owner with >= MIN_OWN_UM inside the overlap: (reproduced?,
+  overlap length um), for the match and the control."""
+  n = owner.max() + 1 if len(owner) else 0
+  tot = np.bincount(owner, weights=w, minlength=n)
+  keep = tot * UM_PER_PX >= MIN_OWN_UM
+  out = []
+  for h in (hit, hit_c):
+    f = np.bincount(owner, weights=w * h, minlength=n)[keep] / tot[keep]
+    out.append((f >= OWN_REPRO, tot[keep] * UM_PER_PX))
+  return out
+
+
+def wfrac(w, ok):
+  return float((w * ok).sum() / w.sum()) if w.sum() > 0 else np.nan
+
+
+def figure(args):
+  """Same plate patches seen from two neighbouring views, in a depth
+  slab of SLAB_UM around the middle of view a: minimum projection of
+  the slab with B' polylines (left pair) and A segments (right pair),
+  green when the other view reproduces >= OWN_REPRO of the segment's
+  length inside the patch (r_px, MATCH_DEG, MATCH_DZ_UM), red when not.
+  Patches sit in the overlap, picked at random."""
+  import matplotlib
+  matplotlib.use("Agg")
+  import matplotlib.pyplot as plt
+  from module.reader import load_spng
+
+  paths = view_paths(args.vx, args.vy)
+  a, b = tuple(args.pair[:2]), tuple(args.pair[2:])
+  geo = {k: stage_of(paths[k]) for k in (a, b)}
+  z_mid = np.median(geo[a][1])
+  slab = (z_mid - SLAB_UM / 2, z_mid + SLAB_UM / 2)
+  imgs, polys, samp = {}, {}, {}
+  for k in (a, b):
+    sz = geo[k][1]
+    ks = np.flatnonzero((sz >= slab[0]) & (sz <= slab[1]))
+    imgs[k] = load_spng(paths[k]).read_stack()[ks].min(axis=0)
+    polys[k] = {"Bprime": load_bprime(OUT / f"{paths[k].stem}_bprime.npz"),
+                "A": load_a(OUT / f"{paths[k].stem}_A.parquet")}
+    samp[k] = {s: sample(v) for s, v in polys[k].items()}
+  rng = np.random.default_rng(RAND_SEED)
+  half = args.patch_px / 2 * UM_PER_PX
+  lo = np.maximum(geo[a][0], geo[b][0]) - (IMAGE_PX / 2 - EDGE_PX) * UM_PER_PX
+  hi = np.minimum(geo[a][0], geo[b][0]) + (IMAGE_PX / 2 - EDGE_PX) * UM_PER_PX
+  centres = rng.uniform(lo + half, hi - half, (args.n_patch, 2))
+  r_um = args.r_px * UM_PER_PX
+  fig, axes = plt.subplots(args.n_patch, 4,
+                           figsize=(16, 4 * args.n_patch), squeeze=False)
+  for row, c in zip(axes, centres):
+    for ax, (k, src) in zip(row, [(a, "Bprime"), (b, "Bprime"),
+                                  (a, "A"), (b, "A")]):
+      o = b if k == a else a
+      xy, z, u = to_plate(samp[k][src], *geo[k])
+      m = ((np.abs(xy - c) <= half).all(axis=1)
+           & (z >= slab[0]) & (z <= slab[1]))
+      pb = to_plate(samp[o][src], *geo[o])
+      d, _ = best_match((xy[m], z[m], u[m]), (cKDTree(pb[0]), pb[1], pb[2]),
+                        r_um, MATCH_DZ_UM)
+      owner = samp[k][src][m, 5].astype(int)
+      w = samp[k][src][m, 6]
+      n = owner.max() + 1 if len(owner) else 0
+      tot = np.bincount(owner, weights=w, minlength=n)
+      hit = np.bincount(owner, weights=w * (d <= r_um), minlength=n)
+      px0 = to_px(c[None], geo[k][0])[0]
+      x0, y0 = (px0 - args.patch_px / 2).astype(int)
+      crop = imgs[k][y0:y0 + args.patch_px, x0:x0 + args.patch_px]
+      ax.imshow(crop, cmap="gray", extent=(x0, x0 + args.patch_px,
+                                           y0 + args.patch_px, y0))
+      n_ok = 0
+      for j in np.flatnonzero(tot > 0):
+        ok = hit[j] / tot[j] >= OWN_REPRO
+        n_ok += ok
+        p = polys[k][src][j]
+        ax.plot(p[:, 0], p[:, 1], "-", color="lime" if ok else "red",
+                lw=0.8, alpha=0.8)
+      ax.set_xlim(x0, x0 + args.patch_px)
+      ax.set_ylim(y0 + args.patch_px, y0)
+      ax.set_title(f"{src} VX{k[0]} VY{k[1]} ({c[0]:.0f}, {c[1]:.0f}) um: "
+                   f"{n_ok}/{(tot > 0).sum()} reproduced", fontsize=9)
+      ax.set_xticks([])
+      ax.set_yticks([])
+  fig.suptitle(f"depth slab {slab[0]:.0f}..{slab[1]:.0f} um, "
+               f"r {args.r_px:g} px, {MATCH_DEG:g} deg, dz {MATCH_DZ_UM:g} um")
+  fig.tight_layout()
+  f = OUT / f"crops_VX{a[0]}VY{a[1]}_VX{b[0]}VY{b[1]}.png"
+  fig.savefig(f, dpi=110)
+  print(f)
+
+
+def main():
+  ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+  ap.add_argument("step", choices=["extract", "score", "figure"])
+  ap.add_argument("--pair", type=int, nargs=4, default=(22, 22, 23, 22),
+                  help="figure: VX VY of two neighbouring views")
+  ap.add_argument("--patch-px", type=int, default=300)
+  ap.add_argument("--n-patch", type=int, default=3)
+  ap.add_argument("--r-px", type=float, default=MATCH_PX[1])
+  ap.add_argument("--vx", type=int, nargs=2, default=(21, 23))
+  ap.add_argument("--vy", type=int, nargs=2, default=(21, 23))
+  args = ap.parse_args()
+  {"extract": extract, "score": score, "figure": figure}[args.step](args)
+
+
+if __name__ == "__main__":
+  main()
