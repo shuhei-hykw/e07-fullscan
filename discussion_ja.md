@@ -2003,3 +2003,8 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   xy 5 µm・z 15 µm 以内でつなぐ。311 万 → 196 万（対照 0.90 倍）。B' の暗い点 0.50 倍（対照 0.95 倍）、A 0.84 倍（0.93 倍）。
   正しい倍率では A の視野間の一致は 5 µm で 28%（対照 6%）で、11-02 の点検の 4.2%（0.289 µm/px）ではない。
   まとめだけでは約 200 万が残るので、順位づけが要る。
+
+## 2026-11-13 03:12 JST 計画（Claude、fullscan）: v25 evalU の和集合の入力
+- v25_embed_nagara_dz4 の入力が完了（100/100）。相手に伝えたうえで、scripts/union_inputs.py を
+  v25_embed_evalU_dz4 で実行（本番の設定、一度きり、採点は相手のみ）。出力 results/sim_eval/v25_embed_evalU_dz4_*、
+  ログ logs/union_inputs_v25_evalU.log。

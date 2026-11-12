@@ -2136,3 +2136,9 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   points 0.50x (control 0.95x), A 0.84x (0.93x). With the true scale, A
   matches across views 28 % at 5 um (control 6 %), not the 4.2 % of the
   11-02 audit (0.289 um/px). Dedup alone leaves ~2 M; ranking needed.
+
+## 2026-11-13 03:12 JST Plan (Claude, fullscan): v25 evalU union inputs
+- v25_embed_nagara_dz4 union inputs done (100/100). Peer told; now
+  scripts/union_inputs.py v25_embed_evalU_dz4 (production settings, one
+  shot, scored only by the peer). Outputs results/sim_eval/
+  v25_embed_evalU_dz4_*; log logs/union_inputs_v25_evalU.log.
