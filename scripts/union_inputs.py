@@ -102,13 +102,16 @@ def main():
                   help="method-A minimum track length (px)")
   ap.add_argument("--only", choices=["A", "Bprime"], default=None,
                   help="run one method only")
+  ap.add_argument("--images", type=Path, default=IMAGES,
+                  help="directory holding DATASET")
   ap.add_argument("--tag", default="",
                   help="suffix of the output names, e.g. _zfix")
   args = ap.parse_args()
 
-  evs = sorted((IMAGES / args.dataset).glob("ev*"))
+  root = args.images / args.dataset
+  evs = sorted(d for d in root.iterdir() if (d / "image.json").exists())
   if not evs:
-    sys.exit(f"no events under {IMAGES / args.dataset}")
+    sys.exit(f"no events under {root}")
   name = args.dataset + ("_real" if args.real else "") + args.tag
   out = args.out
   out.mkdir(parents=True, exist_ok=True)

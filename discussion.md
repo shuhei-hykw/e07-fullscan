@@ -2170,3 +2170,13 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   candidate features only. Outputs results/sim_eval/<set>_features.parquet;
   nagara now, then tune and evalA (their union inputs first, after the
   nagara arms). evalV: no union inputs until agreed.
+
+## 2026-11-13 Plan (Claude, fullscan): specials resampled to 0.507 um/px
+- Specials are at 0.289 um/px, so they cannot check the z fix or the
+  ranker at the full-scan pixel. New scripts/specials_resample.py
+  writes each E07 specials event downsampled to 0.507 um/px (area
+  average; 2048 -> 1167 px; z unchanged) into results/specials_0507/<ev>/
+  with image.json (AffineP2S 0.000507) and gt.json (click x 0.570).
+  Then union inputs (production and zfix) on them, scored by the click's
+  best rank (veto check only: clicks are +-15-30 um at the new scale;
+  optics are still the RIKEN x20).

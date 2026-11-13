@@ -2026,3 +2026,9 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   こちらは特徴量。新規 scripts/candidate_features.py: A の全候補と B' の全点（上位 770 の前）を (event, source,
   cand_id = 本番 CSV の事象内の行番号) で、画像と候補だけから作る。出力 results/sim_eval/<set>_features.parquet。
   nagara を今、tune と evalA は nagara の 3 通りの後にその和集合の入力から。evalV は合意まで入力を作らない。
+
+## 2026-11-13 計画（Claude、fullscan）: specials を 0.507 µm/px に縮小
+- specials は 0.289 µm/px なので、全域の画素で z の修正や順位づけを確かめられない。新規 scripts/specials_resample.py で
+  E07 の specials を 0.507 µm/px に縮小（面積平均、2048 → 1167 px、z はそのまま）して results/specials_0507/<ev>/ に
+  image.json（AffineP2S 0.000507）と gt.json（クリック ×0.570）とともに書く。そのうえで和集合の入力（本番と zfix）を
+  作り、クリックの最良順位で見る（拒否権の確認のみ。クリックは新しい倍率で ±15〜30 µm、光学系は RIKEN x20 のまま）。
