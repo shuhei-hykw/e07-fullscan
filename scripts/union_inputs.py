@@ -2,6 +2,7 @@
 union study (discussion.md 2026-10-28 16:49 proposal).
 
 usage: union_inputs.py DATASET [--real] [--first N] [--last N]
+         [--z-px-um 0.507] [--min-len-px 29] [--only A|Bprime] [--tag T]
 
 DATASET is a directory under e07-g4-hypernuclei/data/images. With --real
 each event's truth.json background_view (the unmodified real view) is
@@ -31,7 +32,8 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts"))
 import rank_specials as rs  # noqa: E402
-from module.graphdet import (E07_Z_SCALE, MATLAB_CONFIG,  # noqa: E402
+from module.graphdet import (E07_SLICE_UM, E07_Z_SCALE,  # noqa: E402
+                             MATLAB_CONFIG,
                              attachment_codes, branch_points,
                              integrate_smallregions)
 from module.graphdet.detectlseg import detect_lseg_view  # noqa: E402
@@ -47,11 +49,11 @@ CELL_PX = 6
 WORKERS = 12
 
 
-def method_a(path):
+def method_a(path, min_len_px):
   tracks = rs.tracks_of(path)
   if tracks.empty:
     return pd.DataFrame(columns=["vx_px"])
-  vdf = find_vertices(tracks, **rs._PRODUCTION)
+  vdf = find_vertices(tracks, **dict(rs._PRODUCTION, min_len_px=min_len_px))
   if vdf.empty:
     return pd.DataFrame(columns=["vx_px"])
   return merge_vertex_slices(vdf, eps_xy=rs._MERGE_EPS_XY,
@@ -92,12 +94,22 @@ def main():
   ap.add_argument("--first", type=int, default=0)
   ap.add_argument("--last", type=int, default=None)
   ap.add_argument("--out", type=Path, default=OUT)
+  ap.add_argument("--z-px-um", type=float, default=None,
+                  help="B' z scale = E07_SLICE_UM over this pixel size "
+                  "(default production E07_Z_SCALE, i.e. 0.29)")
+  ap.add_argument("--min-len-px", type=float,
+                  default=rs._PRODUCTION["min_len_px"],
+                  help="method-A minimum track length (px)")
+  ap.add_argument("--only", choices=["A", "Bprime"], default=None,
+                  help="run one method only")
+  ap.add_argument("--tag", default="",
+                  help="suffix of the output names, e.g. _zfix")
   args = ap.parse_args()
 
   evs = sorted((IMAGES / args.dataset).glob("ev*"))
   if not evs:
     sys.exit(f"no events under {IMAGES / args.dataset}")
-  name = args.dataset + ("_real" if args.real else "")
+  name = args.dataset + ("_real" if args.real else "") + args.tag
   out = args.out
   out.mkdir(parents=True, exist_ok=True)
   f_a = out / f"{name}_methodA_production.csv"
@@ -112,16 +124,19 @@ def main():
 
   clf = train_classifier(*build_training_set(REPO / "results/manual_labels"))
   cfg = replace(MATLAB_CONFIG.for_spacing(float(CELL_PX)),
-                z_scale=E07_Z_SCALE)
+                z_scale=E07_Z_SCALE if args.z_px_um is None
+                else E07_SLICE_UM / args.z_px_um)
   for ev in evs[args.first:args.last]:
     if ev.name in done:
       continue
     t0 = time.time()
     path = (Path(json.loads((ev / "truth.json").read_text())
                  ["background_view"]) if args.real else ev / "image.json")
-    a = method_a(path)
+    a = (method_a(path, args.min_len_px) if args.only != "Bprime"
+         else pd.DataFrame(columns=["vx_px"]))
     t1 = time.time()
-    b, n_hits = bprime(path, clf, cfg)
+    b, n_hits = (bprime(path, clf, cfg) if args.only != "A"
+                 else (pd.DataFrame(columns=["vx_px"]), 0))
     t2 = time.time()
     # Candidates first, the event row last: a crash in between leaves
     # the event unlisted, and its rows are dropped on restart.

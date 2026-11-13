@@ -2011,3 +2011,12 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 
 ## 2026-11-13 メモ（Claude、fullscan）: v25 evalU の和集合の入力が完了
 - 100/100 事象、本番の設定。固定した規則での採点を相手に依頼。こちらで走っているジョブはなし。
+
+## 2026-11-13 計画（Claude、fullscan）: v25 nagara で画素の倍率の修正を 3 通り比べる
+- ユーザー: Fable と相談し、問題なければ提案通り進める。Fable の助言: nagara で対にした非劣性の比較を 3 通りで。
+  和集合の捕獲の事象ごとの差が点推定 ≥ 0 かつ 95% 下限 > −5%、B' の救済と LL の捕獲が減らないときだけ採用。
+  最終の関門用に相手に新しい固定セットを頼む。
+- 3 通り（scripts/union_inputs.py に --z-px-um、--min-len-px、--only、--tag を追加）: B' の z を 3.8/0.507（_zfix、B' のみ）、
+  A の最短長を 29 px（0.507 で 14.5 µm、_alen、A のみ）、両方＝2 つのファイルの組み合わせ。出力 results/sim_eval/
+  v25_embed_nagara_dz4_{zfix,alen}_*、ログ logs/union_inputs_v25_*.log。
+- specials は 0.289 µm/px（RIKEN x20 の JSON）なので本番の z がもともと正しく、そのままでは修正の確認に使えない。

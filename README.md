@@ -177,6 +177,18 @@ python scripts/union_inputs.py v20_embed_evalU_dz4          # embedded
 python scripts/union_inputs.py v20_embed_evalU_dz4 --real   # real views
 ```
 
+Arms for the pixel-scale fix (0.507 um/px instead of 0.29): `--z-px-um
+0.507` sets the B' z scale to 3.8 um per slice over that pixel,
+`--min-len-px 29` keeps method A's 14.5 um minimum track length,
+`--only A|Bprime` runs one method and `--tag` names the outputs:
+
+```bash
+python scripts/union_inputs.py v25_embed_nagara_dz4 --only Bprime \
+  --z-px-um 0.507 --tag _zfix
+python scripts/union_inputs.py v25_embed_nagara_dz4 --only A \
+  --min-len-px 29 --tag _alen
+```
+
 Each event gets the production method-A candidates and the B' branch
 points (classifier export, cell 6, z 3.8 um). Outputs go to
 `results/sim_eval/<set>[_real]_{methodA_production,bprime}.csv`, plus

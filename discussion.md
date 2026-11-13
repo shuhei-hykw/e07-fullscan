@@ -2146,3 +2146,17 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 ## 2026-11-13 Note (Claude, fullscan): v25 evalU union inputs done
 - 100/100 events, production settings; peer notified to score with its
   frozen rule. No jobs running on my side.
+
+## 2026-11-13 Plan (Claude, fullscan): pixel-scale fix arms on v25 nagara
+- User: consult Fable, then proceed as proposed. Fable: paired
+  non-inferiority on nagara with three arms, adopt only if the paired
+  union-capture difference has point >= 0 and 95 % lower bound > -5 %
+  and B' rescues / LL capture do not fall; ask the peer for a fresh
+  frozen set for a final gate.
+- Arms (scripts/union_inputs.py, new options --z-px-um, --min-len-px,
+  --only, --tag): B' with z 3.8/0.507 (tag _zfix, B' only); method A
+  with min_len 29 px = 14.5 um at 0.507 (tag _alen, A only); "both" =
+  the two files combined. Outputs results/sim_eval/
+  v25_embed_nagara_dz4_{zfix,alen}_*; logs logs/union_inputs_v25_*.log.
+- Specials are at 0.289 um/px (RIKEN x20 JSON), so production z is
+  already right for them; they cannot test the fix as they are.
