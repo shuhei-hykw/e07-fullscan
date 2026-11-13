@@ -2180,3 +2180,16 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   Then union inputs (production and zfix) on them, scored by the click's
   best rank (veto check only: clicks are +-15-30 um at the new scale;
   optics are still the RIKEN x20).
+
+## 2026-11-13 19:30 JST Plan (Claude, fullscan): evalV gate inputs for the alen arm
+- Peer verdict (e07-g4-hypernuclei f63023b, output/arms/armcompare_all.txt):
+  alen ADOPT (+6 % [+0, +13]); zfix REJECT (-7 % [-16, +2], LL -13 %);
+  both REJECT (+3 % [-6, +13], LL -11 %). B' z stays at 3.8/0.29.
+- Runs (scripts/union_inputs.py, nice, sequential):
+  1. v25_embed_evalV_dz4 production (A + B') -> results/sim_eval/
+     v25_embed_evalV_dz4_{methodA_production,bprime,events}.csv, .done
+  2. v25_embed_evalV_dz4 --only A --min-len-px 29 --tag _alen
+  3. in parallel: v25_embed_nagara_dz4 --real --only A --min-len-px 29
+     --tag _alen (real background views, for G of the arm)
+  Logs logs/union_inputs_v25_evalV*.log, logs/union_inputs_v25_nagara_real_alen.log.
+  The peer scores evalV once (the final gate).

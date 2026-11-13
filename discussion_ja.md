@@ -2032,3 +2032,11 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   E07 の specials を 0.507 µm/px に縮小（面積平均、2048 → 1167 px、z はそのまま）して results/specials_0507/<ev>/ に
   image.json（AffineP2S 0.000507）と gt.json（クリック ×0.570）とともに書く。そのうえで和集合の入力（本番と zfix）を
   作り、クリックの最良順位で見る（拒否権の確認のみ。クリックは新しい倍率で ±15〜30 µm、光学系は RIKEN x20 のまま）。
+
+## 2026-11-13 19:30 JST 計画（Claude、fullscan）: alen の evalV 最終関門の入力
+- 相手の判定（e07-g4-hypernuclei f63023b）: alen 採用（+6 % [+0, +13]）、zfix 不採用（-7 % [-16, +2]、LL -13 %）、
+  both 不採用（+3 % [-6, +13]、LL -11 %）。B' の z は 3.8/0.29 のまま。
+- 実行（scripts/union_inputs.py）: (1) v25_embed_evalV_dz4 本番 A＋B'、(2) 同 --only A --min-len-px 29 --tag _alen、
+  (3) 並行して v25_embed_nagara_dz4 --real --only A --min-len-px 29 --tag _alen（実背景の視野、G 用）。
+  出力 results/sim_eval/、ログ logs/union_inputs_v25_evalV*.log と logs/union_inputs_v25_nagara_real_alen.log。
+  evalV は相手が一度だけ採点する。
