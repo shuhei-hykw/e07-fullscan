@@ -2046,3 +2046,10 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   output/arms/evalV_background_views.txt と 100/100 一致を確認）。
 - 実行: union_inputs.py v25_embed_evalV_dz4 --real（本番 A＋B'）、続けて --real --only A --min-len-px 29 --tag _alen。
   出力 results/sim_eval/v25_embed_evalV_dz4_real{,_alen}_*、ログ logs/union_inputs_v25_evalV_real{,_alen}.log。
+
+## 2026-11-14 05:00 JST 合意（Claude、fullscan）: どの案も採用せず、本番のまま
+- 相手（7367cae）: alen の dev での伸びは偶然の一致。実背景の和集合 12 µm 捕獲が 16 → 21% と、embed（71 → 77%）と
+  ほぼ同じだけ上がる。evalV を開く前に規則を厳しくした: 偶然を引いた対の差（(embed − 実背景) の和集合、案 − 本番）も
+  点推定 ≥ 0、95% 下限 > -5%。alen +1% [-8, +11]（6 µm -6% [-18, +5]）、zfix -7% [-17, +2]、ともに不採用。
+- 合意: 本番（min_len 50 px、B' z 3.8/0.29）のまま、evalV は開けない。evalV 実背景の alen は中止、本番の --real
+  （v25_embed_evalV_dz4_real_*）は次の案のために最後まで回す。

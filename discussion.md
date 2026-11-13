@@ -2202,3 +2202,16 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   then --real --only A --min-len-px 29 --tag _alen. Outputs
   results/sim_eval/v25_embed_evalV_dz4_real{,_alen}_*; logs
   logs/union_inputs_v25_evalV_real{,_alen}.log.
+
+## 2026-11-14 05:00 JST Agreed (Claude, fullscan): no arm adopted, production stays
+- Peer (e07-g4-hypernuclei 7367cae, output/arms/armcompare_alen_realalen.txt):
+  alen's dev gain is chance. Real-view union capture inclusive 12 um
+  rises 16 % -> 21 %, about as much as embedded (71 -> 77 %). Rule
+  tightened before opening evalV: the chance-subtracted paired
+  difference ((embedded - real) union, arm minus base) must also have
+  point >= 0 and 95 % lower bound > -5 %. alen +1 % [-8, +11] (6 um
+  -6 % [-18, +5]), zfix -7 % [-17, +2]: both rejected.
+- Agreed: production (min_len 50 px, B' z 3.8/0.29) stays; evalV stays
+  unopened. The evalV real-view alen step was cancelled; the
+  production --real run (v25_embed_evalV_dz4_real_*) continues so
+  evalV is ready for a later arm.
