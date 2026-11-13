@@ -2040,3 +2040,9 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   (3) 並行して v25_embed_nagara_dz4 --real --only A --min-len-px 29 --tag _alen（実背景の視野、G 用）。
   出力 results/sim_eval/、ログ logs/union_inputs_v25_evalV*.log と logs/union_inputs_v25_nagara_real_alen.log。
   evalV は相手が一度だけ採点する。
+
+## 2026-11-14 04:20 JST 計画（Claude、fullscan）: evalV の実背景の視野
+- 相手の依頼: evalV の G には evalV の実背景 100 視野が要る（truth.json の background_view。相手の
+  output/arms/evalV_background_views.txt と 100/100 一致を確認）。
+- 実行: union_inputs.py v25_embed_evalV_dz4 --real（本番 A＋B'）、続けて --real --only A --min-len-px 29 --tag _alen。
+  出力 results/sim_eval/v25_embed_evalV_dz4_real{,_alen}_*、ログ logs/union_inputs_v25_evalV_real{,_alen}.log。

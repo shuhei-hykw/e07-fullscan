@@ -2193,3 +2193,12 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
      --tag _alen (real background views, for G of the arm)
   Logs logs/union_inputs_v25_evalV*.log, logs/union_inputs_v25_nagara_real_alen.log.
   The peer scores evalV once (the final gate).
+
+## 2026-11-14 04:20 JST Plan (Claude, fullscan): evalV real background views
+- Peer request: G on evalV needs the 100 evalV background views
+  (truth.json background_view; identical to e07-g4-hypernuclei
+  output/arms/evalV_background_views.txt, checked 100/100).
+- Runs: union_inputs.py v25_embed_evalV_dz4 --real (production A + B'),
+  then --real --only A --min-len-px 29 --tag _alen. Outputs
+  results/sim_eval/v25_embed_evalV_dz4_real{,_alen}_*; logs
+  logs/union_inputs_v25_evalV_real{,_alen}.log.
