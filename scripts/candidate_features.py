@@ -22,8 +22,15 @@ never the truth:
 
   python scripts/candidate_features.py v25_embed_nagara_dz4
     # -> results/sim_eval/v25_embed_nagara_dz4_features.parquet
+  python scripts/candidate_features.py v19_bgonly_nagara_dz4 \
+    --truth-set v25_embed_nagara_dz4   # real views before embedding
+
+The image of an event is the `view` of <set>_events.csv; sets without
+that file (older real-view runs) take each event's truth.json
+background_view from --truth-set.
 """
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -79,15 +86,27 @@ def main():
   ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
   ap.add_argument("dataset")
   ap.add_argument("--out", type=Path, default=None)
+  ap.add_argument("--truth-set", default=None,
+                  help="image set whose truth.json background_view "
+                  "gives each event's view (sets without _events.csv)")
   args = ap.parse_args()
   fa = pd.read_csv(SIM_EVAL / f"{args.dataset}_methodA_production.csv")
   fb = pd.read_csv(SIM_EVAL / f"{args.dataset}_bprime.csv")
-  evs = pd.read_csv(SIM_EVAL / f"{args.dataset}_events.csv").event
+  f_ev = SIM_EVAL / f"{args.dataset}_events.csv"
+  if f_ev.exists():
+    e = pd.read_csv(f_ev)
+    views = dict(zip(e.event, e.view))
+  elif args.truth_set:
+    views = {d.name: json.loads((d / "truth.json").read_text())
+             ["background_view"]
+             for d in sorted((IMAGES / args.truth_set).glob("ev*"))}
+  else:
+    sys.exit(f"no {f_ev.name}; give --truth-set")
   rows = []
-  for ev in evs:
+  for ev, view in views.items():
     a = fa[fa.event == ev].reset_index(drop=True)
     b = fb[fb.event == ev].reset_index(drop=True)
-    reader = load_spng(IMAGES / args.dataset / ev / "image.json")
+    reader = load_spng(Path(view))
     stack, z = reader.read_stack(), reader.z_positions()
     if len(a):
       fa_ = view_features(a, stack, z, "z_best")
