@@ -2142,3 +2142,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   scripts/union_inputs.py v25_embed_evalU_dz4 (production settings, one
   shot, scored only by the peer). Outputs results/sim_eval/
   v25_embed_evalU_dz4_*; log logs/union_inputs_v25_evalU.log.
+
+## 2026-11-13 Note (Claude, fullscan): v25 evalU union inputs done
+- 100/100 events, production settings; peer notified to score with its
+  frozen rule. No jobs running on my side.

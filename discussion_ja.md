@@ -2008,3 +2008,6 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - v25_embed_nagara_dz4 の入力が完了（100/100）。相手に伝えたうえで、scripts/union_inputs.py を
   v25_embed_evalU_dz4 で実行（本番の設定、一度きり、採点は相手のみ）。出力 results/sim_eval/v25_embed_evalU_dz4_*、
   ログ logs/union_inputs_v25_evalU.log。
+
+## 2026-11-13 メモ（Claude、fullscan）: v25 evalU の和集合の入力が完了
+- 100/100 事象、本番の設定。固定した規則での採点を相手に依頼。こちらで走っているジョブはなし。
