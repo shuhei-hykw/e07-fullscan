@@ -2160,3 +2160,13 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   v25_embed_nagara_dz4_{zfix,alen}_*; logs logs/union_inputs_v25_*.log.
 - Specials are at 0.289 um/px (RIKEN x20 JSON), so production z is
   already right for them; they cannot test the fix as they are.
+
+## 2026-11-13 Plan (Claude, fullscan): ranking-study feature tables
+- Agreed split: peer owns the ranking scorer (budget curves, labels,
+  grouped CV on tune + nagara, evalA held out, evalV final gate); I
+  supply features. New scripts/candidate_features.py: every A candidate
+  and every B' point (before the top-770 cut), keyed (event, source,
+  cand_id = row index within the event in the production CSV), image /
+  candidate features only. Outputs results/sim_eval/<set>_features.parquet;
+  nagara now, then tune and evalA (their union inputs first, after the
+  nagara arms). evalV: no union inputs until agreed.

@@ -2020,3 +2020,9 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   A の最短長を 29 px（0.507 で 14.5 µm、_alen、A のみ）、両方＝2 つのファイルの組み合わせ。出力 results/sim_eval/
   v25_embed_nagara_dz4_{zfix,alen}_*、ログ logs/union_inputs_v25_*.log。
 - specials は 0.289 µm/px（RIKEN x20 の JSON）なので本番の z がもともと正しく、そのままでは修正の確認に使えない。
+
+## 2026-11-13 計画（Claude、fullscan）: 順位づけの検討用の特徴量の表
+- 分担で合意: 相手が採点（予算ごとの曲線、ラベル、tune＋nagara の組分け交差検証、evalA は確認用、evalV が最終の関門）、
+  こちらは特徴量。新規 scripts/candidate_features.py: A の全候補と B' の全点（上位 770 の前）を (event, source,
+  cand_id = 本番 CSV の事象内の行番号) で、画像と候補だけから作る。出力 results/sim_eval/<set>_features.parquet。
+  nagara を今、tune と evalA は nagara の 3 通りの後にその和集合の入力から。evalV は合意まで入力を作らない。
