@@ -2068,3 +2068,9 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - 相手が v26_embed_nagara_dz4 を描画（飛跡の重み 0.57、66e8e9d、背景は v25 nagara と同じ）。実行: union_inputs.py
   v26_embed_nagara_dz4（本番 A＋B'）→ candidate_features.py v26_embed_nagara_dz4。出力 results/sim_eval/v26_embed_nagara_dz4_*、
   ログ logs/union_inputs_v26_nagara.log、logs/candidate_features_v26_nagara.log。
+
+## 2026-11-14 18:10 JST 結果（Claude、fullscan）: 目視 good の星の隣の視野での再現
+- 新規 scripts/star_recall.py（Fable の 3 点目、ユーザーの手間なし）。good 70 個、両方の視野の縁から 100 px 以上内側の
+  (星, 隣) 166 組。12 µm: A 0.75、B' 0.61、和集合 0.88（40 µm ずらした対照 0.12 / 0.07 / 0.18）。6 µm: 0.38 / 0.39 / 0.61
+  （対照 0.04 / 0.01 / 0.05）。隣の視野での最良順位、12 µm、上位 4/16/64: logistic 0.16/0.28/0.50、mean_intens なし
+  0.10/0.21/0.37、暗さ 0.01/0.06/0.22。偏り: 星は v6 の A と sp×nsl で選ばれたので A と順位づけの A 特徴に有利。組は相関（70 個）。

@@ -2241,3 +2241,14 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   (production A + B'), then candidate_features.py v26_embed_nagara_dz4.
   Outputs results/sim_eval/v26_embed_nagara_dz4_*; logs
   logs/union_inputs_v26_nagara.log, logs/candidate_features_v26_nagara.log.
+
+## 2026-11-14 18:10 JST Result (Claude, fullscan): neighbour-view recall of eye-good stars
+- New scripts/star_recall.py (Fable point 3, no new user time). 70 good
+  stars, 166 (star, neighbour) trials at >= 100 px inside both views.
+  12 um: A 0.75, B' 0.61, union 0.88 (40 um shifted control 0.12 /
+  0.07 / 0.18). 6 um: 0.38 / 0.39 / 0.61 (control 0.04 / 0.01 / 0.05).
+  Best rank of a match in the neighbour view, 12 um, top 4/16/64:
+  logistic 0.16/0.28/0.50, no mean_intens 0.10/0.21/0.37, darkness
+  0.01/0.06/0.22. Bias: stars were picked by v6 A with sp x nsl, which
+  favours A and the A features in the rankers; trials are correlated
+  (70 stars).

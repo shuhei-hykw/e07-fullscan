@@ -225,6 +225,13 @@ an overlapping view (6 / 12 um, dz 15 um, 100 px from both edges), for
 both models, darkness and a random score
 (`results/fullscan_union/reappear.txt`).
 
+`star_recall.py` is a renderer-free recall check on the 70 eye-judged
+"good" real stars (`results/real_vertices_good_v6.csv`): for each star
+and each overlapping neighbour view, whether that view's A, B' (top 770)
+or union candidates contain it (6 / 12 um, dz 30 um), the best rank of
+a match per ranker, and a 40 um shifted control
+(`results/fullscan_union/star_recall.txt`).
+
 The union rule itself is in `module/pipeline/union.py`. It was adopted
 on 2026-10-29 after the evalU gate: each view keeps every method-A
 candidate and adds the 770 B' branch points with the highest local
