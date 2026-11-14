@@ -2264,3 +2264,23 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   12/12/11 (bins 0-100/100-1000/1000-5000; short bins pass their
   remainder on), both 40, random 40, repeats 30 (gap >= 106). Seed
   20261114.
+
+## 2026-11-15 01:20 JST — v26 nagara scored (peer 7e6ab9d)
+
+- Realism gate passes: leak AUC near 0.550 (v25 0.630), far 0.518;
+  mean_intens alone 0.559 (v25 0.71).
+- B' still adds: union capture at 12 um 47 % (real background 16 %),
+  down from 71 % on v25. G union over A +17 % [+10, +24] at 12 um,
+  +8 % [+3, +14] at 6 um. Keep B'.
+- Ranking collapses at realistic darkness: capture points sit near the
+  96th percentile of local darkness; top 16 per view finds 0-4 % for
+  every ranker. Logistic minus darkness at K=16: -3 % [-7, +0], with or
+  without mean_intens, so the v25 logistic gain was a rendering
+  artefact. K=256 per view: n_tracks_max 31 %, interleaved 27 %,
+  darkness 14 %, logistic 15 %; full union (K~1540) 47 %.
+- Implication: a 4-5k site review catches ~0-1 % of simulated Xi
+  captures unless real captures are easier than v26. The real-star
+  top-16 rate (0.28) concerned A-selected nuclear stars, an easier
+  population. No ranker change until round-2 labels are in.
+- evalV stays sealed. The 12-10 slide quotes v26 (47 %, G +17 %),
+  not 71 %.
