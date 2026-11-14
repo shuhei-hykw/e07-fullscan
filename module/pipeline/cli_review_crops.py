@@ -10,6 +10,9 @@ Default labels CSV: results/vertex_crops_v6_labels.csv
 1, 2, 3, ... in the order given. If a directory named after a crop
 (e.g. 001/ beside 001.png) holds per-slice PNGs, the page shows them
 beside the crop: W/S or Up/Down step through the slices, P plays.
+A click on the slice image records its pixel position and the slice
+shown (click_x, click_y, click_slice); --click-required a,b refuses
+those labels until a click is made.
 """
 from __future__ import annotations
 
@@ -32,7 +35,8 @@ CATEGORIES = [
   ("unclear", "3", "#888"),  # uncertain, revisit later
 ]
 # Extra CSV columns per label, and the longest note kept
-_EXTRA_FIELDS = ("ts", "note", "seconds")
+_EXTRA_FIELDS = ("ts", "note", "seconds", "click_x", "click_y",
+                 "click_slice")
 _NOTE_MAX = 200
 # Colours handed out in order to categories given on the command line
 _PALETTE = ["#4a4", "#c44", "#c84", "#888", "#48c", "#a4a"]
@@ -102,7 +106,13 @@ h3 { font-size:0.75em; color:#666; text-transform:uppercase;
        object-fit:contain; transition:opacity .1s; }
 #slice-box { display:none; flex-direction:column; align-items:center;
        height:100%; margin-left:8px; }
-#slice-img { max-height:calc(100% - 30px); object-fit:contain; }
+#slice-img { max-height:calc(100% - 30px); object-fit:contain;
+       cursor:crosshair; }
+#slice-wrap { position:relative; max-height:calc(100% - 30px); }
+#click-mark { position:absolute; width:14px; height:14px;
+       margin:-7px 0 0 -7px; border:2px solid #f0f;
+       border-radius:50%; pointer-events:none; display:none; }
+#click-info { color:#f0f; }
 #slice-ctl { font-size:0.8em; color:#888; font-family:monospace; }
 #crop-area.with-slices #crop-img { max-width:50%; }
 #label-badge {
@@ -185,11 +195,15 @@ h3 { font-size:0.75em; color:#666; text-transform:uppercase;
   <div id="crop-area">
     <img id="crop-img" src="" alt="crop">
     <div id="slice-box">
-      <img id="slice-img" src="" alt="slice">
+      <div id="slice-wrap">
+        <img id="slice-img" src="" alt="slice" onclick="clickAt(event)">
+        <div id="click-mark"></div>
+      </div>
       <div id="slice-ctl">
         <input id="slice-range" type="range" min="0" value="0"
              oninput="showSlice(+this.value)" onchange="this.blur()">
-        <span id="slice-pos"></span> &nbsp;W/S step, P play
+        <span id="slice-pos"></span> &nbsp;W/S step, P play, click =
+        vertex <span id="click-info"></span>
       </div>
     </div>
     <div id="label-badge"></div>
@@ -216,6 +230,29 @@ function updateBadge(label) {
 
 let slices = [], sliceIdx = 0, playTimer = null, shownAt = Date.now();
 const NOTES = {{ notes_json|safe }};
+const CLICKS = {{ clicks_json|safe }};   // {filename: [x, y, slice]}
+const NEED_CLICK = {{ need_click_json|safe }};
+let click = null;
+
+function drawClick() {
+  const m = document.getElementById('click-mark');
+  const img = document.getElementById('slice-img');
+  document.getElementById('click-info').textContent = click ?
+    `(${click[0]}, ${click[1]}) ${click[2]}` : '';
+  if (!click || !img.naturalWidth) { m.style.display = 'none'; return; }
+  const k = img.clientWidth / img.naturalWidth;
+  m.style.left = (click[0] * k) + 'px';
+  m.style.top = (click[1] * k) + 'px';
+  m.style.display = 'block';
+}
+
+function clickAt(e) {
+  const img = e.target;
+  const k = img.naturalWidth / img.clientWidth;
+  click = [Math.round(e.offsetX * k), Math.round(e.offsetY * k),
+           slices[sliceIdx].split('/').pop()];
+  drawClick();
+}
 const PLAY_MS = 150;
 
 function showSlice(i) {
@@ -226,6 +263,7 @@ function showSlice(i) {
   document.getElementById('slice-range').value = sliceIdx;
   document.getElementById('slice-pos').textContent =
     (sliceIdx + 1) + '/' + slices.length;
+  document.getElementById('slice-img').onload = drawClick;
 }
 
 function togglePlay() {
@@ -258,6 +296,8 @@ function load(idx) {
   img.src    = '/crop/' + encodeURIComponent(name);
   shownAt = Date.now();
   document.getElementById('note').value = NOTES[name] || '';
+  click = CLICKS[name] || null;
+  drawClick();
   document.getElementById('crop-title').textContent = name;
   updateBadge(LABELS[name] || null);
   loadSlices(name);
@@ -284,15 +324,20 @@ function goNextUnlabeled() {
 
 function setLabel(cat) {
   const name = NAMES[cur];
+  if (NEED_CLICK.includes(cat) && !click) {
+    alert('Click the vertex on the slice image first.');
+    return;
+  }
   fetch('/label', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({name, label: cat,
       note: document.getElementById('note').value,
-      seconds: (Date.now() - shownAt) / 1000})
+      seconds: (Date.now() - shownAt) / 1000, click})
   }).then(r => r.json()).then(d => {
     LABELS[name] = cat;
     NOTES[name] = document.getElementById('note').value;
+    if (click) CLICKS[name] = click;
     updateBadge(cat);
     // update progress
     document.getElementById('prog-fill').style.width = d.pct + '%';
@@ -347,7 +392,7 @@ def _parse_filename(name: str) -> dict:
 
 
 def create_app(crops_dir: Path, labels_path: Path,
-               categories=CATEGORIES) -> Flask:
+               categories=CATEGORIES, need_click=()) -> Flask:
   app = Flask(__name__)
   allowed = {c[0] for c in categories}
 
@@ -410,6 +455,10 @@ def create_app(crops_dir: Path, labels_path: Path,
       names_json=json.dumps(names),
       labels_json=json.dumps(labels),
       notes_json=json.dumps({k: v.get("note", "") for k, v in extra.items()}),
+      clicks_json=json.dumps({
+        k: [int(v["click_x"]), int(v["click_y"]), v["click_slice"]]
+        for k, v in extra.items() if v.get("click_x")}),
+      need_click_json=json.dumps(list(need_click)),
       n_total=len(names),
       n_labeled=st["n_labeled"],
       pct=st["pct"],
@@ -437,12 +486,17 @@ def create_app(crops_dir: Path, labels_path: Path,
     data  = request.get_json(force=True)
     name  = data.get("name", "")
     label = data.get("label", "")
+    click = data.get("click") or ["", "", ""]
+    if label in need_click and not click[0] and click[0] != 0:
+      return jsonify({"error": "click required"}), 400
     if name and label in allowed and name in set(names):
       labels[name] = label
       extra[name] = {
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "note": str(data.get("note", ""))[:_NOTE_MAX],
         "seconds": round(float(data.get("seconds", 0) or 0), 1),
+        "click_x": click[0], "click_y": click[1],
+        "click_slice": str(click[2])[:_NOTE_MAX],
       }
       _save()
     st = _stats()
@@ -468,6 +522,9 @@ def main() -> None:
   parser.add_argument("--categories", default=None,
                       help="comma-separated labels, e.g. "
                            "vertex,crossing,junk,unclear")
+  parser.add_argument("--click-required", default="",
+                      help="comma-separated labels that need a vertex "
+                           "click on the slice image")
   parser.add_argument("--port", type=int, default=8010)
   parser.add_argument("--host", default="0.0.0.0")
   args = parser.parse_args()
@@ -488,7 +545,8 @@ def main() -> None:
 
   cats = (parse_categories(args.categories) if args.categories
           else CATEGORIES)
-  create_app(crops_dir, labels_path, cats).run(
+  need = [c.strip() for c in args.click_required.split(",") if c.strip()]
+  create_app(crops_dir, labels_path, cats, need).run(
     host=args.host, port=args.port,
     debug=False, threaded=True,
   )

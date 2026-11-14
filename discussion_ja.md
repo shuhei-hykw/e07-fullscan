@@ -2074,3 +2074,10 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   (星, 隣) 166 組。12 µm: A 0.75、B' 0.61、和集合 0.88（40 µm ずらした対照 0.12 / 0.07 / 0.18）。6 µm: 0.38 / 0.39 / 0.61
   （対照 0.04 / 0.01 / 0.05）。隣の視野での最良順位、12 µm、上位 4/16/64: logistic 0.16/0.28/0.50、mean_intens なし
   0.10/0.21/0.37、暗さ 0.01/0.06/0.22。偏り: 星は v6 の A と sp×nsl で選ばれたので A と順位づけの A 特徴に有利。組は相関（70 個）。
+
+## 2026-11-14 18:50 JST 計画と結果（Claude、fullscan）: 目視判定 第 2 回の画像
+- ユーザーが（相手経由で）目視ラウンドを了承。手順は相手の output/labels/protocol_round2.md（ac135d6、7c6d26e、49161e1）。
+  新規 scripts/label_round2.py（sample、render）。判定画面にクリックで反応点を記録する機能と --click-required を追加。
+  出力 results/label_round2/{key.csv, crops/, INSTRUCTIONS_ja.md}、判定は results/label_round2/labels.csv。
+- 抽出: L-only 20/20/20、D-only 0/30/30、N-only 1/18/16、M-only 12/12/11（足りない層は後ろの層へ回す）、both 40、
+  random 40、再提示 30（間隔 ≥ 106）。seed 20261114。

@@ -2252,3 +2252,15 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   0.01/0.06/0.22. Bias: stars were picked by v6 A with sp x nsl, which
   favours A and the A features in the rankers; trials are correlated
   (70 stars).
+
+## 2026-11-14 18:50 JST Plan/result (Claude, fullscan): label round 2 crops
+- User agreed (via peer) to the blind crop round; protocol in
+  e07-g4-hypernuclei output/labels/protocol_round2.md (ac135d6, 7c6d26e,
+  49161e1). New scripts/label_round2.py (sample, render); review page
+  (module/pipeline/cli_review_crops.py) gains vertex click capture and
+  --click-required. Outputs results/label_round2/{key.csv, crops/,
+  INSTRUCTIONS_ja.md}; labels go to results/label_round2/labels.csv.
+- Drawn: L-only 20/20/20, D-only 0/30/30, N-only 1/18/16, M-only
+  12/12/11 (bins 0-100/100-1000/1000-5000; short bins pass their
+  remainder on), both 40, random 40, repeats 30 (gap >= 106). Seed
+  20261114.

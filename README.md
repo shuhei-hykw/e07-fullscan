@@ -232,6 +232,21 @@ or union candidates contain it (6 / 12 um, dz 30 um), the best rank of
 a match per ranker, and a 40 um shifted control
 (`results/fullscan_union/star_recall.txt`).
 
+`label_round2.py` builds the blind crop-labelling round 2 (protocol in
+e07-g4-hypernuclei `output/labels/protocol_round2.md`): `sample` draws
+300 sites (ranker-discordant groups by rank bin, both, random, 30
+repeats) into `results/label_round2/key.csv`, `render` writes the crops
+(150 um context projection with the 50 um box, and every slice of the
+50 um box). The review page records a vertex click (pixel and slice) and
+can refuse chosen labels without one:
+
+```bash
+python run.py review --crops results/label_round2/crops \
+  --labels results/label_round2/labels.csv \
+  --categories 0_nothing,1_ambiguous,2_star,3_xi_like \
+  --click-required 2_star,3_xi_like
+```
+
 The union rule itself is in `module/pipeline/union.py`. It was adopted
 on 2026-10-29 after the evalU gate: each view keeps every method-A
 candidate and adds the 770 B' branch points with the highest local
