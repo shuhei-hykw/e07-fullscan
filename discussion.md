@@ -2234,3 +2234,10 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   scores_{full,nomi}.parquet. Then a truth-free cross-view reappearance
   check (logistic full / no mean_intens / darkness / shuffled).
   evalV stays sealed.
+
+## 2026-11-14 17:20 JST Plan (Claude, fullscan): v26 nagara union inputs + features
+- Peer rendered v26_embed_nagara_dz4 (track_weight 0.57, 66e8e9d; same
+  backgrounds as v25 nagara). Runs: union_inputs.py v26_embed_nagara_dz4
+  (production A + B'), then candidate_features.py v26_embed_nagara_dz4.
+  Outputs results/sim_eval/v26_embed_nagara_dz4_*; logs
+  logs/union_inputs_v26_nagara.log, logs/candidate_features_v26_nagara.log.

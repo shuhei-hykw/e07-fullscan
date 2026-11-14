@@ -2063,3 +2063,8 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - 計画: 新規 scripts/fullscan_features.py → results/fullscan_union/features.parquet、両モデルで採点
   → scores_{full,nomi}.parquet。続けて真値なしの視野間の再現の確認（logistic 全部 / mean_intens なし / 暗さ / シャッフル）。
   evalV は開けない。
+
+## 2026-11-14 17:20 JST 計画（Claude、fullscan）: v26 nagara の和集合の入力と特徴量
+- 相手が v26_embed_nagara_dz4 を描画（飛跡の重み 0.57、66e8e9d、背景は v25 nagara と同じ）。実行: union_inputs.py
+  v26_embed_nagara_dz4（本番 A＋B'）→ candidate_features.py v26_embed_nagara_dz4。出力 results/sim_eval/v26_embed_nagara_dz4_*、
+  ログ logs/union_inputs_v26_nagara.log、logs/candidate_features_v26_nagara.log。
