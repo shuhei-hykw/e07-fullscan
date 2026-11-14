@@ -204,6 +204,27 @@ x/y/z and 0.507 um/px) and are linked across views within 5 or 10 um in
 xy and 15 um in z; a 40 um shifted link gives the chance level
 (`results/fullscan_union/dedup.txt`).
 
+Review ranking. `candidate_features.py SET` writes one feature row per
+A candidate and per B' point of a sim set
+(`results/sim_eval/<SET>_features.parquet`); `fullscan_features.py`
+does the same for every full-scan union row
+(`results/fullscan_union/features.parquet`, keyed by `union_row`, B'
+features from the full per-view B' lists). The frozen logistic
+rankers of e07-g4-hypernuclei score either table:
+
+```bash
+cd ../e07-g4-hypernuclei
+./run.py candscore apply output/models/review_logistic_v25.json \
+  ../e07-fullscan/results/fullscan_union/features.parquet \
+  ../e07-fullscan/results/fullscan_union/scores_full.parquet
+```
+
+`rank_reappear.py` is a truth-free check on the real scan: the fraction
+of a ranker's top-K candidates per view that reappear in the top K of
+an overlapping view (6 / 12 um, dz 15 um, 100 px from both edges), for
+both models, darkness and a random score
+(`results/fullscan_union/reappear.txt`).
+
 The union rule itself is in `module/pipeline/union.py`. It was adopted
 on 2026-10-29 after the evalU gate: each view keeps every method-A
 candidate and adds the 770 B' branch points with the highest local

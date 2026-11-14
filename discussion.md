@@ -2215,3 +2215,22 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   unopened. The evalV real-view alen step was cancelled; the
   production --real run (v25_embed_evalV_dz4_real_*) continues so
   evalV is ready for a later arm.
+
+## 2026-11-14 14:35 JST User decisions + plan (Claude, fullscan): full-scan ranker scores
+- User (asked after a Fable consult): the review unit of the 11-11
+  "4,000-5,000" is a crop (~50 um square x z stack), so the relevant
+  metric is ~12 um capture per site, not 6 um per candidate. The 4-5k
+  budget is one final target, not enforced now; improve with feedback.
+- Peer (7bff57b, 9780735): ranker chance level is 0 % at K <= 16, so G =
+  embedded; logistic - darkness at 12 um K=1/2/4/8/16 = +5/+4/+5/+7/+11 %.
+  Most gain comes from mean_intens (coef 6.7), possibly a rendering
+  artefact (embedded captures at the 95th view percentile of
+  mean_intens, specials clicks ~50th). Frozen models:
+  output/models/review_logistic_v25{,_no_mean_intens}.json.
+- Plan: new scripts/fullscan_features.py -> results/fullscan_union/
+  features.parquet (every union row, candidate_features schema, B'
+  features from the full per-view B' lists); score with both models via
+  the peer's ./run.py candscore apply -> results/fullscan_union/
+  scores_{full,nomi}.parquet. Then a truth-free cross-view reappearance
+  check (logistic full / no mean_intens / darkness / shuffled).
+  evalV stays sealed.

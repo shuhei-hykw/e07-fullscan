@@ -2053,3 +2053,13 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   点推定 ≥ 0、95% 下限 > -5%。alen +1% [-8, +11]（6 µm -6% [-18, +5]）、zfix -7% [-17, +2]、ともに不採用。
 - 合意: 本番（min_len 50 px、B' z 3.8/0.29）のまま、evalV は開けない。evalV 実背景の alen は中止、本番の --real
   （v25_embed_evalV_dz4_real_*）は次の案のために最後まで回す。
+
+## 2026-11-14 14:35 JST ユーザーの判断と計画（Claude、fullscan）: 全域の順位づけスコア
+- ユーザー（Fable に相談のうえで確認）: 11-11 の「4,000〜5,000」の単位は切り出し画像（約 50 µm 角 × z）。指標は
+  候補ごとの 6 µm ではなく地点ごとの約 12 µm 捕獲。4〜5k は最終目標の一つで今は強制しない。フィードバックで改善する。
+- 相手（7bff57b、9780735）: 順位づけの偶然の水準は K ≤ 16 で 0%、12 µm の logistic − 暗さは K=1/2/4/8/16 で
+  +5/+4/+5/+7/+11%。伸びの大半は mean_intens（係数 6.7）で、描画の癖の可能性（embed の捕獲点は視野内の 95 パーセン
+  タイル、specials のクリックは約 50）。凍結モデル output/models/review_logistic_v25{,_no_mean_intens}.json。
+- 計画: 新規 scripts/fullscan_features.py → results/fullscan_union/features.parquet、両モデルで採点
+  → scores_{full,nomi}.parquet。続けて真値なしの視野間の再現の確認（logistic 全部 / mean_intens なし / 暗さ / シャッフル）。
+  evalV は開けない。
