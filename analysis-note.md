@@ -82,6 +82,13 @@ specials_x20 はすべてダブル超核イベントであり、ほかにも多�
 
 ## 開発ログ（最新が上）
 
+## 2026-11-15 00:30 JST — v26 nagara の入力ができた
+
+- 描き直した v26（相手 66e8e9d）で nagara 100 事象の union_inputs と candidate_features が終わった。
+  results/sim_eval/v26_embed_nagara_dz4_features.parquet は 3,088,783 行。ログはどちらもエラーなし。
+- 相手セッションに連絡済み。G の計算は相手が事前登録した data/score_v26_nagara.sh で行う。
+- 目視ラウンド 2 の 300 枚は描画済みで、ユーザーの判定待ち。
+
 ## 2026-11-14 18:30 JST — 実データの星で B' が効く: 目視 good の星の隣の視野での再現
 
 - Fable の提案（相手経由）: 合成に頼らない取りこぼしの確認。新規 scripts/star_recall.py。5-27 の目視 good 70 個（67 視野）を、

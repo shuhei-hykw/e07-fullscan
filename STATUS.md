@@ -121,6 +121,8 @@ Method A/B が共用する補助部品として、手作り特徴量分類器
   **全域のスコア（11-14）**: results/fullscan_union/scores_{full,nomi}.parquet（311 万行、凍結 logistic の 2 モデル）。
   視野間の再現（rank_reappear.py、12 µm、上位 K）: logistic 0.23/0.39/0.47（K=1/4/16）、mean_intens なし 0.23/0.38/0.46、
   暗さ 0.22/0.40/0.52、ランダム 0.00/0.01/0.02。どれも安定な構造を拾うが、実データでは両モデルの差は見えない。
+  **v26 nagara の入力完成（11-15 00:26）**: results/sim_eval/v26_embed_nagara_dz4_features.parquet（309 万行、100 事象）。
+  相手が事前登録の data/score_v26_nagara.sh で G を出す番。目視ラウンド 2（300 枚、results/label_round2）はユーザー判定待ち。
 - **視野をまたいだ重複のまとめ（2026-11-12、union_dedup.py）**: 和集合 311 万 → 5 µm・dz 15 µm でまとめて 196 万
   （対照 0.90 倍、実質約 3 割減）。B' の暗い点は半分が重複、A は 16% のみ。**目標 4,000〜5,000 には順位づけが必須。**
 
