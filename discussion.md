@@ -2397,3 +2397,25 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   B' 27.6k-30.5k segments.
 - Pinged the peer to run crossview at --tol-z 15 and 30. Fable round 3
   will follow once that result is in.
+
+## 2026-11-27 22:35 JST Result (peer e07-g4-hypernuclei 1beddeb): twoview crossview
+
+- 30 events, real view pairs with embedded v26 captures. "Present" =
+  a pool candidate in the other view within 12 um XY.
+- Capture found at 12 um: A 63 % (real 27 %), B 67 % (20 %), both
+  40 % (13 %).
+- Present in other view, dz 15 / 30:
+  - capture A (n=15): 73 / 87 %;
+  - capture B' (n=21): 71 / 81 %;
+  - ordinary A: 40 / 52 %;
+  - ordinary B': 49 / 60 %.
+  - Embedded and real views agree, so the sim matches the real data.
+  - Likelihood ratio about 1.5-1.8.
+- Present-first vs darkness, dz 30:
+  - K=16: 3 vs 7 %;
+  - K=64: 7 vs 20 % [+7, +33];
+  - K=256: 23 vs 30 %.
+  - Real chance 0 %. Not resolved on 30 events.
+- Peer's read: presence is a fused feature, not a cut, and it does
+  not rescue few-per-view review. Peer offers 100 more events (about
+  1 h of rendering plus a 2.5 h chain). Taking this to Fable round 3.
