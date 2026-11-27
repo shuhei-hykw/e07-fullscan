@@ -2375,3 +2375,16 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   Outputs results/sim_eval/twoview_v26_nagara30_{A,B}{,_real}_*; logs
   logs/union_inputs_twoview_{A,B}{,_real}.log and
   logs/candidate_features_twoview_*.log. ~2.5 h.
+
+## 2026-11-27 18:40 JST Result (Claude, fullscan): recall curve, blob-free reappearance
+
+- recall_curve.txt (owner pool, top K per view, 70 eye-good stars,
+  12 um / dz 30 um; shifted control <= 0.03 for K <= 16): K=2 (4,050
+  sites) fused_logistic 0.29, logistic 0.21, no_mi 0.17, darkness 0.13,
+  n_tracks 0.04, random 0.01; K=16 0.53 / 0.51 / 0.41 / 0.34 / 0.34 /
+  0.11. Paired bootstrap: logistic - darkness K=4 +14 [+1, +27], K=16
+  +17 [+4, +29]; fused - logistic K=2 +7 [-3, +17]; logistic - no_mi
+  K=4 +13 [+6, +21]. Stars are an easy A-selected population.
+- reappear_blob5.txt (blob_thick <= 5 px): 6 um K=16 darkness 0.47 ->
+  0.21, logistic 0.20 -> 0.08; most of the darkness reappearance was
+  blobs.

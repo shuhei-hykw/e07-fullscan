@@ -2151,3 +2151,11 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   埋め込む）。描画後に並列（nice）で union_inputs.py twoview_v26_nagara30_{A,B} と同じく --real（本番 A + B'）、続いて
   4 組すべてに candidate_features.py。出力 results/sim_eval/twoview_v26_nagara30_{A,B}{,_real}_*、ログ
   logs/union_inputs_twoview_{A,B}{,_real}.log と logs/candidate_features_twoview_*.log。約 2.5 時間。
+
+## 2026-11-27 18:40 JST 結果（Claude、fullscan）: 確認件数あたりの検出率、塊を除いた再現
+
+- recall_curve.txt（担当視野、視野ごと上位 K、目視 good の星 70、12 µm・dz 30 µm、ずらし対照は K ≤ 16 で 0.03 以下）:
+  K=2（4,050 地点）で融合 logistic 0.29、logistic 0.21、mean_intens なし 0.17、暗さ 0.13、飛跡数 0.04、ランダム 0.01。
+  K=16 で 0.53 / 0.51 / 0.41 / 0.34 / 0.34 / 0.11。対応ブートストラップ: logistic − 暗さ K=4 で +14 [+1, +27]、K=16 で
+  +17 [+4, +29]。融合 − logistic K=2 で +7 [−3, +17]。logistic − mean_intens なし K=4 で +13 [+6, +21]。星は易しい母集団。
+- reappear_blob5.txt（太さ ≤ 5 px）: 6 µm・K=16 で暗さ 0.47 → 0.21、logistic 0.20 → 0.08。暗さの再現の大半は塊だった。

@@ -53,12 +53,12 @@ def load():
   return d
 
 
-def presence(d):
+def covering(d):
+  """(row, w) pairs: neighbour view w also images row's spot."""
   views = d.groupby("vid")[["view_x_mm", "view_y_mm", "gx", "gy"]].first()
   at = {(a, b): v for v, (a, b) in views[["gx", "gy"]].iterrows()}
   xy = d[["px", "py"]].to_numpy()
-  vid, gx, gy = d.vid.to_numpy(), d.gx.to_numpy(), d.gy.to_numpy()
-  # covering neighbour views per row (up to 8 offsets)
+  gx, gy = d.gx.to_numpy(), d.gy.to_numpy()
   cover = []
   for dx in (-1, 0, 1):
     for dy in (-1, 0, 1):
@@ -73,18 +73,27 @@ def presence(d):
       ok[ok] = inside(xy[ok], cen[ok])
       cover.append(np.where(ok, w, -1))
   cover = np.stack(cover, axis=1)
-  pairs = cKDTree(xy).query_pairs(R_UM, output_type="ndarray")
-  z = d.z.to_numpy()
-  pairs = pairs[(vid[pairs[:, 0]] != vid[pairs[:, 1]])
-                & (np.abs(z[pairs[:, 0]] - z[pairs[:, 1]]) <= DZ_UM)]
-  # unique (row, other view) matches, counted only for covering views
-  both = np.concatenate([pairs, pairs[:, ::-1]])
-  hit = pd.DataFrame({"row": both[:, 0], "w": vid[both[:, 1]]})
-  hit = hit.drop_duplicates()
   cov = pd.DataFrame({"row": np.repeat(np.arange(len(d)), cover.shape[1]),
                       "w": cover.ravel()})
-  cov = cov[cov.w >= 0]
-  m = cov.merge(hit, on=["row", "w"])
+  return cov[cov.w >= 0]
+
+
+def matches(d, r_um=R_UM, dz_um=DZ_UM):
+  """(row, other) index pairs in different views within r_um, dz_um."""
+  vid, z = d.vid.to_numpy(), d.z.to_numpy()
+  pairs = cKDTree(d[["px", "py"]].to_numpy()).query_pairs(
+    r_um, output_type="ndarray")
+  pairs = pairs[(vid[pairs[:, 0]] != vid[pairs[:, 1]])
+                & (np.abs(z[pairs[:, 0]] - z[pairs[:, 1]]) <= dz_um)]
+  return np.concatenate([pairs, pairs[:, ::-1]])
+
+
+def presence(d):
+  cov = covering(d)
+  both = matches(d)
+  # unique (row, other view) matches, counted only for covering views
+  hit = pd.DataFrame({"row": both[:, 0], "w": d.vid.to_numpy()[both[:, 1]]})
+  m = cov.merge(hit.drop_duplicates(), on=["row", "w"])
   n_cover = np.bincount(cov.row, minlength=len(d))
   n_match = np.bincount(m.row, minlength=len(d))
   return n_cover, n_match
