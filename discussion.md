@@ -2389,7 +2389,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   0.21, logistic 0.20 -> 0.08; most of the darkness reappearance was
   blobs.
 
-## 2026-11-27 22:20 JST Result (Claude, fullscan): twoview inputs ready
+## 2026-11-27 22:17 JST Result (Claude, fullscan): twoview inputs ready
 
 - All four twoview_v26_nagara30_{A,B}{,_real} chains finished with no
   traceback. features.parquet rows: A 940,487, A_real 937,280,
@@ -2398,7 +2398,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Pinged the peer to run crossview at --tol-z 15 and 30. Fable round 3
   will follow once that result is in.
 
-## 2026-11-27 22:35 JST Result (peer e07-g4-hypernuclei 1beddeb): twoview crossview
+## 2026-11-27 22:19 JST Result (peer e07-g4-hypernuclei 1beddeb): twoview crossview
 
 - 30 events, real view pairs with embedded v26 captures. "Present" =
   a pool candidate in the other view within 12 um XY.
@@ -2420,7 +2420,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   not rescue few-per-view review. Peer offers 100 more events (about
   1 h of rendering plus a 2.5 h chain). Taking this to Fable round 3.
 
-## 2026-11-27 22:45 JST Discussion (Fable round 3) and plan
+## 2026-11-27 22:20 JST Discussion (Fable round 3) and plan
 
 - Fable on the twoview crossview:
   - LR 1.5-1.8 is decisive. No LR in 1.2-2.5 bridges 857 k to about
@@ -2456,7 +2456,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   - The 12/10 framing needs the user's judgement, so it is listed in
     the prep doc's open items, not decided here.
 
-## 2026-11-27 23:05 JST Plan (Claude, fullscan): oracle ranker on sim labels
+## 2026-11-27 22:25 JST Plan (Claude, fullscan): oracle ranker on sim labels
 
 - Peer 7ca150e:
   - The 63-67 % vs 47 % gap is a definition difference: any candidate
@@ -2480,7 +2480,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   ceiling-limited pool, stop tuning candidate ranking for captures.
 - The twoview version with presence follows on nagara30+80.
 
-## 2026-11-27 23:30 JST Result (Claude, fullscan): oracle fails; captures look ordinary
+## 2026-11-27 22:28 JST Result (Claude, fullscan): oracle fails; captures look ordinary
 
 - oracle_v26_embed_nagara_dz4.txt (100 events, union, 11 features, no
   edge_px / slice / dark_rank_view; far-AUC 0.50 for every score, so
@@ -2504,7 +2504,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   needs new information: tracking, 3D topology, or an image-based
   second stage. Twoview with presence will be checked on nagara80.
 
-## 2026-11-28 00:10 JST Result (Claude, fullscan): specials vs sim captures
+## 2026-11-27 22:33 JST Result (Claude, fullscan): specials vs sim captures
 
 - Peer's point (e8c1ee4): 7/9 real specials are within 256 per view by
   n_tracks, against 25 % for sim. So the sim verdict may be a lower
@@ -2526,7 +2526,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   review budgets; real specials rank somewhat higher (n_tracks 7/9
   within 256), so sim is a lower bound".
 
-## 2026-11-28 00:25 JST Agreement (peer 2d050de)
+## 2026-11-27 22:34 JST Agreement (peer 2d050de)
 
 - Specials rescaled by candidate count (rank x 31k / crop count), not
   area. Within 16 / 64 / 256 per view:
@@ -2538,7 +2538,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   - About 256 per view (about 500 k sites per plate) is needed to
     review the majority of real events.
 
-## 2026-11-28 00:40 JST Plan (Claude, fullscan): nagara80 chain
+## 2026-11-27 23:09 JST Plan (Claude, fullscan): nagara80 chain
 
 - Input: peer render twoview_v26_nagara80_{A,B}: 80 events, the pair
   guard is peer 6156400.
