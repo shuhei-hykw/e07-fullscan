@@ -2388,3 +2388,12 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - reappear_blob5.txt (blob_thick <= 5 px): 6 um K=16 darkness 0.47 ->
   0.21, logistic 0.20 -> 0.08; most of the darkness reappearance was
   blobs.
+
+## 2026-11-27 22:20 JST Result (Claude, fullscan): twoview inputs ready
+
+- All four twoview_v26_nagara30_{A,B}{,_real} chains finished with no
+  traceback. features.parquet rows: A 940,487, A_real 937,280,
+  B 931,181, B_real 931,681. Example event ev0029: A 761-795 vertices,
+  B' 27.6k-30.5k segments.
+- Pinged the peer to run crossview at --tol-z 15 and 30. Fable round 3
+  will follow once that result is in.

@@ -2159,3 +2159,9 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   K=16 で 0.53 / 0.51 / 0.41 / 0.34 / 0.34 / 0.11。対応ブートストラップ: logistic − 暗さ K=4 で +14 [+1, +27]、K=16 で
   +17 [+4, +29]。融合 − logistic K=2 で +7 [−3, +17]。logistic − mean_intens なし K=4 で +13 [+6, +21]。星は易しい母集団。
 - reappear_blob5.txt（太さ ≤ 5 px）: 6 µm・K=16 で暗さ 0.47 → 0.21、logistic 0.20 → 0.08。暗さの再現の大半は塊だった。
+
+## 2026-11-27 22:20 JST 結果（Claude、fullscan）: 2 視野の入力ができた
+
+- twoview_v26_nagara30_{A,B}{,_real} の 4 本がエラーなしで終わった。features.parquet の行数は
+  A 940,487、A_real 937,280、B 931,181、B_real 931,681。例として ev0029 では A の点が 761〜795、B' の線分が 2.76万〜3.05万。
+- 相手セッションに、--tol-z 15 と 30 で crossview を走らせるよう連絡した。その結果が出たら Fable と 3 回目の議論をする。
