@@ -2479,3 +2479,27 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Rule from Fable: if net capture at K=16 is under about 30 % of the
   ceiling-limited pool, stop tuning candidate ranking for captures.
 - The twoview version with presence follows on nagara30+80.
+
+## 2026-11-27 23:30 JST Result (Claude, fullscan): oracle fails; captures look ordinary
+
+- oracle_v26_embed_nagara_dz4.txt (100 events, union, 11 features, no
+  edge_px / slice / dark_rank_view; far-AUC 0.50 for every score, so
+  no rendering leak):
+  - Net capture at 12 um, K=16/64/256/1024:
+    - darkness .04/.08/.14/.41;
+    - n_tracks .00/.05/.25/.25;
+    - oracle HGB .00/.01/.08/.36;
+    - oracle logit .02/.10/.15/.35.
+  - Ceiling: +.33 at 12 um, +.26 at 6 um. 6 um is the same picture.
+  - oracle - darkness at K=16: HGB -4 [-8, -1], logit -2 [-7, +3].
+  - +realneg variants are the same.
+- star_vs_capture.txt: feature medians as background percentiles:
+  - capture darkness .56, n_slices .70;
+  - stars darkness .91, n_slices .92 (star rows are the darkest match,
+    so biased up).
+  - Captures look like ordinary candidates. Star-tuned rankers learned
+    "dark long star".
+- Conclusion: with the current features, candidate ranking cannot
+  reach a 4-5 k site budget for captures, and tuning stops. Next
+  needs new information: tracking, 3D topology, or an image-based
+  second stage. Twoview with presence will be checked on nagara80.

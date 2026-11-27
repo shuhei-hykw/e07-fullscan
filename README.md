@@ -226,6 +226,18 @@ K up to 256), for both models, darkness, n_tracks_max (ties broken by
 a seeded jitter) and a random score
 (`results/fullscan_union/reappear.txt`).
 
+`oracle_rank.py` is the oracle test on sim truth (labels from
+e07-g4-hypernuclei `output/simlabels`): HistGradientBoosting and
+logistic rankers trained on the v26 embedded captures (union cut, no
+edge_px / slice / dark_rank_view, GroupKFold by event), applied to the
+held-out embedded events and their real-background twins. It reports
+capture at K per view (embedded, real, net), the far-region
+adversarial AUC and paired bootstrap against darkness
+(`results/sim_eval/oracle_<set>.txt`). `star_vs_capture.py` compares
+feature percentiles of sim capture candidates, the 70 eye-good stars'
+matched candidates and both backgrounds
+(`results/sim_eval/star_vs_capture.txt`).
+
 `star_recall.py` is a renderer-free recall check on the 70 eye-judged
 "good" real stars (`results/real_vertices_good_v6.csv`): for each star
 and each overlapping neighbour view, whether that view's A, B' (top 770)
