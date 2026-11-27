@@ -237,6 +237,11 @@ adversarial AUC and paired bootstrap against darkness
 feature percentiles of sim capture candidates, the 70 eye-good stars'
 matched candidates and both backgrounds
 (`results/sim_eval/star_vs_capture.txt`).
+`special_realism.py` places the maximum feature near each vertex as a
+percentile of the event's own pool, for the 9 real special crops, the
+v26 sim captures and the 70 stars, with shifted or real-twin controls
+and a Mann-Whitney test of specials against captures
+(`results/sim_eval/special_realism.txt`).
 
 `star_recall.py` is a renderer-free recall check on the 70 eye-judged
 "good" real stars (`results/real_vertices_good_v6.csv`): for each star

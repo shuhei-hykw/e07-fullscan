@@ -2503,3 +2503,25 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   reach a 4-5 k site budget for captures, and tuning stops. Next
   needs new information: tracking, 3D topology, or an image-based
   second stage. Twoview with presence will be checked on nagara80.
+
+## 2026-11-28 00:10 JST Result (Claude, fullscan): specials vs sim captures
+
+- Peer's point (e8c1ee4): 7/9 real specials are within 256 per view by
+  n_tracks, against 25 % for sim. So the sim verdict may be a lower
+  bound.
+- special_realism.txt: the max feature within 15 um / dz 30 um, as a
+  percentile of the event's own pool. Controls: shifted positions, or
+  the real twin for captures. Medians:
+  - n_tracks: special .86, capture .76, twin .46, star .97;
+  - n_slices: .86 / .74 / .55 / .98;
+  - darkness: .97 / .96 / .54 / .92;
+  - z_span: .87 / .71 / .64 / .95.
+  - Specials vs captures: Mann-Whitney p .11-.45 (n=9).
+- Read: the specials sit slightly above sim in n_tracks and length but
+  equal in darkness. The sim is at most mildly under-rendered, so its
+  verdict is a lower bound. A percentile of about .75-.86 is about
+  rank 100-200 of about 770 A per view: inside 256, outside 16. The
+  budget conclusion (2 per view infeasible) stands.
+- Agreed wording for STATUS: "sim captures are not separable at
+  review budgets; real specials rank somewhat higher (n_tracks 7/9
+  within 256), so sim is a lower bound".
