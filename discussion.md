@@ -2525,3 +2525,15 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Agreed wording for STATUS: "sim captures are not separable at
   review budgets; real specials rank somewhat higher (n_tracks 7/9
   within 256), so sim is a lower bound".
+
+## 2026-11-28 00:25 JST Agreement (peer 2d050de)
+
+- Specials rescaled by candidate count (rank x 31k / crop count), not
+  area. Within 16 / 64 / 256 per view:
+  - darkness 1 / 2 / 3 of 9;
+  - n_tracks 0 / 2 / 6 of 9.
+- Shared conclusion:
+  - Stop ranking tuning; the sim verdict is a lower bound.
+  - A few per view is out of reach on sim and real alike.
+  - About 256 per view (about 500 k sites per plate) is needed to
+    review the majority of real events.
