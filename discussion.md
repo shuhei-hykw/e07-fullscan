@@ -2341,3 +2341,26 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - New scripts/cross_view_presence.py -> results/fullscan_union/
   presence.{parquet,txt}: per union row, covering neighbour views and
   how many have a candidate within 12 um / dz 30 um.
+
+## 2026-11-27 17:00 JST — Fable round 2; veto threshold sweep
+
+- Fable round 2: owner view yes as the base; blob veto as a flag, not a
+  hard cut; label samples from the owner pool, stratified by blob flag
+  and score band with recorded weights. Star top-16 fractions across
+  pools are not comparable (all-candidates gets ~3.6 views of tries per
+  star); compare recall versus unique objects reviewed per cm2 with
+  paired bootstrap; random averaged over many seeds. Presence fails
+  because junk is real too; score agreement across views may work
+  (ntracks_match: matched and neighbour top 256, stars 0.72 vs random
+  A 0.22). Corrected the 16:15 note (random column, logistic drop under
+  owner view, veto benefit is a guess, logistic is out-of-sample).
+- Veto sweep (star_rank_owner.py, owner pool): stars any match 0.87 /
+  0.86 / 0.86 / 0.87 / 0.87 for no veto / 5 / 6 / 8 / 10 px; top-16
+  ranks unchanged from 8 px up. Darkness top 16 blob share 85 / 77 /
+  59 / 40 %. Proposed 8 px as the working flag (peer decides sim side).
+- Next (mine): scripts/recall_curve.py -> results/fullscan_union/
+  recall_curve.txt: on the owner pool, star recall versus reviewed
+  objects per view for single-view rankers and a cross-view fused
+  score (mean logistic percentile over covering views, dz 30 um),
+  40 um shifted control, paired bootstrap over stars, random averaged
+  over seeds.

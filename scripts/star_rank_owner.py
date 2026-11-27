@@ -3,8 +3,9 @@
 For the 70 eye-good stars, the best in-view rank of any matching
 candidate (within R_UM in xy and DZ_UM in z, any view) when each view
 ranks only its owner-view candidates (owner_view.py), optionally after
-dropping blob_thick_px > MAX_BLOB_PX (fullscan_blob.py). Rankers: dark-
-ness, both logistic models, n_tracks_max and random; a CONTROL_SHIFT_UM
+dropping blob_thick_px above each VETO_PX cut (fullscan_blob.py), and
+the fraction of stars with any match in the pool. Rankers: darkness,
+both logistic models, n_tracks_max and random; a CONTROL_SHIFT_UM
 shifted star is the chance control. Also reports the blob and edge
 share of each ranker's top 16 over all candidates.
 
@@ -27,7 +28,7 @@ BLOB = cv.DIR / "blob.parquet"
 OUT = cv.DIR / "star_rank_owner.txt"
 R_UM = 12.0
 DZ_UM = 30.0
-MAX_BLOB_PX = 5.0   # v26 capture points are <= 5 px (peer, ac46411)
+VETO_PX = (5.0, 6.0, 8.0, 10.0)   # v26 captures are <= 5 px (ac46411)
 EDGE_PX = 100
 TOP = 16
 CONTROL_SHIFT_UM = 40.0
@@ -66,13 +67,15 @@ def main():
   own = np.zeros(len(d), bool)
   own[pd.read_parquet(cv.OWNER).union_row.to_numpy()] = True
 
-  lines = [f"blob_thick_px > {MAX_BLOB_PX:g}: " + ", ".join(
-    f"{s} {(g.thick > MAX_BLOB_PX).mean():.3f}"
-    for s, g in d.groupby("source"))]
+  lines = []
+  for v in VETO_PX:
+    lines.append(f"blob_thick_px > {v:g}: " + ", ".join(
+      f"{s} {(g.thick > v).mean():.3f}" for s, g in d.groupby("source")))
   for r in RANKERS:
     t = d.sort_values(r, ascending=False).groupby("view").head(TOP)
-    lines.append(f"  top {TOP} {r}: blob {(t.thick > MAX_BLOB_PX).mean():.2f}"
-                 f"  edge<{EDGE_PX} {(t.edge < EDGE_PX).mean():.2f}")
+    lines.append(f"  top {TOP} {r}: blob > " + " / ".join(
+      f"{v:g} {(t.thick > v).mean():.2f}" for v in VETO_PX)
+      + f"  edge<{EDGE_PX} {(t.edge < EDGE_PX).mean():.2f}")
 
   st = pd.read_csv(cv.STARS)
   views = d.groupby("view")[["view_x_mm", "view_y_mm"]].first()
@@ -82,8 +85,9 @@ def main():
   lines.append(f"{len(st)} stars, r {R_UM:g} um, dz {DZ_UM:g} um; best "
                "in-view rank over any view, fraction <= " +
                "/".join(map(str, RANK_CUTS)))
-  sets = (("all", np.ones(len(d), bool)), ("owner", own),
-          ("owner+veto", own & (d.thick.to_numpy() <= MAX_BLOB_PX)))
+  sets = [("all", np.ones(len(d), bool)), ("owner", own)]
+  sets += [(f"owner+veto{v:g}", own & (d.thick.to_numpy() <= v))
+           for v in VETO_PX]
   for label, mask in sets:
     q = d[mask].copy()
     for r in RANKERS:
@@ -91,7 +95,9 @@ def main():
                                                method="first")
     for shift in (0.0, CONTROL_SHIFT_UM):
       best = best_ranks(q, sxy + [shift, 0.0], sz)
-      lines.append(f"  {label} ({len(q)} rows) shift {shift:g} um")
+      anym = np.isfinite(best["random"]).mean()
+      lines.append(f"  {label} ({len(q)} rows) shift {shift:g} um: "
+                   f"any match {anym:.2f}")
       for r, v in best.items():
         lines.append(f"    {r:15s} " + " ".join(
           f"{(v <= c).mean():.2f}" for c in RANK_CUTS))
