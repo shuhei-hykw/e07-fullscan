@@ -2152,7 +2152,7 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   4 組すべてに candidate_features.py。出力 results/sim_eval/twoview_v26_nagara30_{A,B}{,_real}_*、ログ
   logs/union_inputs_twoview_{A,B}{,_real}.log と logs/candidate_features_twoview_*.log。約 2.5 時間。
 
-## 2026-11-27 18:40 JST 結果（Claude、fullscan）: 確認件数あたりの検出率、塊を除いた再現
+## 2026-11-27 16:40 JST 結果（Claude、fullscan）: 確認件数あたりの検出率、塊を除いた再現
 
 - recall_curve.txt（担当視野、視野ごと上位 K、目視 good の星 70、12 µm・dz 30 µm、ずらし対照は K ≤ 16 で 0.03 以下）:
   K=2（4,050 地点）で融合 logistic 0.29、logistic 0.21、mean_intens なし 0.17、暗さ 0.13、飛跡数 0.04、ランダム 0.01。

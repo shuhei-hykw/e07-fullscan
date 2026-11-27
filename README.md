@@ -254,6 +254,12 @@ candidates, owner-view candidates and owner view plus the blob veto
 (`star_rank_owner.txt`). `rank_reappear.py --max-blob 5 --kmax 64`
 repeats the reappearance check without blobs (`reappear_blob5.txt`).
 
+`recall_curve.py` gives the eye-good star recall versus review
+budget (top K per view on the owner pool) for single-view rankers,
+cross-view fused logistic scores (mean of own and covering-view best
+percentiles) and random (20 seeds), with a shifted control and paired
+bootstrap intervals (`results/fullscan_union/recall_curve.txt`).
+
 `label_round2.py` builds the blind crop-labelling round 2 (protocol in
 e07-g4-hypernuclei `output/labels/protocol_round2.md`): `sample` draws
 300 sites (ranker-discordant groups by rank bin, both, random, 30

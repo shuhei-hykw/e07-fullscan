@@ -2376,7 +2376,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   logs/union_inputs_twoview_{A,B}{,_real}.log and
   logs/candidate_features_twoview_*.log. ~2.5 h.
 
-## 2026-11-27 18:40 JST Result (Claude, fullscan): recall curve, blob-free reappearance
+## 2026-11-27 16:40 JST Result (Claude, fullscan): recall curve, blob-free reappearance
 
 - recall_curve.txt (owner pool, top K per view, 70 eye-good stars,
   12 um / dz 30 um; shifted control <= 0.03 for K <= 16): K=2 (4,050
