@@ -2455,3 +2455,27 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
     on the 30 pilot events first, then on 130.
   - The 12/10 framing needs the user's judgement, so it is listed in
     the prep doc's open items, not decided here.
+
+## 2026-11-27 23:05 JST Plan (Claude, fullscan): oracle ranker on sim labels
+
+- Peer 7ca150e:
+  - The 63-67 % vs 47 % gap is a definition difference: any candidate
+    vs one-to-one matching. With any candidate, v26 union is 57 %
+    (real 24 %) at 12 um.
+  - Net ceiling: +33 % at 12 um and +26 % at 6 um (v26); twoview A
+    +36 / +27 %.
+  - Labels are in output/simlabels.
+  - 80 more two-view events (nagara80) are rendering.
+- scripts/oracle_rank.py:
+  - Data: v26_embed_nagara_dz4 features + labels. Union cut: all A,
+    plus B' with dark_rank_view <= 770.
+  - Positive: is_capture_{6,12}um.
+  - Model: HistGradientBoosting and logistic on the 13 features,
+    5-fold GroupKFold by event.
+  - Apply the same out-of-fold models to v19_bgonly (the real set) for
+    chance.
+  - Metric: capture at K per view, K 1-1024, emb, real and net, with
+    darkness and n_tracks_max as references.
+- Rule from Fable: if net capture at K=16 is under about 30 % of the
+  ceiling-limited pool, stop tuning candidate ranking for captures.
+- The twoview version with presence follows on nagara30+80.
