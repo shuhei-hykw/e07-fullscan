@@ -244,6 +244,16 @@ centre is nearest in plate xy and reports the kept counts and the
 eye-good star recall against all candidates
 (`results/fullscan_union/owner_view.{txt,parquet}`).
 
+`fullscan_blob.py` computes the peer's blob features
+(e07-g4-hypernuclei `module/blobfeat.py`) for every union row
+(`results/fullscan_union/blob.parquet`). `cross_view_presence.py`
+counts, per union row, the covering neighbour views and those with a
+candidate within 12 um / dz 30 um (`presence.{parquet,txt}`).
+`star_rank_owner.py` reports the eye-good star ranks over all
+candidates, owner-view candidates and owner view plus the blob veto
+(`star_rank_owner.txt`). `rank_reappear.py --max-blob 5 --kmax 64`
+repeats the reappearance check without blobs (`reappear_blob5.txt`).
+
 `label_round2.py` builds the blind crop-labelling round 2 (protocol in
 e07-g4-hypernuclei `output/labels/protocol_round2.md`): `sample` draws
 300 sites (ranker-discordant groups by rank bin, both, random, 30

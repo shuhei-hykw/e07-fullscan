@@ -2330,3 +2330,14 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   reproducible than a generic A vertex, while eye-good stars are
   (0.82 vs 0.55, chance 0.30). Cross-view presence looks like a
   feature, but the single-view sim cannot test it.
+
+## 2026-11-27 16:00 JST — Real-scan blob features and cross-view presence
+
+- New scripts/fullscan_blob.py imports the peer's module/blobfeat.py
+  (ac46411) unchanged and computes blob_thick_px/area/fill for all
+  3,113,696 union rows (12 procs) -> results/fullscan_union/blob.parquet.
+  Purpose: split the real reappearance and star checks by blob_thick_px
+  <= 5 (peer's request).
+- New scripts/cross_view_presence.py -> results/fullscan_union/
+  presence.{parquet,txt}: per union row, covering neighbour views and
+  how many have a candidate within 12 um / dz 30 um.

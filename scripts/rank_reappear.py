@@ -16,7 +16,11 @@ specific traits does not. Stability is not truth: a persistent dark
 blob reappears too.
 
   python scripts/rank_reappear.py   # -> results/fullscan_union/reappear.txt
+  python scripts/rank_reappear.py --max-blob 5 --kmax 64
+  # candidates with blob_thick_px <= 5 only (blob.parquet, fullscan_blob.py)
+  # -> results/fullscan_union/reappear_blob5.txt
 """
+import argparse
 import sys
 from pathlib import Path
 
@@ -35,6 +39,7 @@ FEATURES = DIR / "features.parquet"   # darkness for A and B' rows
 SCORES = {"logistic": DIR / "scores_full.parquet",
           "logistic_no_mi": DIR / "scores_nomi.parquet"}
 OUT = DIR / "reappear.txt"
+BLOB = DIR / "blob.parquet"
 KS = (1, 2, 4, 8, 16, 64, 256)
 R_UM = (6.0, 12.0)
 DZ_UM = 15.0
@@ -78,6 +83,11 @@ def reappear(d, col, k, r):
 
 
 def main():
+  ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+  ap.add_argument("--max-blob", type=float, default=None)
+  ap.add_argument("--kmax", type=int, default=max(KS))
+  args = ap.parse_args()
+  out = OUT
   d = pd.read_parquet(UNION, columns=["view", "vx_px", "vy_px", "z_mean",
                                       "view_x_mm", "view_y_mm",
                                       "n_tracks_max"])
@@ -90,6 +100,12 @@ def main():
   f = pd.read_parquet(FEATURES, columns=["union_row", "darkness"])
   d["darkness"] = np.nan
   d.loc[f.union_row.to_numpy(), "darkness"] = f.darkness.to_numpy()
+  if args.max_blob is not None:
+    b = pd.read_parquet(BLOB, columns=["union_row", "blob_thick_px"])
+    keep = np.zeros(len(d), bool)
+    keep[b.union_row[b.blob_thick_px <= args.max_blob].to_numpy()] = True
+    d = d[keep]
+    out = OUT.with_name(f"reappear_blob{args.max_blob:g}.txt")
   rng = np.random.default_rng(SEED)
   d["random"] = rng.random(len(d))
   d["n_tracks_max"] += JITTER * rng.random(len(d))
@@ -106,14 +122,14 @@ def main():
   lines = [f"{UNION.name}: {len(d)} rows, dz {DZ_UM:g} um, edge "
            f"{EDGE_PX} px; reappeared / trials in the neighbour top K"]
   for r in R_UM:
-    for k in KS:
+    for k in (k for k in KS if k <= args.kmax):
       row = [f"r {r:g} um K {k:3d}:"]
       for col in list(SCORES) + ["darkness", "n_tracks_max", "random"]:
         n, m = reappear(d, col, k, r)
         row.append(f"{col} {m}/{n} ({m / max(n, 1):.3f})")
       lines.append("  ".join(row))
       print(lines[-1], flush=True)
-  OUT.write_text("\n".join(lines) + "\n")
+  out.write_text("\n".join(lines) + "\n")
 
 
 if __name__ == "__main__":

@@ -2121,3 +2121,11 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   入るのは 0.09。つまり (a) A の反応点の z は視野間で中央値約 11 µm ずれる（dz 15 µm で一致の約 4 割を失う）、
   (b) 飛跡数の順位は視野間で不安定、上位地点の再現は普通の A 候補と同程度。一方、星は再現しやすい（0.82 対 0.55、
   偶然 0.30）。視野間の再現は特徴量になりそうだが、1 視野だけの合成では検証できない。
+
+## 2026-11-27 16:00 JST — 実データ全域の塊（blob）特徴量と視野間の存在
+
+- scripts/fullscan_blob.py（新規）: 相手の module/blobfeat.py（ac46411）をそのまま読み込み、和集合 3,113,696 行すべての
+  blob_thick_px・面積・充填度を計算（12 並列）→ results/fullscan_union/blob.parquet。目的: 実データの再現と星の検査を
+  blob_thick_px ≤ 5 で分ける（相手の依頼）。
+- scripts/cross_view_presence.py（新規）→ results/fullscan_union/presence.{parquet,txt}: 各候補を覆う隣の視野の数と、
+  そのうち 12 µm・dz 30 µm 以内に候補がある視野の数。
