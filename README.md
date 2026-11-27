@@ -221,15 +221,17 @@ cd ../e07-g4-hypernuclei
 
 `rank_reappear.py` is a truth-free check on the real scan: the fraction
 of a ranker's top-K candidates per view that reappear in the top K of
-an overlapping view (6 / 12 um, dz 15 um, 100 px from both edges), for
-both models, darkness and a random score
+an overlapping view (6 / 12 um, dz 15 um, 100 px from both edges,
+K up to 256), for both models, darkness, n_tracks_max (ties broken by
+a seeded jitter) and a random score
 (`results/fullscan_union/reappear.txt`).
 
 `star_recall.py` is a renderer-free recall check on the 70 eye-judged
 "good" real stars (`results/real_vertices_good_v6.csv`): for each star
 and each overlapping neighbour view, whether that view's A, B' (top 770)
 or union candidates contain it (6 / 12 um, dz 30 um), the best rank of
-a match per ranker, and a 40 um shifted control
+a match per ranker (both models, darkness, n_tracks_max; rank cuts up
+to 256), and a 40 um shifted control
 (`results/fullscan_union/star_recall.txt`).
 
 `label_round2.py` builds the blind crop-labelling round 2 (protocol in

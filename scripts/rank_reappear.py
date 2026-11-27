@@ -32,12 +32,13 @@ UNION = DIR / "union.parquet"
 SCORES = {"logistic": DIR / "scores_full.parquet",
           "logistic_no_mi": DIR / "scores_nomi.parquet"}
 OUT = DIR / "reappear.txt"
-KS = (1, 2, 4, 8, 16, 64)
+KS = (1, 2, 4, 8, 16, 64, 256)
 R_UM = (6.0, 12.0)
 DZ_UM = 15.0
 EDGE_PX = 100       # synthetic vertices sit >= 100 px from the edge
 UM_PER_MM = 1000.0
 SEED = 0
+JITTER = 1e-3       # breaks ties of integer rankers (n_tracks_max)
 
 
 def inside(xy, centre_um):
@@ -76,14 +77,16 @@ def reappear(d, col, k, r):
 def main():
   d = pd.read_parquet(UNION, columns=["view", "vx_px", "vy_px", "z_mean",
                                       "view_x_mm", "view_y_mm",
-                                      "darkness"])
+                                      "darkness", "n_tracks_max"])
   for c in ("view_x_mm", "view_y_mm"):
     d[c] = d.groupby("view")[c].transform("first")
   for name, f in SCORES.items():
     s = pd.read_parquet(f, columns=["union_row", "review_score"])
     d[name] = np.nan
     d.loc[s.union_row.to_numpy(), name] = s.review_score.to_numpy()
-  d["random"] = np.random.default_rng(SEED).random(len(d))
+  rng = np.random.default_rng(SEED)
+  d["random"] = rng.random(len(d))
+  d["n_tracks_max"] += JITTER * rng.random(len(d))
   d["cx"] = d.view_x_mm * UM_PER_MM
   d["cy"] = d.view_y_mm * UM_PER_MM
   px = d[["vx_px", "vy_px"]].to_numpy() - CENTRE_PX
@@ -99,7 +102,7 @@ def main():
   for r in R_UM:
     for k in KS:
       row = [f"r {r:g} um K {k:3d}:"]
-      for col in list(SCORES) + ["darkness", "random"]:
+      for col in list(SCORES) + ["darkness", "n_tracks_max", "random"]:
         n, m = reappear(d, col, k, r)
         row.append(f"{col} {m}/{n} ({m / max(n, 1):.3f})")
       lines.append("  ".join(row))

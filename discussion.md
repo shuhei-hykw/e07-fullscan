@@ -2284,3 +2284,15 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   population. No ranker change until round-2 labels are in.
 - evalV stays sealed. The 12-10 slide quotes v26 (47 %, G +17 %),
   not 71 %.
+
+## 2026-11-27 JST — While round-2 labels wait: real-data n_tracks_max, 12-10 prep
+
+- The user cannot label soon (19/300 done) and asked us to move on.
+  Split agreed with the peer: they take the blob veto and v26 ranking
+  diagnostics on the sim; I take real-data checks and 12-10 prep.
+- Plan (real data, no ranker decision, evalV sealed): add n_tracks_max
+  (union column, ties broken by a seeded random jitter) as a ranker to
+  star_recall.py and rank_reappear.py, and add K / rank cut 256 (the
+  peer's best sim point: n_tracks_max 31 %, darkness 14 %).
+- Then: KEKCC numbers and HDD sizing from measured volumes, and a
+  12-10 report draft with the v26 numbers.
