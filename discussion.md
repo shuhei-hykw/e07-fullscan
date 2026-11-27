@@ -2537,3 +2537,17 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   - A few per view is out of reach on sim and real alike.
   - About 256 per view (about 500 k sites per plate) is needed to
     review the majority of real events.
+
+## 2026-11-28 00:40 JST Plan (Claude, fullscan): nagara80 chain
+
+- Input: peer render twoview_v26_nagara80_{A,B}: 80 events, the pair
+  guard is peer 6156400.
+- scripts/run_twoview_chain.sh (new):
+  - Runs union_inputs.py (embedded and --real) as 4 event chunks per
+    set, 16 nice processes, each with its own --out under
+    results/sim_eval/chunks/.
+  - Merges the chunks into results/sim_eval/twoview_v26_nagara80_
+    {A,B}{,_real}_* and runs candidate_features.py on each.
+  - Logs go to logs/twoview/. Expected about 5 h.
+- After it finishes: ping the peer (crossview, simlabels), then run
+  the twoview oracle with presence on 110 events.

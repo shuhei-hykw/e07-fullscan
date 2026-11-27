@@ -226,6 +226,12 @@ K up to 256), for both models, darkness, n_tracks_max (ties broken by
 a seeded jitter) and a random score
 (`results/fullscan_union/reappear.txt`).
 
+`run_twoview_chain.sh BASE [NCHUNK]` runs `union_inputs.py` (embedded
+and `--real`) and `candidate_features.py` for a two-view sim pair
+`BASE_{A,B}`, splitting each set into NCHUNK parallel event chunks
+(separate `--out` dirs under `results/sim_eval/chunks/`, merged
+afterwards; logs in `logs/twoview/`).
+
 `oracle_rank.py` is the oracle test on sim truth (labels from
 e07-g4-hypernuclei `output/simlabels`): HistGradientBoosting and
 logistic rankers trained on the v26 embedded captures (union cut, no

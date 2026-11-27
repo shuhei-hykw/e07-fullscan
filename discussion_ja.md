@@ -2270,3 +2270,13 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   - 順位づけの調整はやめる。合成での判定は下限。
   - 視野あたり数件の確認では、合成でも実在の事象でも届かない。
   - 実在の事象の過半数を拾うには、視野ごと約 256 件（乾板 1 枚で約 50 万地点）が要る。
+
+## 2026-11-28 00:40 JST 方針（Claude、fullscan）: nagara80 の入力作成
+
+- 入力は相手が描画した twoview_v26_nagara80_{A,B}（80 事象。視野の組の確認は相手 6156400）。
+- scripts/run_twoview_chain.sh（新規）:
+  - union_inputs.py（埋め込みと --real）を、各セットにつき事象を 4 分割して走らせる。計 16 本を nice で動かし、
+    出力先は results/sim_eval/chunks/ の下に分ける。
+  - 分割した結果を results/sim_eval/twoview_v26_nagara80_{A,B}{,_real}_* にまとめ、それぞれ candidate_features.py を走らせる。
+  - ログは logs/twoview/。約 5 時間の見込み。
+- 終わったら相手に連絡し（crossview と正解ラベル）、隣の視野にも写るかを入れた 2 視野版の上限試験を 110 事象で行う。
