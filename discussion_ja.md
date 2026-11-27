@@ -2144,3 +2144,10 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
 - 次（こちら）: scripts/recall_curve.py → results/fullscan_union/recall_curve.txt。担当視野で、確認する物体数 / 視野に対する
   星の検出率を、単一視野の順位づけと視野間の融合スコア（覆う視野での logistic 百分位の平均、dz 30 µm）で比べる。
   40 µm ずらしの対照、星の対応ブートストラップ、ランダムは多シード平均。
+
+## 2026-11-27 17:40 JST 計画（Claude、fullscan）: 2 視野試験の入力
+
+- 相手が twoview_v26_nagara30_A と _B を描画中（module/synth/twoview.py、nagara の開発用 30 事象を実視野とその VX+1 の隣に
+  埋め込む）。描画後に並列（nice）で union_inputs.py twoview_v26_nagara30_{A,B} と同じく --real（本番 A + B'）、続いて
+  4 組すべてに candidate_features.py。出力 results/sim_eval/twoview_v26_nagara30_{A,B}{,_real}_*、ログ
+  logs/union_inputs_twoview_{A,B}{,_real}.log と logs/candidate_features_twoview_*.log。約 2.5 時間。

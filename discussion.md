@@ -2364,3 +2364,14 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   score (mean logistic percentile over covering views, dz 30 um),
   40 um shifted control, paired bootstrap over stars, random averaged
   over seeds.
+
+## 2026-11-27 17:40 JST Plan (Claude, fullscan): two-view pilot inputs
+
+- Peer renders twoview_v26_nagara30_A and _B (module/synth/twoview.py;
+  30 nagara dev events, each embedded into a real view and its VX+1
+  neighbour). After the render, run in parallel (nice):
+  union_inputs.py twoview_v26_nagara30_{A,B} and the same with --real
+  (production A + B'), then candidate_features.py on all four sets.
+  Outputs results/sim_eval/twoview_v26_nagara30_{A,B}{,_real}_*; logs
+  logs/union_inputs_twoview_{A,B}{,_real}.log and
+  logs/candidate_features_twoview_*.log. ~2.5 h.
