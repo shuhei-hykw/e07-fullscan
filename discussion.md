@@ -2419,3 +2419,39 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Peer's read: presence is a fused feature, not a cut, and it does
   not rescue few-per-view review. Peer offers 100 more events (about
   1 h of rendering plus a 2.5 h chain). Taking this to Fable round 3.
+
+## 2026-11-27 22:45 JST Discussion (Fable round 3) and plan
+
+- Fable on the twoview crossview:
+  - LR 1.5-1.8 is decisive. No LR in 1.2-2.5 bridges 857 k to about
+    4 k sites, so presence is a fused input, not a rescue.
+  - Fable claimed present-first is worse than darkness at every K.
+    That misreads the peer table (7/20/30 vs 3/7/23); discarded.
+- Fable's recommendations:
+  - Run 100 more two-view events: for the capture-vs-K curve with
+    intervals and about 130 embedded positives, not for the LR.
+  - Explain the single-view capture gap (pilot 63-67 % vs v26 union
+    47 %) and report chance-subtracted capture (real chance 20-27 %).
+  - Oracle test: train a ranker with sim captures as positives and
+    real pool candidates as negatives, CV by event, presence and dz as
+    inputs. If it gets under about 30 % at K=16, stop tuning
+    candidate ranking for captures.
+  - Diagnose stars (51-53 % at K=16) vs sim captures (0-4 %) by
+    comparing feature distributions.
+- 12/10 framing (Fable):
+  - 2 per view is not supported.
+  - Do not propose K 64-256 as a human budget: 130-520 k sites, about
+    200-700 person-hours, at 20-30 % capture.
+  - Show efficiency vs K with intervals and the pool ceiling (under
+    50 %).
+  - Raise prediction-guided Xi- track-following as the primary path,
+    and topology search plus an automated second stage for the full
+    scan.
+- Plan:
+  - Told the peer to go on the 100 events.
+  - Asked the peer for capture truth (event, source, cand_id,
+    is_capture).
+  - I will build the oracle and the feature-distribution comparison
+    on the 30 pilot events first, then on 130.
+  - The 12/10 framing needs the user's judgement, so it is listed in
+    the prep doc's open items, not decided here.
