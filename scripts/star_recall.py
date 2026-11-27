@@ -23,8 +23,8 @@ import pandas as pd
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
-from rank_reappear import (DIR, JITTER, SCORES, SEED, UM_PER_MM,
-                           inside)  # noqa: E402
+from rank_reappear import (DIR, FEATURES, JITTER, SCORES, SEED,
+                           UM_PER_MM, inside)  # noqa: E402
 from segment_repro import CENTRE_PX, PX_TO_UM  # noqa: E402
 
 STARS = REPO / "results/real_vertices_good_v6.csv"
@@ -39,12 +39,14 @@ RANK_CUTS = (1, 4, 16, 64, 256)
 def main():
   d = pd.read_parquet(UNION, columns=["view", "vx_px", "vy_px", "z_mean",
                                       "view_x_mm", "view_y_mm", "source",
-                                      "darkness", "n_tracks_max"])
+                                      "n_tracks_max"])
   for c in ("view_x_mm", "view_y_mm"):
     d[c] = d.groupby("view")[c].transform("first")
   for name, f in SCORES.items():
     s = pd.read_parquet(f, columns=["union_row", "review_score"])
     d.loc[s.union_row.to_numpy(), name] = s.review_score.to_numpy()
+  f = pd.read_parquet(FEATURES, columns=["union_row", "darkness"])
+  d.loc[f.union_row.to_numpy(), "darkness"] = f.darkness.to_numpy()
   rng = np.random.default_rng(SEED)
   d["n_tracks_max"] += JITTER * rng.random(len(d))
   rankers = list(SCORES) + ["darkness", "n_tracks_max"]

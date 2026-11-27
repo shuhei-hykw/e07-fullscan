@@ -2296,3 +2296,37 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   peer's best sim point: n_tracks_max 31 %, darkness 14 %).
 - Then: KEKCC numbers and HDD sizing from measured volumes, and a
   12-10 report draft with the v26 numbers.
+
+## 2026-11-27 15:20 JST — Fable consult; darkness bug; owner view
+
+- Fable (second opinion) found that union.parquet has darkness NaN for
+  every A row, so the 11-14 reappear.txt and the 11-27 run covered
+  B' rows only, and "darkness" ranked B' only. Fixed: rank_reappear.py
+  and star_recall.py now take darkness from features.parquet (all
+  rows). Star recall barely changes (darkness top ranks are B' anyway).
+  reappear.txt is being regenerated (logs/rank_reappear_v2.log).
+- New scripts (outputs in results/fullscan_union/):
+  ntracks_match.py -> ntracks_match.txt: top 16 n_tracks_max per view
+  vs ALL A candidates of each neighbour (6/12/25 um, dz 15 um or any,
+  z_best), with random-A, shifted and eye-good-star controls.
+  owner_view.py -> owner_view.txt, owner_view.parquet: keep a
+  candidate only in the view whose centre is nearest (Fable's
+  suggestion).
+- Owner view keeps 857,390 / 3,113,696 (0.275; A 0.279, B' 0.271).
+  Eye-good stars at 12 um, any view: owner union 0.87 (shifted control
+  0.19) vs a single neighbour view 0.88 (0.18), so per-view recall is
+  kept with 3.6x fewer candidates. At 6 um owner 0.51 (0.06) vs 0.61
+  (0.05). All-view recall 0.99 (0.49) is chance-inflated.
+- Meeting prep doc corrected per Fable (per-cm2 CPU/GPU hours were
+  wrong: A 17 CPU-h/cm2, B' 37 GPU-h/cm2; net capture 31 %; B' real
+  evidence is weak; overlap use overstated; "about 4 times").
+- ntracks_match (12 um, any z / dz 15 um, z_best): top 16 n_tracks_max
+  sites match some neighbour A candidate 0.49 / 0.30; random A 0.55 /
+  0.30; shifted chance 0.30 / 0.14; eye-good stars 0.82 / 0.44. The
+  matched neighbour candidate is in that view's top 16 only 0.09 of
+  the time. So: (a) A vertex z differs across views by ~11 um median
+  (a 15 um dz cut loses about 40 % of matches), (b) the n_tracks_max
+  rank is unstable across views, and the top sites are no more
+  reproducible than a generic A vertex, while eye-good stars are
+  (0.82 vs 0.55, chance 0.30). Cross-view presence looks like a
+  feature, but the single-view sim cannot test it.

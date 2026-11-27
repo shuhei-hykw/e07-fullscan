@@ -7,8 +7,10 @@ up to four times. Each top-K candidate lying at least EDGE_PX inside its
 own view and inside a neighbour view (plate coordinates as in
 segment_repro.py) is one trial; it reappears if that neighbour's top K
 has a candidate within R_UM in xy and DZ_UM in stage z. Rankers:
-the columns of the score files plus darkness and a random score (the
-chance level of picking K points per view). A ranker that keeps stable
+the columns of the score files plus darkness (from features.parquet;
+union.parquet has it for B' rows only), n_tracks_max (A track count;
+B' rows carry their branch count) and a random score (the chance level
+of picking K points per view). A ranker that keeps stable
 image structure reappears often; one that keeps noise or rendering-
 specific traits does not. Stability is not truth: a persistent dark
 blob reappears too.
@@ -29,6 +31,7 @@ from segment_repro import (CENTRE_PX, IMAGE_PX, PX_TO_UM,  # noqa: E402
 
 DIR = REPO / "results/fullscan_union"
 UNION = DIR / "union.parquet"
+FEATURES = DIR / "features.parquet"   # darkness for A and B' rows
 SCORES = {"logistic": DIR / "scores_full.parquet",
           "logistic_no_mi": DIR / "scores_nomi.parquet"}
 OUT = DIR / "reappear.txt"
@@ -77,13 +80,16 @@ def reappear(d, col, k, r):
 def main():
   d = pd.read_parquet(UNION, columns=["view", "vx_px", "vy_px", "z_mean",
                                       "view_x_mm", "view_y_mm",
-                                      "darkness", "n_tracks_max"])
+                                      "n_tracks_max"])
   for c in ("view_x_mm", "view_y_mm"):
     d[c] = d.groupby("view")[c].transform("first")
   for name, f in SCORES.items():
     s = pd.read_parquet(f, columns=["union_row", "review_score"])
     d[name] = np.nan
     d.loc[s.union_row.to_numpy(), name] = s.review_score.to_numpy()
+  f = pd.read_parquet(FEATURES, columns=["union_row", "darkness"])
+  d["darkness"] = np.nan
+  d.loc[f.union_row.to_numpy(), "darkness"] = f.darkness.to_numpy()
   rng = np.random.default_rng(SEED)
   d["random"] = rng.random(len(d))
   d["n_tracks_max"] += JITTER * rng.random(len(d))

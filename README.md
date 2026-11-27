@@ -234,6 +234,16 @@ a match per ranker (both models, darkness, n_tracks_max; rank cuts up
 to 256), and a 40 um shifted control
 (`results/fullscan_union/star_recall.txt`).
 
+`ntracks_match.py` matches the top 16 n_tracks_max sites per view
+against all A candidates of each overlapping view (6 / 12 / 25 um, dz
+15 um on z_best or unlimited), with random-A, 40 um shifted and
+eye-good-star controls (`results/fullscan_union/ntracks_match.txt`).
+
+`owner_view.py` keeps each union candidate only in the view whose
+centre is nearest in plate xy and reports the kept counts and the
+eye-good star recall against all candidates
+(`results/fullscan_union/owner_view.{txt,parquet}`).
+
 `label_round2.py` builds the blind crop-labelling round 2 (protocol in
 e07-g4-hypernuclei `output/labels/protocol_round2.md`): `sample` draws
 300 sites (ranker-discordant groups by rank bin, both, random, 30
