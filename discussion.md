@@ -2561,3 +2561,25 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
     B_real 2,469,165.
 - Pinged the peer for crossview and simlabels. The twoview oracle with
   presence follows once the labels exist.
+
+## 2026-11-28 15:50 JST Result (Claude, fullscan): twoview oracle, 110 events
+
+- oracle_twoview.txt: 220 views (nagara30+80, both sides). Features:
+  11 + presence (present_dz15/30, d_other_um, in_overlap; peer
+  e7e22b4). GroupKFold(5) by view_a. Far-AUC 0.50 for every score.
+- Net capture at 12 um (ceiling +.44), K = 16 / 64 / 256 / 1024:
+  - darkness .01 / .06 / .19 / .38;
+  - n_tracks .01 / .06 / .22 / .36;
+  - present_first .05 / .15 / .30 / .42;
+  - oracle HGB .06 / .15 / .35 / .43;
+  - oracle logit .06 / .15 / .32 / .44.
+- oracle − darkness: K=16 +5 [+0, +9]; K=64 +9-10; K=256 +13-15, all
+  with intervals above 0. At 6 um (ceiling +.21), K=16 is <= .03.
+- Read:
+  - Presence roughly doubles capture over darkness at K 64-256, and
+    the learned oracle adds little beyond present-first.
+  - K=16 reaches about 14 % of the ceiling, below Fable's 30 % bar.
+  - K=256 reaches 75-80 %.
+  - The shared conclusion stands: a few per view is out of reach.
+    About 256 per view is needed, and there present-first gives about
+    1.5x darkness.
