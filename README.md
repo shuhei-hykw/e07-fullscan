@@ -247,6 +247,11 @@ and folds grouped by background view pair
 feature percentiles of sim capture candidates, the 70 eye-good stars'
 matched candidates and both backgrounds
 (`results/sim_eval/star_vs_capture.txt`).
+`star_presence.py` gives the cross-view presence multiplicity
+(n_match of n_cover, `presence.parquet`) of the 70 eye-good stars'
+matched owner candidates (most-present and closest match) against
+all owner candidates (`results/fullscan_union/star_presence.txt`).
+
 `special_realism.py` places the maximum feature near each vertex as a
 percentile of the event's own pool, for the 9 real special crops, the
 v26 sim captures and the 70 stars, with shifted or real-twin controls

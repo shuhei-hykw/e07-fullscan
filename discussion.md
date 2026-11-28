@@ -2583,3 +2583,33 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   - The shared conclusion stands: a few per view is out of reach.
     About 256 per view is needed, and there present-first gives about
     1.5x darkness.
+
+## 2026-11-28 16:10 JST Discussion (Fable round 4), real-star presence, split
+
+- Fable's corrections:
+  - K=256 is the input size of an automated stage, not a review list:
+    about 30 % absolute at 500 k sites.
+  - The ceiling (56-67 % of captures have no net candidate) is the
+    bigger loss; break it down by truth prong count and range.
+  - Say the sim and specials "bracket" the truth, not that the sim is
+    a lower bound (n=9, specials biased clean).
+  - The oracle is feature-limited, not information-limited: crops are
+    untested.
+  - Do not present darkness as the best feature (n_tracks 6/9
+    specials at 256).
+- Fable's next steps:
+  - A 3D vertex-topology stage on B' segments for the top ~256 per
+    view: common vertex, >= 2-3 prongs, a dark stopping incoming
+    track, reproduced in >= 2 views. Target 100x rejection at 70 %
+    retention.
+  - Then a crop CNN. Presence as a multiplicity (0-3).
+- star_presence.txt (real stars, closest matching owner candidate):
+  - present fraction .90 vs background .62;
+  - all 3 covering views .51 vs .25 (LR about 2).
+  - This is similar to sim captures (83-88 % vs 52-61 %), so the sim
+    presence is not grossly inflated (stars are bright).
+  - Multiplicity lifts the LR to about 2 in the top bin.
+- Proposed split:
+  - peer: ceiling breakdown by truth topology; optional three-view
+    render for multiplicity;
+  - Claude: vertex-topology stage prototype (plan to follow).
