@@ -239,7 +239,11 @@ edge_px / slice / dark_rank_view, GroupKFold by event), applied to the
 held-out embedded events and their real-background twins. It reports
 capture at K per view (embedded, real, net), the far-region
 adversarial AUC and paired bootstrap against darkness
-(`results/sim_eval/oracle_<set>.txt`). `star_vs_capture.py` compares
+(`results/sim_eval/oracle_<set>.txt`). With `--twoview` it uses the
+two-view sets (nagara30 + nagara80, both sides) with the peer's
+presence columns as extra features, a present-first reference ranker
+and folds grouped by background view pair
+(`results/sim_eval/oracle_twoview.txt`). `star_vs_capture.py` compares
 feature percentiles of sim capture candidates, the 70 eye-good stars'
 matched candidates and both backgrounds
 (`results/sim_eval/star_vs_capture.txt`).
