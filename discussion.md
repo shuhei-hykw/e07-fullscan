@@ -2562,7 +2562,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
 - Pinged the peer for crossview and simlabels. The twoview oracle with
   presence follows once the labels exist.
 
-## 2026-11-28 15:50 JST Result (Claude, fullscan): twoview oracle, 110 events
+## 2026-11-28 15:35 JST Result (Claude, fullscan): twoview oracle, 110 events
 
 - oracle_twoview.txt: 220 views (nagara30+80, both sides). Features:
   11 + presence (present_dz15/30, d_other_um, in_overlap; peer
@@ -2584,7 +2584,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
     About 256 per view is needed, and there present-first gives about
     1.5x darkness.
 
-## 2026-11-28 16:10 JST Discussion (Fable round 4), real-star presence, split
+## 2026-11-28 15:38 JST Discussion (Fable round 4), real-star presence, split
 
 - Fable's corrections:
   - K=256 is the input size of an automated stage, not a review list:
@@ -2614,7 +2614,7 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
     render for multiplicity;
   - Claude: vertex-topology stage prototype (plan to follow).
 
-## 2026-11-28 17:10 JST Plan (Claude, fullscan): B' polylines for the topology stage
+## 2026-11-28 15:49 JST Plan (Claude, fullscan): B' polylines for the topology stage
 
 - scripts/bprime_polys.py (new):
   - Saves the B' polylines per event (npz: xyz in view px / stage mm,
