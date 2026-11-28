@@ -37,7 +37,7 @@ from module.track_classifier import (build_training_set,  # noqa: E402
 IMAGES = REPO.parent / "e07-g4-hypernuclei/data/images"
 OUT = REPO / "results/sim_eval/polys"
 CELL_PX = 6
-WORKERS = 2
+WORKERS = 1   # no nested pool inside the daemonic Pool
 PROCS = 12
 CLF = None
 
