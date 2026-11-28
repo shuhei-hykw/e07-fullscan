@@ -2636,3 +2636,16 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   - No explicit slice exclusion in find_tracks: the zpj window is only
     truncated at 0.
   - Cause still open.
+
+## 2026-11-28 15:51 JST Result (peer b78ba12): surface layer
+
+- Real B' points per slice (110 twoview A real views):
+  - slices 0-6 hold 4.5-6.6 % each, against a plateau of about 1.3 %;
+  - the last slice above 2x the plateau is slice 4-6 in 94/110 views,
+    so the surface layer sits at a fixed depth.
+- The sim draws capture depth uniformly, so about 10 % of captures land
+  in that layer.
+- Excluding them, the net ceiling at B' N = 0 / 770 / 2000 / 5000 is
+  +33 / +43 / +50 / +56 % (with them: +28 / +40 / +47 / +57 %).
+- So the A depth hole costs little, and the B' top-5000 input is the
+  right fix either way.
