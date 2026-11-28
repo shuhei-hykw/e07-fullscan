@@ -2551,3 +2551,13 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   - Logs go to logs/twoview/. Expected about 5 h.
 - After it finishes: ping the peer (crossview, simlabels), then run
   the twoview oracle with presence on 110 events.
+
+## 2026-11-28 15:22 JST Result (Claude, fullscan): nagara80 inputs ready
+
+- run_twoview_chain.sh twoview_v26_nagara80 finished at 15:16 (about
+  16 h, longer than the 5 h estimate).
+  - All 4 sets have 80/80 events, no traceback.
+  - features rows: A 2,454,497, A_real 2,456,634, B 2,469,764,
+    B_real 2,469,165.
+- Pinged the peer for crossview and simlabels. The twoview oracle with
+  presence follows once the labels exist.

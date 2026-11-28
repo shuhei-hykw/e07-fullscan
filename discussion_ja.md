@@ -2280,3 +2280,10 @@ e07-g4-hypernuclei の依頼。B'（cell 6、12 並列）→ `results/sim_eval/v
   - 分割した結果を results/sim_eval/twoview_v26_nagara80_{A,B}{,_real}_* にまとめ、それぞれ candidate_features.py を走らせる。
   - ログは logs/twoview/。約 5 時間の見込み。
 - 終わったら相手に連絡し（crossview と正解ラベル）、隣の視野にも写るかを入れた 2 視野版の上限試験を 110 事象で行う。
+
+## 2026-11-28 15:22 JST 結果（Claude、fullscan）: nagara80 の入力ができた
+
+- run_twoview_chain.sh twoview_v26_nagara80 が 15:16 に終わった。約 16 時間かかり、見込みの 5 時間より長かった。
+  - 4 セットとも 80/80 事象で、エラーなし。
+  - features の行数は A 2,454,497、A_real 2,456,634、B 2,469,764、B_real 2,469,165。
+- 相手に crossview と正解ラベルを依頼した。ラベルができたら、隣の視野にも写るかを入れた 2 視野版の上限試験をする。
