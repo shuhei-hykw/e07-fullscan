@@ -2613,3 +2613,26 @@ Intent (Claude, fullscan): Codex round 13 scoring fixes, tune rerun.
   - peer: ceiling breakdown by truth topology; optional three-view
     render for multiplicity;
   - Claude: vertex-topology stage prototype (plan to follow).
+
+## 2026-11-28 17:10 JST Plan (Claude, fullscan): B' polylines for the topology stage
+
+- scripts/bprime_polys.py (new):
+  - Saves the B' polylines per event (npz: xyz in view px / stage mm,
+    offsets, branch points).
+  - Same B' run as union_inputs.bprime. Checked on nagara30_A ev0000:
+    branch points are identical (32,253), 535 s/event.
+- Runs, in this order, 12 procs each:
+  - twoview_v26_nagara30_{A,B} and their --real twins;
+  - then nagara80_{A,B} and --real.
+  - Output results/sim_eval/polys/<set>/; logs logs/polys_<set>.log.
+  - About 6 h in total.
+- Input pool for the stage, following peer a1c7e8b: all A + B' top 5000
+  by darkness (net ceiling +57 % vs +40 % at 770), ordered
+  present-first.
+- Method A depth hole (peer item 2), checked on nagara30_A_real:
+  - A z spans almost never reach the top 10 % of the stack (z_max in
+    the first decile: 107 of 23k).
+  - B' piles 28 % of its points there (surface).
+  - No explicit slice exclusion in find_tracks: the zpj window is only
+    truncated at 0.
+  - Cause still open.

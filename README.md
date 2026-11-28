@@ -232,6 +232,11 @@ and `--real`) and `candidate_features.py` for a two-view sim pair
 (separate `--out` dirs under `results/sim_eval/chunks/`, merged
 afterwards; logs in `logs/twoview/`).
 
+`bprime_polys.py SET [--real]` saves the B' polylines of every event
+of a sim set (same run as `union_inputs.bprime`; npz per event under
+`results/sim_eval/polys/`), for the vertex-topology stage;
+`run_polys.sh` runs it on the two-view sets.
+
 `oracle_rank.py` is the oracle test on sim truth (labels from
 e07-g4-hypernuclei `output/simlabels`): HistGradientBoosting and
 logistic rankers trained on the v26 embedded captures (union cut, no
